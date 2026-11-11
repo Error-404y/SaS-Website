@@ -4,7 +4,7 @@
   const unreadTools = window.SasUnread;
   const readKey = 'sas-read-state-v1';
   const all = selector => [...document.querySelectorAll(selector)];
-  const site = { entries: [], settings: {}, rss: null, admin: false, csrf: null, page: 'events', selected: null, loaded: false, clockOffset: 0 };
+  const site = { entries: [], settings: {}, rss: null, admin: false, csrf: null, page: 'events', selected: null, loaded: false, clockOffset: 0, rssFormRevision: '', rssFormInitialBalances: {}, rssFormInitialRemaining: '' };
   const labels = { events: 'Events', alliance: 'Alliance Events', rss: 'Alliance RSS', updates: 'Website Updates', announcements: 'HR Announcements' };
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const calendar = window.SasCalendar;
@@ -478,12 +478,22 @@
         tech_stage: one('#rss-tech-stage-input').value,
         tech_plan: one('#rss-tech-notes-input').value,
         tech_remaining: one('#rss-tech-remaining-input').value.trim(),
+        revision: site.rssFormRevision,
         territory_plan: one('#rss-territory-input').value
       };
-      rssTools.parseDuration(payload.tech_remaining);
+      if (payload.tech_remaining === site.rssFormInitialRemaining) {
+        delete payload.tech_remaining;
+      } else {
+        rssTools.parseDuration(payload.tech_remaining);
+      }
+      const snapshot = rssTools.normalize(site.rss);
       for (const key of rssTools.resources) {
         const item = payload.resources[key];
         if (item.limit === null || item.limit <= 0) throw new Error(key + ' capacity must be greater than zero.');
+        if (one('#rss-stock-' + key).value === site.rssFormInitialBalances[key]) {
+          const estimate = rssTools.estimateBalance(snapshot.resources[key], snapshot.as_of, Date.now() + site.clockOffset);
+          item.stored = estimate === null ? null : Math.round(estimate * 100) / 100;
+        }
         if (item.stored !== null && item.stored > item.limit) throw new Error(key + ' balance exceeds its capacity.');
       }
       await request('/api/rss', { method: 'PUT', body: JSON.stringify(payload) });
@@ -586,12 +596,15 @@
       tech_plan: site.settings.tech_plan || '',
       legacy_hour: site.settings.rss_hour || ''
     });
+    site.rssFormRevision = data.updated_at;
+    site.rssFormInitialBalances = {};
     for (const key of rssTools.resources) {
       const item = data.resources[key];
       const current = rssTools.estimateBalance(item, data.as_of, Date.now() + site.clockOffset);
       one('#rss-stock-' + key).value = current === null ? '' : Math.round(current * 100) / 100;
       one('#rss-income-' + key).value = item.per_hour === null ? '' : item.per_hour;
       one('#rss-cap-' + key).value = item.limit;
+      site.rssFormInitialBalances[key] = one('#rss-stock-' + key).value;
     }
     for (const key of rssTools.buffs) {
       one('#rss-buff-input-' + key).value = data.buffs[key] === null ? '' : data.buffs[key];
@@ -601,6 +614,7 @@
     one('#rss-tech-notes-input').value = data.tech_plan;
     const remaining = rssTools.remainingSeconds(data.tech_ends_at, Date.now() + site.clockOffset);
     one('#rss-tech-remaining-input').value = remaining === null ? '' : rssTools.formatDuration(remaining);
+    site.rssFormInitialRemaining = one('#rss-tech-remaining-input').value;
     one('#rss-territory-input').value = data.territory_plan;
     one('#rss-error').textContent = '';
     openDialog('rss-dialog');
