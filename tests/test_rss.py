@@ -245,6 +245,7 @@ class RssTests(unittest.TestCase):
         payload.pop("tech_remaining")
         payload["revision"] = first["updated_at"]
         payload["resources"]["ammo"]["stored"] = 20000
+        payload["resources"]["ammo"]["per_hour"] = 0
         self.assertEqual(self.send("/api/rss", "PUT", payload, cookie, csrf)[0], 200)
         updated = self.send("/api/state")[1]["rss"]
         self.assertEqual(updated["tech_ends_at"], first["tech_ends_at"])
@@ -257,6 +258,7 @@ class RssTests(unittest.TestCase):
         old = self.send("/api/state")[1]["rss"]["updated_at"]
         changed = self.payload()
         changed["resources"]["ammo"]["stored"] = 5000
+        changed["resources"]["ammo"]["per_hour"] = 0
         changed["revision"] = old
         self.assertEqual(self.send("/api/rss", "PUT", changed, cookie, csrf)[0], 200)
         stale = self.payload()
