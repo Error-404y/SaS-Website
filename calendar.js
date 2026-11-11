@@ -95,6 +95,11 @@
       'DTEND:' + calendarTimestamp(event.end_utc),
       'SUMMARY:' + escapeCalendarText(event.title),
       'DESCRIPTION:' + escapeCalendarText(description(event)),
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      'DESCRIPTION:Event begins in one hour',
+      'TRIGGER:-PT1H',
+      'END:VALARM',
       'END:VEVENT',
       'END:VCALENDAR'
     ];
