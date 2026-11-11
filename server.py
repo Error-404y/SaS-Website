@@ -114,7 +114,7 @@ def init():
             db.execute("INSERT INTO meta(key,value) VALUES('seeded','1')")
         for key in ("rss_hour", "tech_plan", "rss_resources", "rss_buffs",
                     "rss_tech_name", "rss_tech_progress", "rss_tech_stage", "rss_tech_ends_at",
-                    "rss_territory_plan", "rss_updated_at", "rss_base_at"):
+                    "rss_territory_plan", "rss_updated_at", "rss_base_at", "rss_base_spend_id"):
             db.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?, '')", (key,))
 
 def now_utc():
@@ -257,6 +257,10 @@ def rss_state(settings, spending=(), current=None):
         anchor_seconds = datetime.fromisoformat(anchor).timestamp()
     except (ValueError, TypeError):
         anchor_seconds = current.timestamp()
+    try:
+        included_through_id = int(settings.get("rss_base_spend_id") or 0)
+    except (ValueError, TypeError):
+        included_through_id = 0
     saved_resources = object_value("rss_resources")
     saved_buffs = object_value("rss_buffs")
     resources = {}
@@ -287,7 +291,7 @@ def rss_state(settings, spending=(), current=None):
         previous = anchor_seconds
         rate = item["per_hour"] or 0
         for spend in sorted(spending, key=lambda row: (row["spent_at"], row["id"])):
-            if spend["resource"] != key:
+            if spend["resource"] != key or spend["id"] <= included_through_id:
                 continue
             spent_at = parse_utc(spend["spent_at"])
             if spent_at < anchor_seconds or spent_at > current.timestamp():
@@ -324,7 +328,7 @@ def rss_state(settings, spending=(), current=None):
         "base_at": anchor,
         "as_of": current.isoformat(timespec="seconds"),
         "spending": [
-            {**dict(item), "included": parse_utc(item["spent_at"]) >= anchor_seconds}
+            {**dict(item), "included": item["id"] > included_through_id and parse_utc(item["spent_at"]) >= anchor_seconds}
             for item in sorted(spending, key=lambda row: (row["spent_at"], row["id"]), reverse=True)[:100]
         ]
     }
@@ -581,9 +585,12 @@ class Handler(BaseHTTPRequestHandler):
                 if "resources" in data or "buffs" in data:
                     values = validate_rss(data)
                     current = datetime.now(timezone.utc)
+                    with LOCK, connect() as db:
+                        latest_spending_id = db.execute("SELECT COALESCE(MAX(id),0) FROM rss_spending").fetchone()[0]
                     updates = {
                         "rss_resources": json.dumps(values["resources"], separators=(",", ":")),
                         "rss_base_at": current.isoformat(timespec="seconds"),
+                        "rss_base_spend_id": str(latest_spending_id),
                         "rss_buffs": json.dumps(values["buffs"], separators=(",", ":")),
                         "rss_tech_name": values["tech_name"],
                         "tech_plan": values["tech_plan"],
