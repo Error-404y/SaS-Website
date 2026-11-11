@@ -82,11 +82,71 @@
         </section>
 
         <section class="page hidden" id="page-rss" data-section="rss">
-          <div class="page-title"><h1>Alliance RSS</h1><button type="button" class="primary-button admin-only" id="rss-edit" hidden>Edit figures</button></div>
-          <div class="rss-layout">
-            <div class="rss-primary"><span class="section-kicker">ALLIANCE RESOURCE INCOME</span><div class="rss-number" id="rss-hour">Not added yet</div><span class="rss-unit" id="rss-unit">Resources per hour</span><div class="rss-rule"></div><p>Our current alliance gathering rate.</p></div>
-            <div class="tech-panel"><span class="section-kicker">UP NEXT</span><h2>Alliance Technology</h2><p id="tech-plan">Our next technology plan has not been posted yet.</p></div>
+          <div class="page-title"><h1>Alliance RSS</h1><button type="button" class="primary-button admin-only" id="rss-edit" hidden>Edit RSS</button></div>
+          <div class="rss-resource-grid" aria-label="Alliance resource balances and production rates">
+            <article class="rss-resource-card">
+              <span class="rss-resource-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="8" y="3" width="8" height="18" rx="4" transform="rotate(40 12 12)"/><path d="m7.5 16 2.5 2.5M14.5 5.5 17 8"/></svg></span>
+              <div class="rss-resource-info"><span class="rss-resource-name">Ammo</span><strong id="rss-amount-ammo">—</strong><span class="rss-resource-rate" id="rss-rate-ammo">Not recorded</span></div>
+            </article>
+            <article class="rss-resource-card">
+              <span class="rss-resource-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 9h1M17 15h1"/></svg></span>
+              <div class="rss-resource-info"><span class="rss-resource-name">Cash</span><strong id="rss-amount-cash">—</strong><span class="rss-resource-rate" id="rss-rate-cash">Not recorded</span></div>
+            </article>
+            <article class="rss-resource-card">
+              <span class="rss-resource-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13 2 5 13h7l-1 9 8-12h-7z"/></svg></span>
+              <div class="rss-resource-info"><span class="rss-resource-name">Electricity</span><strong id="rss-amount-electricity">—</strong><span class="rss-resource-rate" id="rss-rate-electricity">Not recorded</span></div>
+            </article>
+            <article class="rss-resource-card">
+              <span class="rss-resource-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M6 8h12M6 16h12M8 5h8M8 19h8"/></svg></span>
+              <div class="rss-resource-info"><span class="rss-resource-name">Gas</span><strong id="rss-amount-gas">—</strong><span class="rss-resource-rate" id="rss-rate-gas">Not recorded</span></div>
+            </article>
           </div>
+          <div class="rss-feature-grid">
+            <section class="rss-panel">
+              <div class="rss-panel-heading"><span class="rss-heading-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/></svg></span><h2>Alliance Territory</h2></div>
+              <div class="rss-territory-content">
+                <div class="rss-territory-art" aria-hidden="true">
+                  <svg viewBox="0 0 220 180" fill="none">
+                    <path d="M0 35 110 0l110 35v108l-110 37L0 143Z" fill="#e7f0f9"/>
+                    <path d="m0 85 110-38 110 38M0 124l110-38 110 38M55 17v146M110 0v180M165 17v146" stroke="#c8dceb" stroke-width="1"/>
+                    <path d="m48 105 62-46 62 46-62 47z" fill="#c5ddf2" stroke="#8fb4d5" stroke-width="2"/>
+                    <path d="m73 104 37-28 37 28v25l-37 29-37-29z" fill="#5082bc"/>
+                    <path d="m73 104 37 27 37-27-37-28z" fill="#8fb7e0"/>
+                    <path d="M110 131v27M110 76V40M110 40h27l-5 9 5 9h-27" stroke="#335d93" stroke-width="3" stroke-linejoin="round"/>
+                    <path d="m48 105 62 47 62-47" stroke="#4988bb" stroke-width="2"/>
+                  </svg>
+                  <span>Territory overview</span>
+                </div>
+                <div class="rss-territory-details">
+                  <div><h3>Territory Expansion</h3><p id="rss-territory-plan">Alliance HQ and flags expand controlled territory.</p></div>
+                  <div><h3>Alliance Buffs</h3><p>Territory bonuses apply while your PD is inside eligible alliance territory.</p></div>
+                </div>
+              </div>
+            </section>
+            <section class="rss-panel">
+              <div class="rss-panel-heading"><span class="rss-heading-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 3h6M10 3v6l-6 10a2 2 0 0 0 1.7 3h12.6a2 2 0 0 0 1.7-3L14 9V3M8 15h8"/></svg></span><h2>Next Alliance Technology</h2></div>
+              <div class="rss-tech-content">
+                <strong id="rss-tech-name">No technology selected</strong>
+                <p id="rss-tech-plan">Our next technology plan has not been posted yet.</p>
+                <div id="rss-tech-progress-box" class="rss-tech-progress-box hidden">
+                  <div class="rss-progress-track" id="rss-progress-track" role="progressbar" aria-label="Technology progress" aria-valuemin="0" aria-valuemax="100"><div id="rss-progress-fill" class="rss-progress-fill"></div></div>
+                  <strong id="rss-tech-progress-label">0%</strong>
+                </div>
+                <p id="rss-tech-unreported" class="rss-tech-unreported">Progress has not been reported yet.</p>
+              </div>
+            </section>
+          </div>
+          <section class="rss-panel rss-buffs-panel">
+            <div class="rss-panel-heading"><span class="rss-heading-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m13 2-9 12h7l-1 8 10-13h-7z"/></svg></span><h2 id="rss-buffs-heading">Territory Buffs</h2></div>
+            <div class="rss-buff-grid">
+              <div class="rss-buff"><span class="rss-buff-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20 20 4M4 4l16 16M6 18l-3 3M18 18l3 3"/></svg></span><div><span>Troop Attack</span><strong id="rss-buff-troop_attack">Not set</strong></div></div>
+              <div class="rss-buff"><span class="rss-buff-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2 20 5v6c0 5-4 9-8 11-4-2-8-6-8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></span><div><span>Troop Defense</span><strong id="rss-buff-troop_defense">Not set</strong></div></div>
+              <div class="rss-buff"><span class="rss-buff-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20.5 8.5c0 5-8.5 11.5-8.5 11.5S3.5 13.5 3.5 8.5a4.5 4.5 0 0 1 8.5-2 4.5 4.5 0 0 1 8.5 2z"/></svg></span><div><span>Troop HP</span><strong id="rss-buff-troop_hp">Not set</strong></div></div>
+              <div class="rss-buff"><span class="rss-buff-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21 17 9M13 4l7 7M13 4c4-1 7 1 8 4M3 21h5"/></svg></span><div><span>Resource Gathering</span><strong id="rss-buff-resource_gathering">Not set</strong></div></div>
+            </div>
+          </section>
+          <div class="rss-footer"><span id="rss-last-updated">No alliance RSS data posted yet.</span><span>Values are entered by alliance staff.</span></div>
+          <p class="rss-legacy-note hidden" id="rss-legacy-note"></p>
         </section>
 
         <section class="page hidden" id="page-updates" data-section="updates">
@@ -142,11 +202,26 @@
     </form>
   </dialog>
 
-  <dialog id="rss-dialog" class="dialog">
-    <form id="rss-form"><div class="dialog-top"><h2>Alliance RSS</h2><button type="button" data-close="rss-dialog" class="close-button" aria-label="Close">×</button></div>
-      <label for="rss-value">Resources per hour</label><input id="rss-value" placeholder="e.g. 2500000" inputmode="decimal" maxlength="80">
-      <label for="rss-tech">Next alliance technology plan</label><textarea id="rss-tech" rows="5" maxlength="2500" placeholder="What are we researching next?"></textarea>
-      <p class="form-error" id="rss-error" aria-live="polite"></p>
+  <dialog id="rss-dialog" class="dialog rss-editor">
+    <form id="rss-form">
+      <div class="dialog-top"><div><span class="section-kicker">ALLIANCE RSS</span><h2>Edit alliance resources</h2></div><button type="button" data-close="rss-dialog" class="close-button" aria-label="Close">×</button></div>
+      <p class="form-intro">Enter full resource amounts, not abbreviated values. All fields are optional, and zero is a valid value.</p>
+      <fieldset class="rss-editor-group"><legend>Resources</legend>
+        <div class="rss-edit-resource"><strong>Ammo</strong><div class="form-columns"><div><label for="rss-stock-ammo">Current balance</label><input id="rss-stock-ammo" type="number" min="0" step="0.01" placeholder="e.g. 21200"></div><div><label for="rss-income-ammo">Per hour</label><input id="rss-income-ammo" type="number" min="0" step="0.01" placeholder="e.g. 122400"></div></div></div>
+        <div class="rss-edit-resource"><strong>Cash</strong><div class="form-columns"><div><label for="rss-stock-cash">Current balance</label><input id="rss-stock-cash" type="number" min="0" step="0.01"></div><div><label for="rss-income-cash">Per hour</label><input id="rss-income-cash" type="number" min="0" step="0.01"></div></div></div>
+        <div class="rss-edit-resource"><strong>Electricity</strong><div class="form-columns"><div><label for="rss-stock-electricity">Current balance</label><input id="rss-stock-electricity" type="number" min="0" step="0.01"></div><div><label for="rss-income-electricity">Per hour</label><input id="rss-income-electricity" type="number" min="0" step="0.01"></div></div></div>
+        <div class="rss-edit-resource"><strong>Gas</strong><div class="form-columns"><div><label for="rss-stock-gas">Current balance</label><input id="rss-stock-gas" type="number" min="0" step="0.01"></div><div><label for="rss-income-gas">Per hour</label><input id="rss-income-gas" type="number" min="0" step="0.01"></div></div></div>
+      </fieldset>
+      <fieldset class="rss-editor-group"><legend>Territory and technology</legend>
+        <label for="rss-territory-input">Territory expansion notes</label><textarea id="rss-territory-input" rows="2" maxlength="1200" placeholder="Next flag placement or territory goal"></textarea>
+        <label for="rss-tech-title-input">Next technology name</label><input id="rss-tech-title-input" maxlength="120" placeholder="Research priority">
+        <label for="rss-tech-notes-input">Technology plan</label><textarea id="rss-tech-notes-input" rows="3" maxlength="2500" placeholder="What are we researching next?"></textarea>
+        <label for="rss-tech-progress-input">Research progress (%)</label><input id="rss-tech-progress-input" type="number" min="0" max="100" step="0.01" placeholder="Leave blank if unknown">
+      </fieldset>
+      <fieldset class="rss-editor-group"><legend>Territory buffs (%)</legend>
+        <div class="form-columns"><div><label for="rss-buff-input-troop_attack">Troop Attack</label><input id="rss-buff-input-troop_attack" type="number" min="0" max="1000" step="0.01" placeholder="Not recorded"></div><div><label for="rss-buff-input-troop_defense">Troop Defense</label><input id="rss-buff-input-troop_defense" type="number" min="0" max="1000" step="0.01" placeholder="Not recorded"></div><div><label for="rss-buff-input-troop_hp">Troop HP</label><input id="rss-buff-input-troop_hp" type="number" min="0" max="1000" step="0.01" placeholder="Not recorded"></div><div><label for="rss-buff-input-resource_gathering">Resource Gathering</label><input id="rss-buff-input-resource_gathering" type="number" min="0" max="1000" step="0.01" placeholder="Not recorded"></div></div>
+      </fieldset>
+      <p class="form-error" id="rss-error" role="alert" aria-live="polite"></p>
       <div class="dialog-actions"><button type="button" class="small-button" data-close="rss-dialog">Cancel</button><button type="submit" class="primary-button">Save changes</button></div>
     </form>
   </dialog>
