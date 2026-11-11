@@ -159,6 +159,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .entrance-spark-one { top: 12%; left: -6%; animation-delay: 1s; }
 .entrance-spark-two { right: -12%; top: 41%; animation-delay: 3s; }
 .entrance-spark-three { bottom: -1%; left: 26%; animation-delay: 4.5s; }
+.entrance-picture {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
 .entrance-logo {
   width: 93%;
   height: auto;
@@ -296,6 +304,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .website{min-height:100vh}
 .site-header{height:84px;background:#fff;border-bottom:1px solid var(--line);padding:0 clamp(24px,3.4vw,58px);display:flex;align-items:center;justify-content:space-between;gap:20px}
 .header-brand,.header-actions{display:flex;align-items:center;gap:18px}
+.header-picture{display:grid;place-items:center;width:54px;height:54px;flex:none}
 .header-logo{width:54px;height:54px;object-fit:contain}
 .header-brand>div{display:flex;align-items:baseline;gap:10px}
 .header-brand strong{font-size:27px;letter-spacing:-.05em}
@@ -311,6 +320,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .content{padding:clamp(26px,3.5vw,55px);min-width:0}
 .right-sidebar{background:linear-gradient(180deg,#fff,#fafbfd);border-left:1px solid var(--line);padding:32px 18px 23px;display:flex;flex-direction:column;gap:10px}
 .sidebar-identity{padding:7px 8px 32px;display:flex;flex-direction:column;align-items:center;text-align:center;border-bottom:1px solid var(--line)}
+.sidebar-picture{width:88px;height:88px;display:grid;place-items:center}
 .sidebar-identity img{height:88px;width:88px;object-fit:contain;filter:drop-shadow(0 5px 8px rgba(74,44,94,.1));transition:transform .35s}
 .sidebar-identity img:hover{transform:translateY(-4px) scale(1.04)}
 .sidebar-identity strong{font-size:14px;margin-top:12px}
