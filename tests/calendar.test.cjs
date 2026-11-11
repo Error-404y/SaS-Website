@@ -58,7 +58,8 @@ test('downloadable calendar file contains valid UTC fields and escaped event con
   assert.ok(file.includes('DTEND:20261111T143000Z\r\n'));
   assert.ok(file.includes('DTSTAMP:20261110T100000Z\r\n'));
   assert.ok(file.includes('SUMMARY:Alliance\\, Council\\; Session\r\n'));
-  assert.ok(file.includes('Meet at the hall\\;\\nbring supplies.'));
+  const unfolded = file.replace(/\r\n /g, '');
+  assert.ok(unfolded.includes('Meet at the hall\\;\\nbring supplies.'));
   assert.ok(file.includes('UID:sas-12@sas-website.invalid\r\n'));
   for (const line of file.split('\r\n')) {
     assert.ok(Buffer.byteLength(line, 'utf8') <= 75);
