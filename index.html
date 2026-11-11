@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fb">
+  <meta name="description" content="Saints and Sinners alliance events, resources and news.">
+  <title>SaS | Alliance Website</title>
+  <link rel="icon" href="/assets/logo.webp" type="image/webp">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div id="entrance" class="entrance">
+    <div class="entrance-halo" aria-hidden="true"></div>
+    <div class="entrance-content">
+      <img src="/assets/logo.webp" class="entrance-logo" alt="Saints and Sinners crest">
+      <p class="entrance-eyebrow">SAINTS AND SINNERS</p>
+      <h1>Welcome to SaS.</h1>
+      <p class="entrance-copy">Your alliance, all in one place.</p>
+      <button id="enter-site" type="button" class="enter-button">Bring me in! <span aria-hidden="true">→</span></button>
+    </div>
+  </div>
+
+  <div id="website" class="website hidden">
+    <header class="site-header">
+      <div class="header-brand">
+        <img src="/assets/logo.webp" alt="" class="header-logo">
+        <div><strong>SaS</strong><span>Saints and Sinners</span></div>
+        <span class="header-divider"></span><span id="header-section">Events</span>
+      </div>
+      <div class="header-actions">
+        <div class="utc-clock"><span>SERVER TIME (UTC)</span><strong id="clock">--:--:--</strong></div>
+        <button class="small-button" id="admin-toggle" type="button">Admin login</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <main class="content" id="main-content">
+        <section class="page" id="page-events" data-section="events">
+          <div class="page-title"><h1>Events</h1><button type="button" class="primary-button admin-only" data-create="events" hidden>Add event</button></div>
+          <div class="stats-grid">
+            <div class="stat-box"><span>Active Events</span><strong id="events-active">0</strong></div>
+            <div class="stat-box"><span>Upcoming Events</span><strong id="events-upcoming">0</strong></div>
+          </div>
+          <div class="filter-bar">
+            <input type="search" id="events-search" placeholder="Search events..." aria-label="Search events">
+            <select id="events-category" aria-label="Filter event categories"><option value="">All Categories</option><option>Events</option><option>Deals</option><option>Alliance</option><option>Port Inspection</option><option>Other</option></select>
+            <select id="events-status" aria-label="Filter event status"><option value="">All Statuses</option><option value="active">In Progress</option><option value="upcoming">Upcoming</option><option value="ended">Ended</option></select>
+          </div>
+          <div class="table-container">
+            <table class="event-table"><thead><tr><th>Event</th><th>Category</th><th>Start (UTC)</th><th>End (UTC)</th><th>Status</th></tr></thead><tbody id="events-rows"></tbody></table>
+          </div>
+        </section>
+
+        <section class="page hidden" id="page-alliance" data-section="alliance">
+          <div class="page-title"><h1>Alliance Events</h1><button type="button" class="primary-button admin-only" data-create="alliance" hidden>Add alliance event</button></div>
+          <div class="stats-grid">
+            <div class="stat-box"><span>Active Events</span><strong id="alliance-active">0</strong></div>
+            <div class="stat-box"><span>Upcoming Events</span><strong id="alliance-upcoming">0</strong></div>
+          </div>
+          <div class="filter-bar"><input type="search" id="alliance-search" placeholder="Search alliance events..." aria-label="Search alliance events"><select id="alliance-status" aria-label="Filter status"><option value="">All Statuses</option><option value="active">In Progress</option><option value="upcoming">Upcoming</option><option value="ended">Ended</option></select></div>
+          <div class="table-container"><table class="event-table"><thead><tr><th>Event</th><th>Category</th><th>Start (UTC)</th><th>End (UTC)</th><th>Status</th></tr></thead><tbody id="alliance-rows"></tbody></table></div>
+        </section>
+
+        <section class="page hidden" id="page-rss" data-section="rss">
+          <div class="page-title"><h1>Alliance RSS</h1><button type="button" class="primary-button admin-only" id="rss-edit" hidden>Edit figures</button></div>
+          <div class="rss-layout">
+            <div class="rss-primary"><span class="section-kicker">ALLIANCE RESOURCE INCOME</span><div class="rss-number" id="rss-hour">Not added yet</div><span class="rss-unit" id="rss-unit">Resources per hour</span><div class="rss-rule"></div><p>Our current alliance gathering rate.</p></div>
+            <div class="tech-panel"><span class="section-kicker">UP NEXT</span><h2>Alliance Technology</h2><p id="tech-plan">Our next technology plan has not been posted yet.</p></div>
+          </div>
+        </section>
+
+        <section class="page hidden" id="page-updates" data-section="updates">
+          <div class="page-title"><h1>Website Updates</h1><button type="button" class="primary-button admin-only" data-create="updates" hidden>Post update</button></div>
+          <div class="post-list" id="updates-list"></div>
+        </section>
+
+        <section class="page hidden" id="page-announcements" data-section="announcements">
+          <div class="page-title"><h1>HR Announcements</h1><button type="button" class="primary-button admin-only" data-create="announcements" hidden>Post announcement</button></div>
+          <div class="post-list" id="announcements-list"></div>
+        </section>
+      </main>
+
+      <aside class="right-sidebar" aria-label="Website navigation">
+        <div class="sidebar-identity"><img src="/assets/logo.webp" alt="Saints and Sinners logo"><strong>Saints and Sinners</strong><span>Alliance Website</span></div>
+        <p class="sidebar-heading">EXPLORE</p>
+        <nav class="sidebar-nav">
+          <button type="button" data-view="events" class="selected">Events</button>
+          <button type="button" data-view="alliance">Alliance Events</button>
+          <button type="button" data-view="rss">Alliance RSS</button>
+          <button type="button" data-view="updates">Website Updates</button>
+          <button type="button" data-view="announcements">HR Announcements</button>
+        </nav>
+        <div class="sidebar-footer"><span>SaS Alliance</span><span>All event times are UTC.</span></div>
+      </aside>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </div>
+
+  <dialog id="detail-dialog" class="dialog">
+    <div class="dialog-top"><div><span class="section-kicker">EVENT DETAILS</span><h2 id="detail-title"></h2></div><button type="button" data-close="detail-dialog" class="close-button" aria-label="Close">×</button></div>
+    <div id="detail-body" class="detail-body"></div>
+    <div class="dialog-actions"><button type="button" class="small-button" data-close="detail-dialog">Close</button><button type="button" class="primary-button admin-only" id="detail-edit" hidden>Edit</button></div>
+  </dialog>
+
+  <dialog id="entry-dialog" class="dialog">
+    <form id="entry-form">
+      <div class="dialog-top"><div><span class="section-kicker">ALLIANCE WEBSITE</span><h2 id="entry-heading">Add entry</h2></div><button type="button" data-close="entry-dialog" class="close-button" aria-label="Close">×</button></div>
+      <input type="hidden" id="entry-id"><input type="hidden" id="entry-kind">
+      <label for="entry-title">Title</label><input id="entry-title" maxlength="120" required placeholder="Event or post title">
+      <div id="event-fields">
+        <label for="entry-category">Category</label><select id="entry-category"><option>Events</option><option>Deals</option><option>Alliance</option><option>Port Inspection</option><option>Other</option></select>
+        <div class="form-columns"><div><label for="entry-start">Start (UTC)</label><input id="entry-start" placeholder="YYYY-MM-DD HH:MM:SS" maxlength="19"></div><div><label for="entry-end">End (UTC)</label><input id="entry-end" placeholder="YYYY-MM-DD HH:MM:SS" maxlength="19"></div></div>
+        <label for="entry-rewards">Rewards</label><textarea id="entry-rewards" maxlength="1600" rows="2" placeholder="Optional rewards"></textarea>
+      </div>
+      <div id="author-field" class="hidden"><label for="entry-author">Announcement from</label><select id="entry-author"><option>R4</option><option>R5</option></select></div>
+      <label for="entry-details" id="details-label">Details</label><textarea id="entry-details" maxlength="5000" rows="4" placeholder="Add more information"></textarea>
+      <p class="form-error" id="entry-error" aria-live="polite"></p>
+      <div class="dialog-actions"><button type="button" class="danger-button hidden" id="entry-delete">Delete</button><button type="button" class="small-button" data-close="entry-dialog">Cancel</button><button type="submit" class="primary-button">Save</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="rss-dialog" class="dialog">
+    <form id="rss-form"><div class="dialog-top"><h2>Alliance RSS</h2><button type="button" data-close="rss-dialog" class="close-button" aria-label="Close">×</button></div>
+      <label for="rss-value">Resources per hour</label><input id="rss-value" placeholder="e.g. 2500000" inputmode="decimal" maxlength="80">
+      <label for="rss-tech">Next alliance technology plan</label><textarea id="rss-tech" rows="5" maxlength="2500" placeholder="What are we researching next?"></textarea>
+      <p class="form-error" id="rss-error" aria-live="polite"></p>
+      <div class="dialog-actions"><button type="button" class="small-button" data-close="rss-dialog">Cancel</button><button type="submit" class="primary-button">Save changes</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="login-dialog" class="dialog auth-dialog">
+    <form id="login-form" autocomplete="on"><div class="dialog-top"><div><span class="section-kicker">EDITOR ACCESS</span><h2>Admin login</h2></div><button type="button" data-close="login-dialog" class="close-button" aria-label="Close">×</button></div>
+      <p class="form-intro">Everyone can view the website. An administrator account is only needed to make changes.</p>
+      <label for="login-username">Username</label><input id="login-username" autocomplete="username" required>
+      <label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required>
+      <p class="form-error" id="login-error" aria-live="polite"></p>
+      <div class="dialog-actions"><button class="primary-button wide-button" type="submit">Sign in</button></div>
+    </form>
+  </dialog>
+</body>
+</html>
