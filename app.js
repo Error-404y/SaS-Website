@@ -1,7 +1,8 @@
 (() => {
   const one = selector => document.querySelector(selector);
+  const rssTools = window.SasRss;
   const all = selector => [...document.querySelectorAll(selector)];
-  const site = { entries: [], settings: {}, admin: false, csrf: null, page: 'events', selected: null };
+  const site = { entries: [], settings: {}, rss: null, admin: false, csrf: null, page: 'events', selected: null };
   const labels = { events: 'Events', alliance: 'Alliance Events', rss: 'Alliance RSS', updates: 'Website Updates', announcements: 'HR Announcements' };
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const calendar = window.SasCalendar;
@@ -113,11 +114,45 @@
   }
 
   function rss() {
-    const value = site.settings.rss_hour || '';
-    const parsed = Number(value.replace(/[,\s]/g, ''));
-    one('#rss-hour').textContent = value ? (Number.isFinite(parsed) ? parsed.toLocaleString('en-US') : value) : 'Not added yet';
-    one('#rss-unit').textContent = 'Resources per hour';
-    one('#tech-plan').textContent = site.settings.tech_plan || 'Our next technology plan has not been posted yet.';
+    const data = rssTools.normalize(site.rss || {
+      tech_plan: site.settings.tech_plan || '',
+      legacy_hour: site.settings.rss_hour || ''
+    });
+    for (const key of rssTools.resources) {
+      one('#rss-amount-' + key).textContent = rssTools.formatAmount(data.resources[key].stored);
+      const rate = one('#rss-rate-' + key);
+      rate.textContent = rssTools.formatRate(data.resources[key].per_hour);
+      rate.classList.toggle('rss-value-missing', data.resources[key].per_hour === null);
+    }
+    for (const key of rssTools.buffs) {
+      const buff = one('#rss-buff-' + key);
+      buff.textContent = rssTools.formatBuff(data.buffs[key]);
+      buff.classList.toggle('rss-value-missing', data.buffs[key] === null);
+    }
+    one('#rss-buffs-heading').textContent = Object.values(data.buffs).some(value => value > 0)
+      ? 'Active Territory Buffs' : 'Territory Buffs';
+    one('#rss-territory-plan').textContent = data.territory_plan ||
+      'Alliance HQ and flags expand controlled territory.';
+    one('#rss-tech-name').textContent = data.tech_name || 'No technology selected';
+    one('#rss-tech-plan').textContent = data.tech_plan ||
+      'Our next technology plan has not been posted yet.';
+    const progress = rssTools.formatProgress(data.tech_progress);
+    one('#rss-tech-progress-box').classList.toggle('hidden', progress === null);
+    one('#rss-tech-unreported').classList.toggle('hidden', progress !== null);
+    if (progress !== null) {
+      one('#rss-progress-fill').style.width = data.tech_progress + '%';
+      one('#rss-progress-track').setAttribute('aria-valuenow', String(data.tech_progress));
+      one('#rss-tech-progress-label').textContent = progress;
+    }
+    one('#rss-last-updated').textContent = rssTools.formatUpdated(data.updated_at);
+    const unassigned = data.legacy_hour.trim() &&
+      rssTools.resources.every(key => data.resources[key].per_hour === null);
+    const legacy = one('#rss-legacy-note');
+    legacy.classList.toggle('hidden', !unassigned || !site.admin);
+    if (unassigned) {
+      legacy.textContent = 'Previously saved total rate: ' + data.legacy_hour +
+        '/h. This value has been kept, but it cannot be assigned to individual resources automatically.';
+    }
   }
 
   function render() {
@@ -166,6 +201,7 @@
     const data = await request('/api/state');
     site.entries = Array.isArray(data.entries) ? data.entries : [];
     site.settings = data.settings || {};
+    site.rss = data.rss || null;
     render();
   }
 
@@ -287,15 +323,36 @@
 
   async function saveRss(event) {
     event.preventDefault();
+    const error = one('#rss-error');
+    error.textContent = '';
     try {
-      await request('/api/rss', { method: 'PUT', body: JSON.stringify({
-        rss_hour: one('#rss-value').value, tech_plan: one('#rss-tech').value
-      }) });
+      const resources = {};
+      for (const key of rssTools.resources) {
+        resources[key] = {
+          stored: rssTools.readNumber(one('#rss-stock-' + key).value, key + ' balance'),
+          per_hour: rssTools.readNumber(one('#rss-income-' + key).value, key + ' income per hour')
+        };
+      }
+      const buffs = {};
+      for (const key of rssTools.buffs) {
+        buffs[key] = rssTools.readNumber(one('#rss-buff-input-' + key).value,
+          key.replace(/_/g, ' ') + ' buff', 1000);
+      }
+      const payload = {
+        resources,
+        buffs,
+        tech_name: one('#rss-tech-title-input').value,
+        tech_plan: one('#rss-tech-notes-input').value,
+        tech_progress: rssTools.readNumber(one('#rss-tech-progress-input').value,
+          'Technology progress', 100),
+        territory_plan: one('#rss-territory-input').value
+      };
+      await request('/api/rss', { method: 'PUT', body: JSON.stringify(payload) });
       one('#rss-dialog').close();
       await reload();
       notify('Alliance RSS updated.');
-    } catch (error) {
-      one('#rss-error').textContent = error.message;
+    } catch (problem) {
+      error.textContent = problem.message;
     }
   }
 
@@ -384,8 +441,22 @@
     if (item) { one('#detail-dialog').close(); edit(item.kind, item.id); }
   });
   one('#rss-edit').addEventListener('click', () => {
-    one('#rss-value').value = site.settings.rss_hour || '';
-    one('#rss-tech').value = site.settings.tech_plan || '';
+    const data = rssTools.normalize(site.rss || {
+      tech_plan: site.settings.tech_plan || '',
+      legacy_hour: site.settings.rss_hour || ''
+    });
+    for (const key of rssTools.resources) {
+      const item = data.resources[key];
+      one('#rss-stock-' + key).value = item.stored === null ? '' : item.stored;
+      one('#rss-income-' + key).value = item.per_hour === null ? '' : item.per_hour;
+    }
+    for (const key of rssTools.buffs) {
+      one('#rss-buff-input-' + key).value = data.buffs[key] === null ? '' : data.buffs[key];
+    }
+    one('#rss-tech-title-input').value = data.tech_name;
+    one('#rss-tech-notes-input').value = data.tech_plan;
+    one('#rss-tech-progress-input').value = data.tech_progress === null ? '' : data.tech_progress;
+    one('#rss-territory-input').value = data.territory_plan;
     one('#rss-error').textContent = '';
     openDialog('rss-dialog');
   });
@@ -408,6 +479,7 @@
     setAdmin(!!session.admin, session.csrf);
     site.entries = Array.isArray(data.entries) ? data.entries : [];
     site.settings = data.settings || {};
+    site.rss = data.rss || null;
     render();
   }).catch(() => notify('Unable to load website data. Please refresh.'));
   setInterval(() => { if (!document.hidden) reload().catch(() => {}); }, 60000);
