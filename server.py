@@ -16,6 +16,22 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
+
+def load_local_env():
+    path = ROOT / ".env"
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        value = line.strip()
+        if not value or value.startswith("#") or "=" not in value:
+            continue
+        key, setting = value.split("=", 1)
+        key = key.strip()
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
+            continue
+        os.environ.setdefault(key, setting.strip().strip('"').strip("'"))
+
+load_local_env()
 DB = Path(os.environ.get("SAS_DB_PATH", str(ROOT / "data" / "website.sqlite3")))
 HOST = os.environ.get("SAS_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SERVER_PORT") or os.environ.get("PORT") or "8080")
