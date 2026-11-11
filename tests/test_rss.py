@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 import tempfile
 import threading
 import unittest
@@ -159,6 +160,75 @@ class RssTests(unittest.TestCase):
         updated["tech_plan"] = state["tech_plan"]
         self.assertEqual(self.send("/api/rss", "PUT", updated, cookie, csrf)[0], 200)
         self.assertEqual(self.send("/api/state")[1]["rss"]["legacy_hour"], "155000")
+
+    def test_resource_income_stops_at_cap_and_resumes_after_spending(self):
+        resources = {
+            key: {"stored": None, "per_hour": None, "limit": 1200000}
+            for key in server.RSS_RESOURCES
+        }
+        resources["ammo"] = {"stored": 1000, "per_hour": 3600, "limit": 1200}
+        settings = {
+            "rss_resources": json.dumps(resources),
+            "rss_base_at": "2026-11-10T00:00:00+00:00"
+        }
+        moment = datetime(2026, 11, 10, 0, 5, 0, tzinfo=timezone.utc)
+        without_spending = server.rss_state(settings, [], moment)
+        self.assertEqual(without_spending["resources"]["ammo"]["current"], 1200)
+        spending = [{
+            "id": 1, "resource": "ammo", "amount": 100,
+            "spent_at": "2026-11-10 00:04:00", "note": "Research",
+            "created_at": "2026-11-10T00:04:00+00:00"
+        }]
+        with_spending = server.rss_state(settings, spending, moment)
+        self.assertEqual(with_spending["resources"]["ammo"]["current"], 1160)
+        later = datetime(2026, 11, 10, 0, 15, tzinfo=timezone.utc)
+        self.assertEqual(server.rss_state(settings, spending, later)["resources"]["ammo"]["current"], 1200)
+
+    def test_spending_api_validation_permissions_and_recalculation(self):
+        cookie, csrf = self.login()
+        payload = self.payload()
+        payload["resources"]["ammo"] = {"stored": 1000, "per_hour": 0, "limit": 1200000}
+        self.assertEqual(self.send("/api/rss", "PUT", payload, cookie, csrf)[0], 200)
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        entry = {"resource": "ammo", "amount": 250, "spent_at": now, "note": "Alliance research"}
+        self.assertEqual(self.send("/api/rss/spending", "POST", entry)[0], 403)
+        self.assertEqual(self.send("/api/rss/spending", "POST", entry, cookie)[0], 403)
+        status, response, _ = self.send("/api/rss/spending", "POST", entry, cookie, csrf)
+        self.assertEqual(status, 201)
+        spending_id = response["id"]
+        state = self.send("/api/state")[1]["rss"]
+        self.assertEqual(state["resources"]["ammo"]["current"], 750)
+        self.assertEqual(state["spending"][0]["note"], "Alliance research")
+        self.assertTrue(state["spending"][0]["included"])
+        self.assertEqual(self.send("/api/rss/spending", "POST", {**entry, "amount": 900}, cookie, csrf)[0], 400)
+        future = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+        self.assertEqual(self.send("/api/rss/spending", "POST", {**entry, "spent_at": future}, cookie, csrf)[0], 400)
+        self.assertEqual(self.send("/api/rss/spending/" + str(spending_id), "DELETE")[0], 403)
+        self.assertEqual(self.send("/api/rss/spending/" + str(spending_id), "DELETE", cookie=cookie, csrf=csrf)[0], 200)
+        self.assertEqual(self.send("/api/state")[1]["rss"]["resources"]["ammo"]["current"], 1000)
+
+    def test_spending_history_is_not_counted_twice_after_manual_balance_reset(self):
+        cookie, csrf = self.login()
+        payload = self.payload()
+        payload["resources"]["ammo"] = {"stored": 1000, "per_hour": 0, "limit": 1200000}
+        self.assertEqual(self.send("/api/rss", "PUT", payload, cookie, csrf)[0], 200)
+        spent_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        self.assertEqual(self.send("/api/rss/spending", "POST", {
+            "resource": "ammo", "amount": 200, "spent_at": spent_at, "note": ""
+        }, cookie, csrf)[0], 201)
+        reset = self.payload()
+        reset["resources"]["ammo"] = {"stored": 800, "per_hour": 0, "limit": 1200000}
+        self.assertEqual(self.send("/api/rss", "PUT", reset, cookie, csrf)[0], 200)
+        state = self.send("/api/state")[1]["rss"]
+        self.assertEqual(state["resources"]["ammo"]["current"], 800)
+        self.assertEqual(len(state["spending"]), 1)
+
+    def test_missing_balance_cannot_be_spent(self):
+        cookie, csrf = self.login()
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        self.assertEqual(self.send("/api/rss/spending", "POST", {
+            "resource": "ammo", "amount": 5, "spent_at": now
+        }, cookie, csrf)[0], 400)
 
     def test_legacy_editor_request_still_works(self):
         cookie, csrf = self.login()
