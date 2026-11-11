@@ -93,6 +93,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .status-active{background:#e7f4ed;color:#246d43}
 .status-upcoming{background:#e5f0fc;color:#2363a5}
 .status-ended{background:#f1f3f6;color:#6d7886}
+.event-status-cell{min-width:157px}
+.event-countdown{display:block;font-size:11px;font-weight:650;color:#69788e;margin-top:8px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .mobile-date{display:none}
 .empty-row{height:130px;text-align:center;color:#8591a0!important;white-space:normal!important}
 .rss-layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr);gap:20px}
@@ -130,6 +132,12 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:22px}
 .danger-button{background:transparent;border:1px solid #f3d8dc;color:#ac3e48;border-radius:8px;font-size:13px;padding:10px 14px;margin-right:auto}
 .danger-button:hover{background:#fff2f3}
+.detail-countdown-box{background:#f0f5fb;border:1px solid #dbe6f4;border-radius:10px;padding:16px 19px;margin-bottom:22px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.detail-countdown-box span{font-size:11px;font-weight:750;letter-spacing:.08em;color:#697b91}
+.detail-countdown-box strong{font-size:17px;color:#24486e;font-weight:750;font-variant-numeric:tabular-nums}
+.calendar-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:1px solid #e9edf1;padding-top:20px;margin-top:22px}
+.calendar-link{display:flex;justify-content:center;align-items:center;text-align:center;border:1px solid #cddbeb;background:#f6f9fd;border-radius:9px;padding:12px 14px;color:#2a5c93;font-size:12px;font-weight:700;text-decoration:none;transition:background .2s,border-color .2s}
+.calendar-link:hover{background:#eaf3ff;border-color:#8eacd0}
 .detail-body{display:grid;grid-template-columns:1fr 1fr;gap:18px 22px}
 .detail-item span{color:#7a8a9d;font-size:11px;letter-spacing:.04em;font-weight:750;text-transform:uppercase}
 .detail-item p{margin:8px 0 0;font-size:14px;color:#293b53;line-height:1.55;overflow-wrap:anywhere}
@@ -153,6 +161,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   .event-table{font-size:11px}
   .event-row td:first-child strong{font-size:12px}
   .status-pill{min-width:auto}
+  .event-status-cell{min-width:141px}
+  .event-countdown{font-size:10px}
   .header-brand>div span{display:none}
 }
 @media(max-width:750px){
@@ -186,6 +196,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   .event-row td:first-child strong{font-size:14px}
   .mobile-date{display:block;color:#8b96a4;font-size:11px;margin-top:5px}
   .event-table th:last-child,.event-table td:last-child{text-align:right}
+  .event-status-cell{min-width:132px}
+  .event-countdown{font-size:10px}
+  .calendar-actions{grid-template-columns:1fr}
+  .detail-countdown-box{align-items:flex-start;flex-direction:column;gap:7px}
   .rss-layout{grid-template-columns:1fr}
   .rss-primary,.tech-panel{padding:25px}
   .form-columns{grid-template-columns:1fr;gap:0}
