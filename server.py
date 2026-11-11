@@ -1,6 +1,7 @@
 import hmac
 import json
 import logging
+import math
 import os
 import re
 import secrets
@@ -42,6 +43,8 @@ WEBHOOK = os.environ.get("SAS_DISCORD_WEBHOOK_URL", "")
 LOCK = threading.RLock()
 KINDS = ("events", "alliance", "updates", "announcements")
 CATEGORIES = ("Events", "Deals", "Alliance", "Port Inspection", "Other")
+RSS_RESOURCES = ("ammo", "cash", "electricity", "gas")
+RSS_BUFFS = ("troop_attack", "troop_defense", "troop_hp", "resource_gathering")
 SEED_EVENTS = [
     ("Chief Almighty", "Events", "2026-11-09 00:00:00", "2026-11-14 23:59:59"),
     ("Precinct Powerplay", "Events", "2026-11-09 00:00:00", "2026-11-15 23:59:59"),
@@ -97,7 +100,8 @@ def init():
                 db.execute("""INSERT INTO entries(kind,title,category,start_utc,end_utc,created_at)
                     VALUES('events',?,?,?,?,?)""", (title, category, start, end, now))
             db.execute("INSERT INTO meta(key,value) VALUES('seeded','1')")
-        for key in ("rss_hour", "tech_plan"):
+        for key in ("rss_hour", "tech_plan", "rss_resources", "rss_buffs",
+                    "rss_tech_name", "rss_tech_progress", "rss_territory_plan", "rss_updated_at"):
             db.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?, '')", (key,))
 
 def now_utc():
@@ -151,6 +155,95 @@ def validate_entry(data):
             author = ""
     return kind, title, category, start, end, rewards, details, author
 
+def optional_rss_number(value, field, maximum=1000000000000000):
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise ValueError(field + " must be a non-negative number.")
+    if isinstance(value, str) and not re.fullmatch(r"\d+(?:\.\d{1,2})?", value.strip()):
+        raise ValueError(field + " must be a non-negative number with up to two decimals.")
+    try:
+        number = float(value)
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(field + " must be a valid number.") from exc
+    if not math.isfinite(number) or number < 0 or number > maximum or round(number, 2) != number:
+        raise ValueError(field + " is outside the allowed range.")
+    return int(number) if number.is_integer() else number
+
+def validate_rss(data):
+    if not isinstance(data, dict):
+        raise ValueError("Invalid form.")
+    resources = data.get("resources")
+    buffs = data.get("buffs")
+    if not isinstance(resources, dict) or set(resources) != set(RSS_RESOURCES):
+        raise ValueError("Please enter all four resource types.")
+    if not isinstance(buffs, dict) or set(buffs) != set(RSS_BUFFS):
+        raise ValueError("Invalid territory buffs.")
+    normalized_resources = {}
+    for key in RSS_RESOURCES:
+        item = resources[key]
+        if not isinstance(item, dict):
+            raise ValueError("Invalid resource details.")
+        normalized_resources[key] = {
+            "stored": optional_rss_number(item.get("stored"), key + " stored resources"),
+            "per_hour": optional_rss_number(item.get("per_hour"), key + " per hour")
+        }
+    normalized_buffs = {
+        key: optional_rss_number(buffs[key], key.replace("_", " ") + " buff", 1000)
+        for key in RSS_BUFFS
+    }
+    tech_progress = optional_rss_number(data.get("tech_progress"), "Technology progress", 100)
+    return {
+        "resources": normalized_resources,
+        "buffs": normalized_buffs,
+        "tech_name": clean(data.get("tech_name", ""), 120),
+        "tech_plan": clean(data.get("tech_plan", ""), 2500),
+        "tech_progress": tech_progress,
+        "territory_plan": clean(data.get("territory_plan", ""), 1200)
+    }
+
+def rss_state(settings):
+    def object_value(key):
+        try:
+            value = json.loads(settings.get(key) or "{}")
+            return value if isinstance(value, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+
+    saved_resources = object_value("rss_resources")
+    saved_buffs = object_value("rss_buffs")
+    resources = {}
+    buffs = {}
+    for key in RSS_RESOURCES:
+        item = saved_resources.get(key, {})
+        if not isinstance(item, dict):
+            item = {}
+        resources[key] = {}
+        for field in ("stored", "per_hour"):
+            try:
+                resources[key][field] = optional_rss_number(item.get(field), key + " " + field)
+            except ValueError:
+                resources[key][field] = None
+    for key in RSS_BUFFS:
+        try:
+            buffs[key] = optional_rss_number(saved_buffs.get(key), key, 1000)
+        except ValueError:
+            buffs[key] = None
+    try:
+        progress = optional_rss_number(settings.get("rss_tech_progress"), "Technology progress", 100)
+    except ValueError:
+        progress = None
+    return {
+        "resources": resources,
+        "buffs": buffs,
+        "tech_name": settings.get("rss_tech_name", ""),
+        "tech_plan": settings.get("tech_plan", ""),
+        "tech_progress": progress,
+        "territory_plan": settings.get("rss_territory_plan", ""),
+        "updated_at": settings.get("rss_updated_at", ""),
+        "legacy_hour": settings.get("rss_hour", "")
+    }
+
 def current_session(handler):
     cookie = SimpleCookie()
     try:
@@ -169,8 +262,9 @@ def get_state():
     with LOCK, connect() as db:
         rows = db.execute("""SELECT id,kind,title,category,start_utc,end_utc,rewards,details,author,created_at
             FROM entries ORDER BY CASE WHEN kind IN ('events','alliance') THEN start_utc ELSE created_at END DESC, id DESC""").fetchall()
-        settings = db.execute("SELECT key,value FROM settings").fetchall()
-    return {"entries": [dict(row) for row in rows], "settings": {r["key"]: r["value"] for r in settings}, "utc": now_utc()}
+        settings = {r["key"]: r["value"] for r in db.execute("SELECT key,value FROM settings").fetchall()}
+    return {"entries": [dict(row) for row in rows], "settings": settings,
+            "rss": rss_state(settings), "utc": now_utc()}
 
 def webhook_valid(url):
     parts = urlsplit(url)
@@ -353,13 +447,27 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, {"ok": True})
             if path == "/api/rss" and method == "PUT":
                 data = self.read_json()
-                hourly = clean(data.get("rss_hour", ""), 80)
-                tech = clean(data.get("tech_plan", ""), 2500)
-                if hourly and not re.fullmatch(r"\d[\d,. ]*", hourly):
-                    raise ValueError("Enter a numeric hourly RSS amount.")
+                if "resources" in data or "buffs" in data:
+                    values = validate_rss(data)
+                    updates = {
+                        "rss_resources": json.dumps(values["resources"], separators=(",", ":")),
+                        "rss_buffs": json.dumps(values["buffs"], separators=(",", ":")),
+                        "rss_tech_name": values["tech_name"],
+                        "tech_plan": values["tech_plan"],
+                        "rss_tech_progress": "" if values["tech_progress"] is None else str(values["tech_progress"]),
+                        "rss_territory_plan": values["territory_plan"],
+                        "rss_updated_at": now_utc()
+                    }
+                else:
+                    hourly = clean(data.get("rss_hour", ""), 80)
+                    tech = clean(data.get("tech_plan", ""), 2500)
+                    if hourly and not re.fullmatch(r"\d[\d,. ]*", hourly):
+                        raise ValueError("Enter a numeric hourly RSS amount.")
+                    updates = {"rss_hour": hourly, "tech_plan": tech, "rss_updated_at": now_utc()}
                 with LOCK, connect() as db:
-                    db.execute("UPDATE settings SET value=? WHERE key='rss_hour'", (hourly,))
-                    db.execute("UPDATE settings SET value=? WHERE key='tech_plan'", (tech,))
+                    for key, value in updates.items():
+                        db.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                                   (key, value))
                 return self.respond(200, {"ok": True})
             return self.respond(404, {"error": "Not found."})
         except ValueError as exc:
