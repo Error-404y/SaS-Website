@@ -9,7 +9,7 @@ import sqlite3
 import threading
 import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -77,9 +77,12 @@ def init():
             details TEXT NOT NULL DEFAULT '',
             author TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
+            modified_at TEXT NOT NULL DEFAULT '',
             reminded_at INTEGER,
             reminder_claimed_at INTEGER
         )""")
+        if "modified_at" not in {row["name"] for row in db.execute("PRAGMA table_info(entries)")}:
+            db.execute("ALTER TABLE entries ADD COLUMN modified_at TEXT NOT NULL DEFAULT ''")
         db.execute("""CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -101,7 +104,8 @@ def init():
                     VALUES('events',?,?,?,?,?)""", (title, category, start, end, now))
             db.execute("INSERT INTO meta(key,value) VALUES('seeded','1')")
         for key in ("rss_hour", "tech_plan", "rss_resources", "rss_buffs",
-                    "rss_tech_name", "rss_tech_progress", "rss_territory_plan", "rss_updated_at"):
+                    "rss_tech_name", "rss_tech_progress", "rss_tech_stage", "rss_tech_ends_at",
+                    "rss_territory_plan", "rss_updated_at"):
             db.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?, '')", (key,))
 
 def now_utc():
@@ -170,6 +174,21 @@ def optional_rss_number(value, field, maximum=1000000000000000):
         raise ValueError(field + " is outside the allowed range.")
     return int(number) if number.is_integer() else number
 
+def parse_research_duration(value):
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"\d{1,3}:[0-5]\d:[0-5]\d", value):
+        raise ValueError("Enter time remaining as HH:MM:SS, for example 01:45:00.")
+    hours, minutes, seconds = [int(part) for part in value.split(":")]
+    return hours * 3600 + minutes * 60 + seconds
+
+def research_deadline(value, current=None):
+    seconds = parse_research_duration(value)
+    if seconds is None:
+        return ""
+    current = current or datetime.now(timezone.utc)
+    return (current + timedelta(seconds=seconds)).isoformat(timespec="seconds")
+
 def validate_rss(data):
     if not isinstance(data, dict):
         raise ValueError("Invalid form.")
@@ -193,12 +212,17 @@ def validate_rss(data):
         for key in RSS_BUFFS
     }
     tech_progress = optional_rss_number(data.get("tech_progress"), "Technology progress", 100)
+    remaining = data.get("tech_remaining")
+    if "tech_remaining" in data:
+        parse_research_duration(remaining)
     return {
         "resources": normalized_resources,
         "buffs": normalized_buffs,
         "tech_name": clean(data.get("tech_name", ""), 120),
         "tech_plan": clean(data.get("tech_plan", ""), 2500),
         "tech_progress": tech_progress,
+        "tech_stage": clean(data.get("tech_stage", ""), 120),
+        "tech_remaining": remaining,
         "territory_plan": clean(data.get("territory_plan", ""), 1200)
     }
 
@@ -239,6 +263,8 @@ def rss_state(settings):
         "tech_name": settings.get("rss_tech_name", ""),
         "tech_plan": settings.get("tech_plan", ""),
         "tech_progress": progress,
+        "tech_stage": settings.get("rss_tech_stage", ""),
+        "tech_ends_at": settings.get("rss_tech_ends_at", ""),
         "territory_plan": settings.get("rss_territory_plan", ""),
         "updated_at": settings.get("rss_updated_at", ""),
         "legacy_hour": settings.get("rss_hour", "")
@@ -260,7 +286,7 @@ def current_session(handler):
 
 def get_state():
     with LOCK, connect() as db:
-        rows = db.execute("""SELECT id,kind,title,category,start_utc,end_utc,rewards,details,author,created_at
+        rows = db.execute("""SELECT id,kind,title,category,start_utc,end_utc,rewards,details,author,created_at,modified_at
             FROM entries ORDER BY CASE WHEN kind IN ('events','alliance') THEN start_utc ELSE created_at END DESC, id DESC""").fetchall()
         settings = {r["key"]: r["value"] for r in db.execute("SELECT key,value FROM settings").fetchall()}
     return {"entries": [dict(row) for row in rows], "settings": settings,
@@ -428,8 +454,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/entries" and method == "POST":
                 values = validate_entry(self.read_json())
                 with LOCK, connect() as db:
-                    cursor = db.execute("""INSERT INTO entries(kind,title,category,start_utc,end_utc,rewards,details,author,created_at)
-                        VALUES(?,?,?,?,?,?,?,?,?)""", (*values, now_utc()))
+                    stamp = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+                    cursor = db.execute("""INSERT INTO entries(kind,title,category,start_utc,end_utc,rewards,details,author,created_at,modified_at)
+                        VALUES(?,?,?,?,?,?,?,?,?,?)""", (*values, stamp, stamp))
                     created_id = cursor.lastrowid
                 return self.respond(201, {"id": created_id})
             match = re.fullmatch(r"/api/entries/(\d+)", path)
@@ -440,9 +467,10 @@ class Handler(BaseHTTPRequestHandler):
                         cursor = db.execute("DELETE FROM entries WHERE id=?", (entry_id,))
                     else:
                         values = validate_entry(self.read_json())
+                        stamp = datetime.now(timezone.utc).isoformat(timespec="microseconds")
                         cursor = db.execute("""UPDATE entries SET kind=?,title=?,category=?,start_utc=?,end_utc=?,
-                            rewards=?,details=?,author=?,reminded_at=NULL,reminder_claimed_at=NULL WHERE id=?""",
-                            (*values, entry_id))
+                            rewards=?,details=?,author=?,modified_at=?,reminded_at=NULL,reminder_claimed_at=NULL WHERE id=?""",
+                            (*values, stamp, entry_id))
                     if cursor.rowcount == 0:
                         return self.respond(404, {"error": "Entry not found."})
                 return self.respond(200, {"ok": True})
@@ -455,16 +483,21 @@ class Handler(BaseHTTPRequestHandler):
                         "rss_buffs": json.dumps(values["buffs"], separators=(",", ":")),
                         "rss_tech_name": values["tech_name"],
                         "tech_plan": values["tech_plan"],
-                        "rss_tech_progress": "" if values["tech_progress"] is None else str(values["tech_progress"]),
                         "rss_territory_plan": values["territory_plan"],
-                        "rss_updated_at": now_utc()
+                        "rss_updated_at": datetime.now(timezone.utc).isoformat(timespec="microseconds")
                     }
+                    if "tech_progress" in data:
+                        updates["rss_tech_progress"] = "" if values["tech_progress"] is None else str(values["tech_progress"])
+                    if "tech_stage" in data:
+                        updates["rss_tech_stage"] = values["tech_stage"]
+                    if "tech_remaining" in data:
+                        updates["rss_tech_ends_at"] = research_deadline(values["tech_remaining"])
                 else:
                     hourly = clean(data.get("rss_hour", ""), 80)
                     tech = clean(data.get("tech_plan", ""), 2500)
                     if hourly and not re.fullmatch(r"\d[\d,. ]*", hourly):
                         raise ValueError("Enter a numeric hourly RSS amount.")
-                    updates = {"rss_hour": hourly, "tech_plan": tech, "rss_updated_at": now_utc()}
+                    updates = {"rss_hour": hourly, "tech_plan": tech, "rss_updated_at": datetime.now(timezone.utc).isoformat(timespec="microseconds")}
                 with LOCK, connect() as db:
                     for key, value in updates.items():
                         db.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
