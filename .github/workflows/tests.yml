@@ -15,3 +15,5 @@ jobs:
       - run: python -m unittest discover -s tests -v
       - run: python -m py_compile server.py main.py
       - run: node --check app.js
+      - run: node --check calendar.js
+      - run: node --test tests/calendar.test.cjs
