@@ -263,7 +263,8 @@ class Handler(BaseHTTPRequestHandler):
                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/calendar.js": ("calendar.js", "text/javascript; charset=utf-8"),
                   "/styles.css": ("styles.css", "text/css; charset=utf-8"),
-                  "/assets/logo.webp": ("assets/logo.webp", "image/webp")}
+                  "/assets/logo.webp": ("assets/logo.webp", "image/webp"),
+                  "/assets/crest.avif": ("assets/crest.avif", "image/avif")}
         if path in assets:
             return self.asset(*assets[path])
         return self.respond(404, {"error": "Not found."})
