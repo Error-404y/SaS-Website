@@ -12,7 +12,11 @@ The Saints and Sinners crest appears on the welcome screen, in the header and in
 
 **Alliance Events** uses a completely separate event list with the same detail view and live countdowns.
 
-**Alliance RSS** displays the resource income per hour and the next alliance technology plan. Until an editor supplies a value, the site states that the information has not been added.
+**Alliance RSS** uses the same light design as the rest of the website. Four cards show the separate **Ammo, Cash, Electricity and Gas** balances and hourly production rates, followed by Alliance Territory notes, next technology name and progress, and territory buff values. Unrecorded amounts show an empty state instead of invented or outdated values.
+
+An administrator can select **Edit RSS** to enter full resource amounts, resource production per hour, territory expansion notes, next research name, research details, optional progress from 0 to 100 percent, and optional territory buff percentages. Enter 122400 to display 122.4K/h; the editor does not accept abbreviations like 122.4K. Zero remains a valid recorded value and is distinct from a blank field. The timestamp reflects the most recent administrator save.
+
+This page is manually updated, not connected to live game servers. Earlier single-total RSS entries remain stored in the database and can be viewed by administrators if no per-resource rates are entered; the website does not automatically distribute a historical aggregate across different resource types. Existing technology notes are retained.
 
 **Website Updates** holds website news.
 
@@ -72,5 +76,7 @@ Run checks with:
     python3 -m unittest discover -s tests -v
     python3 -m py_compile server.py main.py
     node --check app.js
+    node --check rss.js
+    node --test tests/rss.test.cjs
 
 The code uses plain HTML, CSS, browser JavaScript, Python's built-in HTTP server and SQLite.
