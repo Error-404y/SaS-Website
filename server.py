@@ -559,7 +559,9 @@ class Handler(BaseHTTPRequestHandler):
                     history.append({"id": max((row["id"] for row in history), default=0) + 1,
                                     "resource": resource, "amount": amount, "spent_at": spent_at,
                                     "note": note, "created_at": current.isoformat()})
-                    rss_state(settings, history, current)
+                    result = rss_state(settings, history, current)
+                    if result["resources"][resource]["current"] is None:
+                        raise ValueError("Enter a starting balance for this resource before recording spending.")
                     cursor = db.execute("""INSERT INTO rss_spending(resource,amount,spent_at,note,created_at)
                         VALUES(?,?,?,?,?)""", (resource, amount, spent_at, note, current.isoformat(timespec="microseconds")))
                     db.execute("UPDATE settings SET value=? WHERE key='rss_updated_at'",
