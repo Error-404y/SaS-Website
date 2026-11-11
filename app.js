@@ -1,8 +1,10 @@
 (() => {
   const one = selector => document.querySelector(selector);
   const rssTools = window.SasRss;
+  const unreadTools = window.SasUnread;
+  const readKey = 'sas-read-state-v1';
   const all = selector => [...document.querySelectorAll(selector)];
-  const site = { entries: [], settings: {}, rss: null, admin: false, csrf: null, page: 'events', selected: null };
+  const site = { entries: [], settings: {}, rss: null, admin: false, csrf: null, page: 'events', selected: null, loaded: false, clockOffset: 0 };
   const labels = { events: 'Events', alliance: 'Alliance Events', rss: 'Alliance RSS', updates: 'Website Updates', announcements: 'HR Announcements' };
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const calendar = window.SasCalendar;
@@ -47,6 +49,71 @@
     one('#admin-toggle').textContent = isAdmin ? 'Sign out' : 'Admin login';
   }
 
+  let readState = null;
+
+  try {
+    const stored = JSON.parse(localStorage.getItem(readKey));
+    if (stored && typeof stored === 'object' && !Array.isArray(stored)) readState = stored;
+  } catch (_) {
+    readState = null;
+  }
+
+  function storeReadState() {
+    try {
+      localStorage.setItem(readKey, JSON.stringify(readState));
+    } catch (_) {
+      return;
+    }
+  }
+
+  function unreadSnapshot() {
+    return unreadTools.snapshot(site.entries, site.rss);
+  }
+
+  function showUnread() {
+    if (!site.loaded) return;
+    const current = unreadSnapshot();
+    if (!readState) {
+      readState = current;
+      storeReadState();
+    }
+    const counts = unreadTools.count(current, readState);
+    all('[data-unread]').forEach(node => {
+      const count = counts[node.dataset.unread] || 0;
+      node.hidden = count === 0;
+      node.textContent = count > 99 ? '99+' : String(count);
+      node.setAttribute('aria-label', count + ' new updates');
+    });
+  }
+
+  function acknowledgePage(kind) {
+    if (!site.loaded) return;
+    if (!readState) readState = unreadSnapshot();
+    readState = unreadTools.acknowledge(readState, unreadSnapshot(), kind);
+    storeReadState();
+    showUnread();
+  }
+
+  function setClockOffset(timestamp) {
+    const parsed = Date.parse(timestamp);
+    if (Number.isFinite(parsed)) site.clockOffset = parsed - Date.now();
+  }
+
+  function refreshResearchCountdown() {
+    if (!site.loaded) return;
+    const data = rssTools.normalize(site.rss);
+    const remaining = rssTools.remainingSeconds(data.tech_ends_at, Date.now() + site.clockOffset);
+    const box = one('#rss-tech-countdown-box');
+    const noTimer = one('#rss-tech-unreported');
+    box.classList.toggle('hidden', remaining === null);
+    noTimer.classList.toggle('hidden', remaining !== null);
+    if (remaining !== null) {
+      one('#rss-tech-time-remaining').textContent = rssTools.formatDuration(remaining);
+      one('#rss-tech-time-label').textContent = remaining === 0 ? 'Research complete' : 'Research in progress';
+      box.classList.toggle('is-complete', remaining === 0);
+    }
+  }
+
   function switchPage(name) {
     if (!labels[name]) return;
     site.page = name;
@@ -66,6 +133,7 @@
       else node.removeAttribute('aria-current');
     });
     one('#header-section').textContent = labels[name];
+    acknowledgePage(name);
     history.replaceState({}, '', '#' + name);
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -136,14 +204,9 @@
     one('#rss-tech-name').textContent = data.tech_name || 'No technology selected';
     one('#rss-tech-plan').textContent = data.tech_plan ||
       'Our next technology plan has not been posted yet.';
-    const progress = rssTools.formatProgress(data.tech_progress);
-    one('#rss-tech-progress-box').classList.toggle('hidden', progress === null);
-    one('#rss-tech-unreported').classList.toggle('hidden', progress !== null);
-    if (progress !== null) {
-      one('#rss-progress-fill').style.width = data.tech_progress + '%';
-      one('#rss-progress-track').setAttribute('aria-valuenow', String(data.tech_progress));
-      one('#rss-tech-progress-label').textContent = progress;
-    }
+    one('#rss-tech-stage').textContent = data.tech_stage;
+    one('#rss-tech-stage').classList.toggle('hidden', !data.tech_stage);
+    refreshResearchCountdown();
     one('#rss-last-updated').textContent = rssTools.formatUpdated(data.updated_at);
     const unassigned = data.legacy_hour.trim() &&
       rssTools.resources.every(key => data.resources[key].per_hour === null);
@@ -162,6 +225,7 @@
     posts('announcements');
     rss();
     refreshCountdowns();
+    showUnread();
   }
 
   function refreshCountdowns() {
@@ -202,6 +266,8 @@
     site.entries = Array.isArray(data.entries) ? data.entries : [];
     site.settings = data.settings || {};
     site.rss = data.rss || null;
+    setClockOffset(data.utc);
+    site.loaded = true;
     render();
   }
 
@@ -342,11 +408,12 @@
         resources,
         buffs,
         tech_name: one('#rss-tech-title-input').value,
+        tech_stage: one('#rss-tech-stage-input').value,
         tech_plan: one('#rss-tech-notes-input').value,
-        tech_progress: rssTools.readNumber(one('#rss-tech-progress-input').value,
-          'Technology progress', 100),
+        tech_remaining: one('#rss-tech-remaining-input').value.trim(),
         territory_plan: one('#rss-territory-input').value
       };
+      rssTools.parseDuration(payload.tech_remaining);
       await request('/api/rss', { method: 'PUT', body: JSON.stringify(payload) });
       one('#rss-dialog').close();
       await reload();
@@ -454,8 +521,10 @@
       one('#rss-buff-input-' + key).value = data.buffs[key] === null ? '' : data.buffs[key];
     }
     one('#rss-tech-title-input').value = data.tech_name;
+    one('#rss-tech-stage-input').value = data.tech_stage;
     one('#rss-tech-notes-input').value = data.tech_plan;
-    one('#rss-tech-progress-input').value = data.tech_progress === null ? '' : data.tech_progress;
+    const remaining = rssTools.remainingSeconds(data.tech_ends_at, Date.now() + site.clockOffset);
+    one('#rss-tech-remaining-input').value = remaining === null ? '' : rssTools.formatDuration(remaining);
     one('#rss-territory-input').value = data.territory_plan;
     one('#rss-error').textContent = '';
     openDialog('rss-dialog');
@@ -467,7 +536,10 @@
   updateClock();
   setInterval(() => {
     updateClock();
-    if (!document.hidden) refreshCountdowns();
+    if (!document.hidden) {
+      refreshCountdowns();
+      refreshResearchCountdown();
+    }
   }, 1000);
   if (sessionStorage.getItem('sas-entered') === '1') {
     one('#entrance').classList.add('hidden');
@@ -480,6 +552,9 @@
     site.entries = Array.isArray(data.entries) ? data.entries : [];
     site.settings = data.settings || {};
     site.rss = data.rss || null;
+    setClockOffset(data.utc);
+    site.loaded = true;
+    acknowledgePage(site.page);
     render();
   }).catch(() => notify('Unable to load website data. Please refresh.'));
   setInterval(() => { if (!document.hidden) reload().catch(() => {}); }, 60000);
