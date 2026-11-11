@@ -84,23 +84,23 @@
         </section>
 
         <section class="page hidden" id="page-rss" data-section="rss">
-          <div class="page-title"><h1>Alliance RSS</h1><button type="button" class="primary-button admin-only" id="rss-edit" hidden>Edit RSS</button></div>
+          <div class="page-title"><h1>Alliance RSS</h1><div class="rss-title-actions"><button type="button" class="small-button admin-only" id="rss-spend-open" hidden>Spend resources</button><button type="button" class="primary-button admin-only" id="rss-edit" hidden>Edit RSS</button></div></div>
           <div class="rss-resource-grid" aria-label="Alliance resource balances and production rates">
             <article class="rss-resource-card">
               <span class="rss-resource-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="8" y="3" width="8" height="18" rx="4" transform="rotate(40 12 12)"/><path d="m7.5 16 2.5 2.5M14.5 5.5 17 8"/></svg></span>
-              <div class="rss-resource-info"><span class="rss-resource-name">Ammo</span><strong id="rss-amount-ammo">—</strong><span class="rss-resource-rate" id="rss-rate-ammo">Not recorded</span></div>
+              <div class="rss-resource-info"><span class="rss-resource-name">Ammo</span><strong id="rss-amount-ammo">—</strong><span class="rss-resource-rate" id="rss-rate-ammo">Not recorded</span><span class="rss-resource-limit" id="rss-limit-ammo">Capacity 1.2M</span></div>
             </article>
             <article class="rss-resource-card">
               <span class="rss-resource-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 9h1M17 15h1"/></svg></span>
-              <div class="rss-resource-info"><span class="rss-resource-name">Cash</span><strong id="rss-amount-cash">—</strong><span class="rss-resource-rate" id="rss-rate-cash">Not recorded</span></div>
+              <div class="rss-resource-info"><span class="rss-resource-name">Cash</span><strong id="rss-amount-cash">—</strong><span class="rss-resource-rate" id="rss-rate-cash">Not recorded</span><span class="rss-resource-limit" id="rss-limit-cash">Capacity 1.2M</span></div>
             </article>
             <article class="rss-resource-card">
               <span class="rss-resource-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13 2 5 13h7l-1 9 8-12h-7z"/></svg></span>
-              <div class="rss-resource-info"><span class="rss-resource-name">Electricity</span><strong id="rss-amount-electricity">—</strong><span class="rss-resource-rate" id="rss-rate-electricity">Not recorded</span></div>
+              <div class="rss-resource-info"><span class="rss-resource-name">Electricity</span><strong id="rss-amount-electricity">—</strong><span class="rss-resource-rate" id="rss-rate-electricity">Not recorded</span><span class="rss-resource-limit" id="rss-limit-electricity">Capacity 1.2M</span></div>
             </article>
             <article class="rss-resource-card">
               <span class="rss-resource-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M6 8h12M6 16h12M8 5h8M8 19h8"/></svg></span>
-              <div class="rss-resource-info"><span class="rss-resource-name">Gas</span><strong id="rss-amount-gas">—</strong><span class="rss-resource-rate" id="rss-rate-gas">Not recorded</span></div>
+              <div class="rss-resource-info"><span class="rss-resource-name">Gas</span><strong id="rss-amount-gas">—</strong><span class="rss-resource-rate" id="rss-rate-gas">Not recorded</span><span class="rss-resource-limit" id="rss-limit-gas">Capacity 1.2M</span></div>
             </article>
           </div>
           <div class="rss-feature-grid">
@@ -148,6 +148,10 @@
               <div class="rss-buff"><span class="rss-buff-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20.5 8.5c0 5-8.5 11.5-8.5 11.5S3.5 13.5 3.5 8.5a4.5 4.5 0 0 1 8.5-2 4.5 4.5 0 0 1 8.5 2z"/></svg></span><div><span>Troop HP</span><strong id="rss-buff-troop_hp">Not set</strong></div></div>
               <div class="rss-buff"><span class="rss-buff-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21 17 9M13 4l7 7M13 4c4-1 7 1 8 4M3 21h5"/></svg></span><div><span>Resource Gathering</span><strong id="rss-buff-resource_gathering">Not set</strong></div></div>
             </div>
+          </section>
+          <section class="rss-panel rss-spending-panel">
+            <div class="rss-spending-heading"><div class="rss-panel-heading"><span class="rss-heading-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span><h2>Resource Spending</h2></div><span class="rss-spending-subtext">Amounts are deducted at the recorded UTC time.</span></div>
+            <div class="rss-spending-list" id="rss-spending-list"><p class="rss-empty-spending">No resources spent yet.</p></div>
           </section>
           <div class="rss-footer"><span id="rss-last-updated">No alliance RSS data posted yet.</span><span>Values are entered by alliance staff.</span></div>
           <p class="rss-legacy-note hidden" id="rss-legacy-note"></p>
@@ -209,12 +213,12 @@
   <dialog id="rss-dialog" class="dialog rss-editor">
     <form id="rss-form">
       <div class="dialog-top"><div><span class="section-kicker">ALLIANCE RSS</span><h2>Edit alliance resources</h2></div><button type="button" data-close="rss-dialog" class="close-button" aria-label="Close">×</button></div>
-      <p class="form-intro">Enter full resource amounts, not abbreviated values. All fields are optional, and zero is a valid value.</p>
+      <p class="form-intro">Balances are the starting amounts at the moment you save. The website adds the hourly income, stops at the capacity, and subtracts spending in time order. Saving a new balance starts a fresh calculation without deleting the spending history.</p>
       <fieldset class="rss-editor-group"><legend>Resources</legend>
-        <div class="rss-edit-resource"><strong>Ammo</strong><div class="form-columns"><div><label for="rss-stock-ammo">Current balance</label><input id="rss-stock-ammo" type="number" min="0" step="0.01" placeholder="e.g. 21200"></div><div><label for="rss-income-ammo">Per hour</label><input id="rss-income-ammo" type="number" min="0" step="0.01" placeholder="e.g. 122400"></div></div></div>
-        <div class="rss-edit-resource"><strong>Cash</strong><div class="form-columns"><div><label for="rss-stock-cash">Current balance</label><input id="rss-stock-cash" type="number" min="0" step="0.01"></div><div><label for="rss-income-cash">Per hour</label><input id="rss-income-cash" type="number" min="0" step="0.01"></div></div></div>
-        <div class="rss-edit-resource"><strong>Electricity</strong><div class="form-columns"><div><label for="rss-stock-electricity">Current balance</label><input id="rss-stock-electricity" type="number" min="0" step="0.01"></div><div><label for="rss-income-electricity">Per hour</label><input id="rss-income-electricity" type="number" min="0" step="0.01"></div></div></div>
-        <div class="rss-edit-resource"><strong>Gas</strong><div class="form-columns"><div><label for="rss-stock-gas">Current balance</label><input id="rss-stock-gas" type="number" min="0" step="0.01"></div><div><label for="rss-income-gas">Per hour</label><input id="rss-income-gas" type="number" min="0" step="0.01"></div></div></div>
+        <div class="rss-edit-resource"><strong>Ammo</strong><div class="form-columns"><div><label for="rss-stock-ammo">Current balance</label><input id="rss-stock-ammo" type="number" min="0" step="0.01" placeholder="e.g. 21200"></div><div><label for="rss-income-ammo">Per hour</label><input id="rss-income-ammo" type="number" min="0" step="0.01" placeholder="e.g. 122400"></div><div class="rss-limit-input"><label for="rss-cap-ammo">Maximum capacity</label><input id="rss-cap-ammo" type="number" min="1" step="0.01" value="1200000"></div></div></div>
+        <div class="rss-edit-resource"><strong>Cash</strong><div class="form-columns"><div><label for="rss-stock-cash">Current balance</label><input id="rss-stock-cash" type="number" min="0" step="0.01"></div><div><label for="rss-income-cash">Per hour</label><input id="rss-income-cash" type="number" min="0" step="0.01"></div><div class="rss-limit-input"><label for="rss-cap-cash">Maximum capacity</label><input id="rss-cap-cash" type="number" min="1" step="0.01" value="1200000"></div></div></div>
+        <div class="rss-edit-resource"><strong>Electricity</strong><div class="form-columns"><div><label for="rss-stock-electricity">Current balance</label><input id="rss-stock-electricity" type="number" min="0" step="0.01"></div><div><label for="rss-income-electricity">Per hour</label><input id="rss-income-electricity" type="number" min="0" step="0.01"></div><div class="rss-limit-input"><label for="rss-cap-electricity">Maximum capacity</label><input id="rss-cap-electricity" type="number" min="1" step="0.01" value="1200000"></div></div></div>
+        <div class="rss-edit-resource"><strong>Gas</strong><div class="form-columns"><div><label for="rss-stock-gas">Current balance</label><input id="rss-stock-gas" type="number" min="0" step="0.01"></div><div><label for="rss-income-gas">Per hour</label><input id="rss-income-gas" type="number" min="0" step="0.01"></div><div class="rss-limit-input"><label for="rss-cap-gas">Maximum capacity</label><input id="rss-cap-gas" type="number" min="1" step="0.01" value="1200000"></div></div></div>
       </fieldset>
       <fieldset class="rss-editor-group"><legend>Territory and technology</legend>
         <label for="rss-territory-input">Territory expansion notes</label><textarea id="rss-territory-input" rows="2" maxlength="1200" placeholder="Next flag placement or territory goal"></textarea>
@@ -229,6 +233,19 @@
       </fieldset>
       <p class="form-error" id="rss-error" role="alert" aria-live="polite"></p>
       <div class="dialog-actions"><button type="button" class="small-button" data-close="rss-dialog">Cancel</button><button type="submit" class="primary-button">Save changes</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="spend-dialog" class="dialog">
+    <form id="spend-form">
+      <div class="dialog-top"><div><span class="section-kicker">ALLIANCE RSS</span><h2>Spend resources</h2></div><button type="button" data-close="spend-dialog" class="close-button" aria-label="Close">×</button></div>
+      <p class="form-intro">Choose the resource and enter the amount spent and when it happened in UTC. The time must be after the last saved balance and cannot be in the future.</p>
+      <label for="spend-resource">Resource</label><select id="spend-resource" required><option value="ammo">Ammo</option><option value="cash">Cash</option><option value="electricity">Electricity</option><option value="gas">Gas</option></select>
+      <label for="spend-amount">Amount spent</label><input id="spend-amount" type="number" min="0.01" step="0.01" required placeholder="e.g. 25000">
+      <label for="spend-at">Spent at (UTC)</label><input id="spend-at" type="text" maxlength="19" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}" required placeholder="YYYY-MM-DD HH:MM:SS">
+      <label for="spend-note">Reason (optional)</label><input id="spend-note" maxlength="280" placeholder="e.g. Alliance technology">
+      <p class="form-error" id="spend-error" role="alert" aria-live="polite"></p>
+      <div class="dialog-actions"><button type="button" class="small-button" data-close="spend-dialog">Cancel</button><button type="submit" class="primary-button">Record spending</button></div>
     </form>
   </dialog>
 
