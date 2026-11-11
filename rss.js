@@ -16,13 +16,18 @@
       tech_ends_at: typeof source.tech_ends_at === 'string' ? source.tech_ends_at : '',
       territory_plan: typeof source.territory_plan === 'string' ? source.territory_plan : '',
       updated_at: typeof source.updated_at === 'string' ? source.updated_at : '',
-      legacy_hour: typeof source.legacy_hour === 'string' ? source.legacy_hour : ''
+      legacy_hour: typeof source.legacy_hour === 'string' ? source.legacy_hour : '',
+      as_of: typeof source.as_of === 'string' ? source.as_of : '',
+      base_at: typeof source.base_at === 'string' ? source.base_at : '',
+      spending: Array.isArray(source.spending) ? source.spending : []
     };
     for (const key of resources) {
       const item = savedResources[key] || {};
       result.resources[key] = {
         stored: validNumber(item.stored),
-        per_hour: validNumber(item.per_hour)
+        current: validNumber(item.current === undefined ? item.stored : item.current),
+        per_hour: validNumber(item.per_hour),
+        limit: validNumber(item.limit) || 1200000
       };
     }
     for (const key of buffs) {
@@ -36,6 +41,13 @@
     if (typeof value !== 'number' && typeof value !== 'string') return null;
     const amount = Number(value);
     return Number.isFinite(amount) && amount >= 0 && amount <= maximum ? amount : null;
+  }
+
+  function estimateBalance(item, asOf, now = Date.now()) {
+    if (item.current === null) return null;
+    const when = Date.parse(asOf);
+    const elapsed = Number.isFinite(when) ? Math.max(0, (now - when) / 3600000) : 0;
+    return Math.max(0, Math.min(item.limit, item.current + (item.per_hour || 0) * elapsed));
   }
 
   function formatAmount(value) {
@@ -108,7 +120,7 @@
   }
 
   const api = { resources, buffs, normalize, formatAmount, formatRate, formatBuff,
-    formatProgress, formatUpdated, readNumber, parseDuration, remainingSeconds, formatDuration };
+    formatProgress, formatUpdated, readNumber, parseDuration, remainingSeconds, formatDuration, estimateBalance };
   root.SasRss = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
