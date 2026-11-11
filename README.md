@@ -12,9 +12,15 @@ The Saints and Sinners crest appears on the welcome screen, in the header and in
 
 **Alliance Events** uses a completely separate event list with the same detail view and live countdowns.
 
-**Alliance RSS** uses the same light design as the rest of the website. Four cards show the separate **Ammo, Cash, Electricity and Gas** balances and hourly production rates, followed by Alliance Territory notes, next technology name and progress, and territory buff values. Unrecorded amounts show an empty state instead of invented or outdated values.
+**Alliance RSS** shows separate **Ammo, Cash, Electricity and Gas** balances, hourly production, the individual resource capacities, territory notes, a live research countdown, and territory buff values. Unrecorded amounts remain blank instead of being presented as real game data.
 
-An administrator can select **Edit RSS** to enter full resource amounts, resource production per hour, territory expansion notes, next research name, research details, optional progress from 0 to 100 percent, and optional territory buff percentages. Enter 122400 to display 122.4K/h; the editor does not accept abbreviations like 122.4K. Zero remains a valid recorded value and is distinct from a blank field. The timestamp reflects the most recent administrator save.
+An administrator can use **Edit RSS** to enter the current balances, hourly production rates, individual capacity limits (default **1,200,000** each), technology name and stage, territory notes and buffs. Enter `122400` for a rate of `122.4K/h`. Balances increase automatically according to their configured rates and stop at the capacity. Zero is a valid recorded value, different from an empty field.
+
+For research, enter an actual time remaining such as `01:45:00` rather than a percentage. The server saves a UTC completion deadline; everyone sees the same countdown, even after refreshing or restarting the server. Changing unrelated RSS figures does not restart the timer unless the remaining-time field is changed.
+
+**Spend resources** records which resource was used, how much was spent, a UTC timestamp (`YYYY-MM-DD HH:MM:SS`) and an optional reason. A spending record must be timestamped after the latest manually saved resource balance and cannot be in the future or exceed the available balance at that moment. The server recalculates spending chronologically, applies the maximum-capacity rule before each expense, and resumes hourly production when resources are spent. Staff can remove incorrect entries. Historical spending entries remain visible after a balance reset, but are not deducted twice. Saving new balances creates a fresh starting point.
+
+The small navigation badges indicate newly created or edited items in each section, plus updates to Alliance RSS. They clear when the member opens the section and remember what that browser has already seen. They are not account-wide push notifications.
 
 This page is manually updated, not connected to live game servers. Earlier single-total RSS entries remain stored in the database and can be viewed by administrators if no per-resource rates are entered; the website does not automatically distribute a historical aggregate across different resource types. Existing technology notes are retained.
 
@@ -78,5 +84,7 @@ Run checks with:
     node --check app.js
     node --check rss.js
     node --test tests/rss.test.cjs
+    node --check unread.js
+    node --test tests/unread.test.cjs
 
 The code uses plain HTML, CSS, browser JavaScript, Python's built-in HTTP server and SQLite.
