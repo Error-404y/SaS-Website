@@ -8,15 +8,17 @@ The original Saints and Sinners crest appears on the welcome screen, in the head
 
 ## Sections
 
-**Events** lists current and upcoming game events, their categories, exact UTC start/end times and statuses. Click an event to see its rewards and notes.
+**Events** lists current and upcoming game events, their categories, exact UTC start/end times and statuses. Click an event to see its rewards and notes. Each upcoming event has a live `Starts in` countdown, and each ongoing event has a live `Ends in` countdown.
 
-**Alliance Events** uses a completely separate event list with the same detail view.
+**Alliance Events** uses a completely separate event list with the same detail view and live countdowns.
 
 **Alliance RSS** displays the resource income per hour and the next alliance technology plan. Until an editor supplies a value, the site states that the information has not been added.
 
 **Website Updates** holds website news.
 
 **HR Announcements** holds leadership announcements attributed to R4 or R5.
+
+**Personal calendar reminders:** Open an event's details and choose **Add to Google Calendar** or **Download calendar file (.ics)**. Google Calendar opens a prefilled event for the member to save. The ICS file can be imported into Apple Calendar, Outlook or other compatible calendars. All event times remain UTC. Calendar alerts follow each member's own calendar settings; adding the event does not automatically enable a notification.
 
 The Events page initially contains the eight names and dates from the supplied Event Center screenshot. Those are starting records, not a live sync with the Discord bot or the game. Ended events remain in the database and are available through the **Ended** filter.
 
