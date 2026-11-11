@@ -87,6 +87,15 @@ def init():
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS rss_spending (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            resource TEXT NOT NULL,
+            amount REAL NOT NULL,
+            spent_at TEXT NOT NULL,
+            note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        )""")
+        db.execute("""CREATE INDEX IF NOT EXISTS rss_spending_order ON rss_spending(spent_at,id)""")
         db.execute("""CREATE TABLE IF NOT EXISTS sessions (
             token_hash TEXT PRIMARY KEY,
             csrf TEXT NOT NULL,
@@ -105,7 +114,7 @@ def init():
             db.execute("INSERT INTO meta(key,value) VALUES('seeded','1')")
         for key in ("rss_hour", "tech_plan", "rss_resources", "rss_buffs",
                     "rss_tech_name", "rss_tech_progress", "rss_tech_stage", "rss_tech_ends_at",
-                    "rss_territory_plan", "rss_updated_at"):
+                    "rss_territory_plan", "rss_updated_at", "rss_base_at"):
             db.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?, '')", (key,))
 
 def now_utc():
@@ -203,9 +212,17 @@ def validate_rss(data):
         item = resources[key]
         if not isinstance(item, dict):
             raise ValueError("Invalid resource details.")
+        limit = optional_rss_number(item.get("limit", 1200000), key + " storage limit")
+        limit = 1200000 if limit is None else limit
+        if limit <= 0:
+            raise ValueError(key + " storage limit must be greater than zero.")
+        stored = optional_rss_number(item.get("stored"), key + " stored resources")
+        if stored is not None and stored > limit:
+            raise ValueError(key + " balance cannot exceed its storage limit.")
         normalized_resources[key] = {
-            "stored": optional_rss_number(item.get("stored"), key + " stored resources"),
-            "per_hour": optional_rss_number(item.get("per_hour"), key + " per hour")
+            "stored": stored,
+            "per_hour": optional_rss_number(item.get("per_hour"), key + " per hour"),
+            "limit": limit
         }
     normalized_buffs = {
         key: optional_rss_number(buffs[key], key.replace("_", " ") + " buff", 1000)
@@ -226,7 +243,7 @@ def validate_rss(data):
         "territory_plan": clean(data.get("territory_plan", ""), 1200)
     }
 
-def rss_state(settings):
+def rss_state(settings, spending=(), current=None):
     def object_value(key):
         try:
             value = json.loads(settings.get(key) or "{}")
@@ -234,6 +251,12 @@ def rss_state(settings):
         except (ValueError, TypeError):
             return {}
 
+    current = current or datetime.now(timezone.utc)
+    anchor = settings.get("rss_base_at") or settings.get("rss_updated_at") or current.isoformat(timespec="seconds")
+    try:
+        anchor_seconds = datetime.fromisoformat(anchor).timestamp()
+    except (ValueError, TypeError):
+        anchor_seconds = current.timestamp()
     saved_resources = object_value("rss_resources")
     saved_buffs = object_value("rss_buffs")
     resources = {}
@@ -248,6 +271,36 @@ def rss_state(settings):
                 resources[key][field] = optional_rss_number(item.get(field), key + " " + field)
             except ValueError:
                 resources[key][field] = None
+        try:
+            limit = optional_rss_number(item.get("limit", 1200000), key + " limit")
+            resources[key]["limit"] = limit if limit is not None and limit > 0 else 1200000
+        except ValueError:
+            resources[key]["limit"] = 1200000
+    calculated = {}
+    for key, item in resources.items():
+        balance = item["stored"]
+        if balance is None:
+            calculated[key] = None
+            continue
+        limit = item["limit"]
+        balance = min(balance, limit)
+        previous = anchor_seconds
+        rate = item["per_hour"] or 0
+        for spend in sorted(spending, key=lambda row: (row["spent_at"], row["id"])):
+            if spend["resource"] != key:
+                continue
+            spent_at = parse_utc(spend["spent_at"])
+            if spent_at < anchor_seconds or spent_at > current.timestamp():
+                continue
+            balance = min(limit, balance + rate * max(0, spent_at - previous) / 3600)
+            balance -= spend["amount"]
+            if balance < -0.011:
+                raise ValueError("Recorded spending exceeds available " + key + ".")
+            balance = max(0, balance)
+            previous = spent_at
+        calculated[key] = round(min(limit, balance + rate * max(0, current.timestamp() - previous) / 3600), 2)
+    for key in RSS_RESOURCES:
+        resources[key]["current"] = calculated[key]
     for key in RSS_BUFFS:
         try:
             buffs[key] = optional_rss_number(saved_buffs.get(key), key, 1000)
@@ -267,7 +320,13 @@ def rss_state(settings):
         "tech_ends_at": settings.get("rss_tech_ends_at", ""),
         "territory_plan": settings.get("rss_territory_plan", ""),
         "updated_at": settings.get("rss_updated_at", ""),
-        "legacy_hour": settings.get("rss_hour", "")
+        "legacy_hour": settings.get("rss_hour", ""),
+        "base_at": anchor,
+        "as_of": current.isoformat(timespec="seconds"),
+        "spending": [
+            {**dict(item), "included": parse_utc(item["spent_at"]) >= anchor_seconds}
+            for item in sorted(spending, key=lambda row: (row["spent_at"], row["id"]), reverse=True)[:100]
+        ]
     }
 
 def current_session(handler):
@@ -289,8 +348,10 @@ def get_state():
         rows = db.execute("""SELECT id,kind,title,category,start_utc,end_utc,rewards,details,author,created_at,modified_at
             FROM entries ORDER BY CASE WHEN kind IN ('events','alliance') THEN start_utc ELSE created_at END DESC, id DESC""").fetchall()
         settings = {r["key"]: r["value"] for r in db.execute("SELECT key,value FROM settings").fetchall()}
+        spent = [dict(row) for row in db.execute("SELECT * FROM rss_spending ORDER BY spent_at,id").fetchall()]
+    current = datetime.now(timezone.utc)
     return {"entries": [dict(row) for row in rows], "settings": settings,
-            "rss": rss_state(settings), "utc": now_utc()}
+            "rss": rss_state(settings, spent, current), "utc": current.isoformat(timespec="seconds")}
 
 def webhook_valid(url):
     parts = urlsplit(url)
@@ -475,12 +536,52 @@ class Handler(BaseHTTPRequestHandler):
                     if cursor.rowcount == 0:
                         return self.respond(404, {"error": "Entry not found."})
                 return self.respond(200, {"ok": True})
+            if path == "/api/rss/spending" and method == "POST":
+                payload = self.read_json()
+                resource = payload.get("resource")
+                if resource not in RSS_RESOURCES:
+                    raise ValueError("Choose a valid resource.")
+                amount = optional_rss_number(payload.get("amount"), "Spending amount")
+                if amount is None or amount <= 0:
+                    raise ValueError("Spending amount must be greater than zero.")
+                spent_at = clean(payload.get("spent_at", ""), 19, True)
+                moment = parse_utc(spent_at)
+                note = clean(payload.get("note", ""), 280)
+                current = datetime.now(timezone.utc)
+                if moment > current.timestamp():
+                    raise ValueError("Spending time cannot be in the future.")
+                with LOCK, connect() as db:
+                    settings = {row["key"]: row["value"] for row in db.execute("SELECT key,value FROM settings")}
+                    anchor = settings.get("rss_base_at") or settings.get("rss_updated_at") or current.isoformat()
+                    if moment < datetime.fromisoformat(anchor).timestamp():
+                        raise ValueError("Spending must be dated on or after the last balance update.")
+                    history = [dict(row) for row in db.execute("SELECT * FROM rss_spending ORDER BY spent_at,id")]
+                    history.append({"id": max((row["id"] for row in history), default=0) + 1,
+                                    "resource": resource, "amount": amount, "spent_at": spent_at,
+                                    "note": note, "created_at": current.isoformat()})
+                    rss_state(settings, history, current)
+                    cursor = db.execute("""INSERT INTO rss_spending(resource,amount,spent_at,note,created_at)
+                        VALUES(?,?,?,?,?)""", (resource, amount, spent_at, note, current.isoformat(timespec="microseconds")))
+                    db.execute("UPDATE settings SET value=? WHERE key='rss_updated_at'",
+                               (current.isoformat(timespec="microseconds"),))
+                return self.respond(201, {"id": cursor.lastrowid})
+            spending_match = re.fullmatch(r"/api/rss/spending/(\d+)", path)
+            if spending_match and method == "DELETE":
+                with LOCK, connect() as db:
+                    cursor = db.execute("DELETE FROM rss_spending WHERE id=?", (int(spending_match.group(1)),))
+                    if not cursor.rowcount:
+                        return self.respond(404, {"error": "Spending entry not found."})
+                    db.execute("UPDATE settings SET value=? WHERE key='rss_updated_at'",
+                               (datetime.now(timezone.utc).isoformat(timespec="microseconds"),))
+                return self.respond(200, {"ok": True})
             if path == "/api/rss" and method == "PUT":
                 data = self.read_json()
                 if "resources" in data or "buffs" in data:
                     values = validate_rss(data)
+                    current = datetime.now(timezone.utc)
                     updates = {
                         "rss_resources": json.dumps(values["resources"], separators=(",", ":")),
+                        "rss_base_at": current.isoformat(timespec="seconds"),
                         "rss_buffs": json.dumps(values["buffs"], separators=(",", ":")),
                         "rss_tech_name": values["tech_name"],
                         "tech_plan": values["tech_plan"],
