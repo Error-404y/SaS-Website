@@ -187,7 +187,7 @@
       legacy_hour: site.settings.rss_hour || ''
     });
     for (const key of rssTools.resources) {
-      one('#rss-amount-' + key).textContent = rssTools.formatAmount(data.resources[key].stored);
+      one('#rss-limit-' + key).textContent = 'Capacity ' + rssTools.formatAmount(data.resources[key].limit);
       const rate = one('#rss-rate-' + key);
       rate.textContent = rssTools.formatRate(data.resources[key].per_hour);
       rate.classList.toggle('rss-value-missing', data.resources[key].per_hour === null);
@@ -208,6 +208,8 @@
     one('#rss-tech-stage').classList.toggle('hidden', !data.tech_stage);
     refreshResearchCountdown();
     one('#rss-last-updated').textContent = rssTools.formatUpdated(data.updated_at);
+    refreshResourceBalances();
+    renderSpending(data);
     const unassigned = data.legacy_hour.trim() &&
       rssTools.resources.every(key => data.resources[key].per_hour === null);
     const legacy = one('#rss-legacy-note');
@@ -215,6 +217,69 @@
     if (unassigned) {
       legacy.textContent = 'Previously saved total rate: ' + data.legacy_hour +
         '/h. This value has been kept, but it cannot be assigned to individual resources automatically.';
+    }
+  }
+
+  function refreshResourceBalances() {
+    if (!site.loaded) return;
+    const data = rssTools.normalize(site.rss);
+    for (const key of rssTools.resources) {
+      const item = data.resources[key];
+      const amount = rssTools.estimateBalance(item, data.as_of, Date.now() + site.clockOffset);
+      const node = one('#rss-amount-' + key);
+      node.textContent = rssTools.formatAmount(amount);
+      node.title = amount === null ? 'Balance not entered' : amount.toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' / ' + item.limit.toLocaleString('en-US');
+    }
+  }
+
+  function renderSpending(data) {
+    const target = one('#rss-spending-list');
+    if (!data.spending.length) {
+      target.innerHTML = '<p class="rss-empty-spending">No resources spent yet.</p>';
+      return;
+    }
+    const names = { ammo: 'Ammo', cash: 'Cash', electricity: 'Electricity', gas: 'Gas' };
+    target.innerHTML = data.spending.map(item => {
+      const deleteButton = site.admin ? '<button class="spend-delete" data-spend-delete="' + item.id + '" type="button" aria-label="Remove spending entry">Remove</button>' : '';
+      const time = escapeHtml(item.spent_at) + ' UTC';
+      const note = item.note ? '<span class="spend-note">' + escapeHtml(item.note) + '</span>' : '';
+      const included = item.included ? '' : '<span class="spend-prior">Already included in the last saved balance</span>';
+      return '<div class="spend-row"><div class="spend-row-main"><strong>' + escapeHtml(names[item.resource] || item.resource) +
+        '</strong><span>' + time + '</span>' + note + included + '</div><div class="spend-row-end"><strong>-' +
+        rssTools.formatAmount(item.amount) + '</strong>' + deleteButton + '</div></div>';
+    }).join('');
+  }
+
+  async function recordSpending(event) {
+    event.preventDefault();
+    one('#spend-error').textContent = '';
+    try {
+      const payload = {
+        resource: one('#spend-resource').value,
+        amount: rssTools.readNumber(one('#spend-amount').value, 'Spending amount'),
+        spent_at: one('#spend-at').value.trim(),
+        note: one('#spend-note').value
+      };
+      if (payload.amount === null || payload.amount <= 0) throw new Error('Enter an amount greater than zero.');
+      await request('/api/rss/spending', { method: 'POST', body: JSON.stringify(payload) });
+      one('#spend-dialog').close();
+      await reload();
+      acknowledgePage('rss');
+      notify('Spending recorded.');
+    } catch (error) {
+      one('#spend-error').textContent = error.message;
+    }
+  }
+
+  async function deleteSpending(id) {
+    if (!site.admin || !confirm('Remove this spending record? The resource balance will be recalculated.')) return;
+    try {
+      await request('/api/rss/spending/' + id, { method: 'DELETE' });
+      await reload();
+      acknowledgePage('rss');
+      notify('Spending record removed.');
+    } catch (error) {
+      notify(error.message);
     }
   }
 
@@ -268,6 +333,7 @@
     site.rss = data.rss || null;
     setClockOffset(data.utc);
     site.loaded = true;
+    if (!document.hidden) acknowledgePage(site.page);
     render();
   }
 
@@ -396,7 +462,8 @@
       for (const key of rssTools.resources) {
         resources[key] = {
           stored: rssTools.readNumber(one('#rss-stock-' + key).value, key + ' balance'),
-          per_hour: rssTools.readNumber(one('#rss-income-' + key).value, key + ' income per hour')
+          per_hour: rssTools.readNumber(one('#rss-income-' + key).value, key + ' income per hour'),
+          limit: rssTools.readNumber(one('#rss-cap-' + key).value, key + ' capacity')
         };
       }
       const buffs = {};
@@ -414,6 +481,11 @@
         territory_plan: one('#rss-territory-input').value
       };
       rssTools.parseDuration(payload.tech_remaining);
+      for (const key of rssTools.resources) {
+        const item = payload.resources[key];
+        if (item.limit === null || item.limit <= 0) throw new Error(key + ' capacity must be greater than zero.');
+        if (item.stored !== null && item.stored > item.limit) throw new Error(key + ' balance exceeds its capacity.');
+      }
       await request('/api/rss', { method: 'PUT', body: JSON.stringify(payload) });
       one('#rss-dialog').close();
       await reload();
@@ -467,6 +539,8 @@
     }
     const row = event.target.closest('.event-row[data-id]');
     if (row) inspect(Number(row.dataset.id));
+    const spendDelete = event.target.closest('[data-spend-delete]');
+    if (spendDelete) deleteSpending(Number(spendDelete.dataset.spendDelete));
     const close = event.target.closest('[data-close]');
     if (close) one('#' + close.dataset.close).close();
   });
@@ -514,8 +588,10 @@
     });
     for (const key of rssTools.resources) {
       const item = data.resources[key];
-      one('#rss-stock-' + key).value = item.stored === null ? '' : item.stored;
+      const current = rssTools.estimateBalance(item, data.as_of, Date.now() + site.clockOffset);
+      one('#rss-stock-' + key).value = current === null ? '' : Math.round(current * 100) / 100;
       one('#rss-income-' + key).value = item.per_hour === null ? '' : item.per_hour;
+      one('#rss-cap-' + key).value = item.limit;
     }
     for (const key of rssTools.buffs) {
       one('#rss-buff-input-' + key).value = data.buffs[key] === null ? '' : data.buffs[key];
@@ -530,6 +606,13 @@
     openDialog('rss-dialog');
   });
   one('#rss-form').addEventListener('submit', saveRss);
+  one('#rss-spend-open').addEventListener('click', () => {
+    one('#spend-form').reset();
+    one('#spend-at').value = new Date(Date.now() + site.clockOffset).toISOString().slice(0, 19).replace('T', ' ');
+    one('#spend-error').textContent = '';
+    openDialog('spend-dialog');
+  });
+  one('#spend-form').addEventListener('submit', recordSpending);
   all('dialog').forEach(node => node.addEventListener('click', event => {
     if (event.target === node) node.close();
   }));
@@ -539,6 +622,7 @@
     if (!document.hidden) {
       refreshCountdowns();
       refreshResearchCountdown();
+      if (site.page === 'rss') refreshResourceBalances();
     }
   }, 1000);
   if (sessionStorage.getItem('sas-entered') === '1') {
