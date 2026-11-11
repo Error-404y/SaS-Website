@@ -359,9 +359,20 @@
   });
 
   one('#enter-site').addEventListener('click', () => {
+    const button = one('#enter-site');
+    if (button.disabled) return;
+    button.disabled = true;
     sessionStorage.setItem('sas-entered', '1');
-    one('#entrance').classList.add('leave');
-    setTimeout(() => { one('#entrance').classList.add('hidden'); one('#website').classList.remove('hidden'); }, 400);
+    const entrance = one('#entrance');
+    const website = one('#website');
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    entrance.classList.add('leave');
+    setTimeout(() => {
+      entrance.classList.add('hidden');
+      website.classList.remove('hidden');
+      website.classList.add('welcome-arrived');
+      website.addEventListener('animationend', () => website.classList.remove('welcome-arrived'), { once: true });
+    }, reducedMotion ? 0 : 540);
   });
   one('#admin-toggle').addEventListener('click', toggleAdmin);
   one('#login-form').addEventListener('submit', login);
