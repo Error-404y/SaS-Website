@@ -18,7 +18,7 @@ The original Saints and Sinners crest appears on the welcome screen, in the head
 
 **HR Announcements** holds leadership announcements attributed to R4 or R5.
 
-**Personal calendar reminders:** Open an event's details and choose **Add to Google Calendar** or **Download calendar file (.ics)**. Google Calendar opens a prefilled event for the member to save. The ICS file can be imported into Apple Calendar, Outlook or other compatible calendars. All event times remain UTC. Calendar alerts follow each member's own calendar settings; adding the event does not automatically enable a notification.
+**Personal calendar reminders:** Open an event's details and choose **Add to Google Calendar** or **Download calendar file (.ics)**. Google Calendar opens a prefilled event for the member to save. The ICS file can be imported into Apple Calendar, Outlook or other compatible calendars, and includes a one-hour alert for calendar apps that support imported alerts. All event times remain UTC. Google Calendar notifications depend on each member's own calendar settings.
 
 The Events page initially contains the eight names and dates from the supplied Event Center screenshot. Those are starting records, not a live sync with the Discord bot or the game. Ended events remain in the database and are available through the **Ended** filter.
 
