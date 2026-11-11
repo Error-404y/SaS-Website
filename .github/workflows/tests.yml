@@ -17,3 +17,5 @@ jobs:
       - run: node --check app.js
       - run: node --check calendar.js
       - run: node --test tests/calendar.test.cjs
+      - run: node --check rss.js
+      - run: node --test tests/rss.test.cjs
