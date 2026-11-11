@@ -230,6 +230,53 @@ class RssTests(unittest.TestCase):
             "resource": "ammo", "amount": 5, "spent_at": now
         }, cookie, csrf)[0], 400)
 
+    def test_research_deadline_survives_unrelated_resource_edits(self):
+        cookie, csrf = self.login()
+        payload = self.payload()
+        payload["tech_stage"] = "Last Research (5/5)"
+        payload["tech_remaining"] = "01:45:00"
+        self.assertEqual(self.send("/api/rss", "PUT", payload, cookie, csrf)[0], 200)
+        first = self.send("/api/state")[1]["rss"]
+        end = datetime.fromisoformat(first["tech_ends_at"])
+        duration = (end - datetime.now(timezone.utc)).total_seconds()
+        self.assertGreater(duration, 6295)
+        self.assertLessEqual(duration, 6300)
+        self.assertEqual(first["tech_stage"], "Last Research (5/5)")
+        payload.pop("tech_remaining")
+        payload["revision"] = first["updated_at"]
+        payload["resources"]["ammo"]["stored"] = 20000
+        self.assertEqual(self.send("/api/rss", "PUT", payload, cookie, csrf)[0], 200)
+        updated = self.send("/api/state")[1]["rss"]
+        self.assertEqual(updated["tech_ends_at"], first["tech_ends_at"])
+        self.assertEqual(updated["resources"]["ammo"]["current"], 20000)
+
+    def test_stale_admin_edit_is_rejected(self):
+        cookie, csrf = self.login()
+        first = self.payload()
+        self.assertEqual(self.send("/api/rss", "PUT", first, cookie, csrf)[0], 200)
+        old = self.send("/api/state")[1]["rss"]["updated_at"]
+        changed = self.payload()
+        changed["resources"]["ammo"]["stored"] = 5000
+        changed["revision"] = old
+        self.assertEqual(self.send("/api/rss", "PUT", changed, cookie, csrf)[0], 200)
+        stale = self.payload()
+        stale["resources"]["ammo"]["stored"] = 9999
+        stale["revision"] = old
+        self.assertEqual(self.send("/api/rss", "PUT", stale, cookie, csrf)[0], 409)
+        self.assertEqual(self.send("/api/state")[1]["rss"]["resources"]["ammo"]["current"], 5000)
+
+    def test_resource_limits_are_adjustable_and_validated(self):
+        cookie, csrf = self.login()
+        payload = self.payload()
+        payload["resources"]["ammo"] = {"stored": 900, "per_hour": 3600, "limit": 1000}
+        self.assertEqual(self.send("/api/rss", "PUT", payload, cookie, csrf)[0], 200)
+        state = self.send("/api/state")[1]["rss"]
+        self.assertEqual(state["resources"]["ammo"]["limit"], 1000)
+        self.assertLessEqual(state["resources"]["ammo"]["current"], 1000)
+        bad = self.payload()
+        bad["resources"]["ammo"] = {"stored": 1200, "per_hour": 3600, "limit": 1000}
+        self.assertEqual(self.send("/api/rss", "PUT", bad, cookie, csrf)[0], 400)
+
     def test_legacy_editor_request_still_works(self):
         cookie, csrf = self.login()
         status, _, _ = self.send("/api/rss", "PUT",
