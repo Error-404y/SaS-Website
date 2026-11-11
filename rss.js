@@ -12,6 +12,8 @@
       tech_name: typeof source.tech_name === 'string' ? source.tech_name : '',
       tech_plan: typeof source.tech_plan === 'string' ? source.tech_plan : '',
       tech_progress: validNumber(source.tech_progress, 100),
+      tech_stage: typeof source.tech_stage === 'string' ? source.tech_stage : '',
+      tech_ends_at: typeof source.tech_ends_at === 'string' ? source.tech_ends_at : '',
       territory_plan: typeof source.territory_plan === 'string' ? source.territory_plan : '',
       updated_at: typeof source.updated_at === 'string' ? source.updated_at : '',
       legacy_hour: typeof source.legacy_hour === 'string' ? source.legacy_hour : ''
@@ -60,6 +62,31 @@
     return amount === null ? null : amount.toLocaleString('en-US', { maximumFractionDigits: 2 }) + '%';
   }
 
+  function parseDuration(value) {
+    if (value === '') return null;
+    if (typeof value !== 'string' || !/^\d{1,3}:[0-5]\d:[0-5]\d$/.test(value)) {
+      throw new Error('Use HH:MM:SS for time remaining, for example 01:45:00.');
+    }
+    const [hours, minutes, seconds] = value.split(':').map(Number);
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  function remainingSeconds(deadline, now = Date.now()) {
+    if (!deadline) return null;
+    const timestamp = Date.parse(deadline);
+    if (!Number.isFinite(timestamp)) return null;
+    return Math.max(0, Math.ceil((timestamp - now) / 1000));
+  }
+
+  function formatDuration(seconds) {
+    if (seconds === null || !Number.isFinite(seconds) || seconds < 0) return '';
+    const total = Math.ceil(seconds);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const remainder = total % 60;
+    return [hours, minutes, remainder].map(value => String(value).padStart(2, '0')).join(':');
+  }
+
   function formatUpdated(value) {
     if (!value) return 'No alliance RSS data posted yet.';
     const date = new Date(value);
@@ -81,7 +108,7 @@
   }
 
   const api = { resources, buffs, normalize, formatAmount, formatRate, formatBuff,
-    formatProgress, formatUpdated, readNumber };
+    formatProgress, formatUpdated, readNumber, parseDuration, remainingSeconds, formatDuration };
   root.SasRss = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
