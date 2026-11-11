@@ -356,6 +356,7 @@ class Handler(BaseHTTPRequestHandler):
                   "/index.html": ("index.html", "text/html; charset=utf-8"),
                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/calendar.js": ("calendar.js", "text/javascript; charset=utf-8"),
+                  "/rss.js": ("rss.js", "text/javascript; charset=utf-8"),
                   "/styles.css": ("styles.css", "text/css; charset=utf-8"),
                   "/assets/logo.webp": ("assets/logo.webp", "image/webp"),
                   "/assets/crest.avif": ("assets/crest.avif", "image/avif")}
