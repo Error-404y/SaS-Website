@@ -4,7 +4,7 @@ The alliance website has five separate sections: Events, Alliance Events, Allian
 
 The public website opens with an animated welcome screen. Anyone can use **Bring me in!** to view the site without an account.
 
-The original Saints and Sinners crest appears on the welcome screen, in the header and in the navigation. The website is responsive and works on desktop, tablet and mobile.
+The Saints and Sinners crest appears on the welcome screen, in the header and in the navigation. The entrance uses a sharper transparent AVIF crest derived from the supplied artwork with a WebP fallback, subtle motion, and a smooth transition after **Bring me in!** is pressed. The rest of the website keeps its clean, light design. Motion is reduced when the visitor enables reduced-motion accessibility settings. The website is responsive and works on desktop, tablet and mobile.
 
 ## Sections
 
