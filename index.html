@@ -8,6 +8,7 @@
   <title>SaS | Alliance Website</title>
   <link rel="icon" href="/assets/logo.webp" type="image/webp">
   <link rel="stylesheet" href="/styles.css">
+  <script src="/calendar.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -101,7 +102,9 @@
 
   <dialog id="detail-dialog" class="dialog">
     <div class="dialog-top"><div><span class="section-kicker">EVENT DETAILS</span><h2 id="detail-title"></h2></div><button type="button" data-close="detail-dialog" class="close-button" aria-label="Close">×</button></div>
+    <div class="detail-countdown-box"><span>EVENT COUNTDOWN</span><strong id="detail-countdown"></strong></div>
     <div id="detail-body" class="detail-body"></div>
+    <div class="calendar-actions"><a id="google-calendar-link" class="calendar-link" href="https://calendar.google.com/calendar/" target="_blank" rel="noopener noreferrer">Add to Google Calendar</a><button type="button" id="download-calendar" class="calendar-link">Download calendar file (.ics)</button></div>
     <div class="dialog-actions"><button type="button" class="small-button" data-close="detail-dialog">Close</button><button type="button" class="primary-button admin-only" id="detail-edit" hidden>Edit</button></div>
   </dialog>
 
