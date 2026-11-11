@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/styles.css">
   <script src="/calendar.js" defer></script>
   <script src="/rss.js" defer></script>
+  <script src="/unread.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -125,15 +126,17 @@
               </div>
             </section>
             <section class="rss-panel">
-              <div class="rss-panel-heading"><span class="rss-heading-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 3h6M10 3v6l-6 10a2 2 0 0 0 1.7 3h12.6a2 2 0 0 0 1.7-3L14 9V3M8 15h8"/></svg></span><h2>Next Alliance Technology</h2></div>
+              <div class="rss-panel-heading"><span class="rss-heading-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 3h6M10 3v6l-6 10a2 2 0 0 0 1.7 3h12.6a2 2 0 0 0 1.7-3L14 9V3M8 15h8"/></svg></span><h2>Alliance Research</h2></div>
               <div class="rss-tech-content">
                 <strong id="rss-tech-name">No technology selected</strong>
+                <span id="rss-tech-stage" class="rss-tech-stage hidden"></span>
                 <p id="rss-tech-plan">Our next technology plan has not been posted yet.</p>
-                <div id="rss-tech-progress-box" class="rss-tech-progress-box hidden">
-                  <div class="rss-progress-track" id="rss-progress-track" role="progressbar" aria-label="Technology progress" aria-valuemin="0" aria-valuemax="100"><div id="rss-progress-fill" class="rss-progress-fill"></div></div>
-                  <strong id="rss-tech-progress-label">0%</strong>
+                <div id="rss-tech-countdown-box" class="rss-tech-countdown-box hidden">
+                  <span class="rss-countdown-kicker">TIME REMAINING</span>
+                  <strong id="rss-tech-time-remaining" class="rss-tech-time-remaining">00:00:00</strong>
+                  <span id="rss-tech-time-label" class="rss-tech-time-label">Research in progress</span>
                 </div>
-                <p id="rss-tech-unreported" class="rss-tech-unreported">Progress has not been reported yet.</p>
+                <p id="rss-tech-unreported" class="rss-tech-unreported">No research countdown has been set.</p>
               </div>
             </section>
           </div>
@@ -165,11 +168,11 @@
         <div class="sidebar-identity"><picture class="sidebar-picture"><source srcset="/assets/crest.avif" type="image/avif"><img src="/assets/logo.webp" alt="Saints and Sinners logo" width="88" height="88"></picture><strong>Saints and Sinners</strong><span>Alliance Website</span></div>
         <p class="sidebar-heading">EXPLORE</p>
         <nav class="sidebar-nav">
-          <button type="button" data-view="events" class="selected">Events</button>
-          <button type="button" data-view="alliance">Alliance Events</button>
-          <button type="button" data-view="rss">Alliance RSS</button>
-          <button type="button" data-view="updates">Website Updates</button>
-          <button type="button" data-view="announcements">HR Announcements</button>
+          <button type="button" data-view="events" class="selected"><span>Events</span><span class="nav-unread" data-unread="events" hidden aria-label="No new updates">0</span></button>
+          <button type="button" data-view="alliance"><span>Alliance Events</span><span class="nav-unread" data-unread="alliance" hidden aria-label="No new updates">0</span></button>
+          <button type="button" data-view="rss"><span>Alliance RSS</span><span class="nav-unread" data-unread="rss" hidden aria-label="No new updates">0</span></button>
+          <button type="button" data-view="updates"><span>Website Updates</span><span class="nav-unread" data-unread="updates" hidden aria-label="No new updates">0</span></button>
+          <button type="button" data-view="announcements"><span>HR Announcements</span><span class="nav-unread" data-unread="announcements" hidden aria-label="No new updates">0</span></button>
         </nav>
         <div class="sidebar-footer"><span>SaS Alliance</span><span>All event times are UTC.</span></div>
       </aside>
@@ -216,8 +219,10 @@
       <fieldset class="rss-editor-group"><legend>Territory and technology</legend>
         <label for="rss-territory-input">Territory expansion notes</label><textarea id="rss-territory-input" rows="2" maxlength="1200" placeholder="Next flag placement or territory goal"></textarea>
         <label for="rss-tech-title-input">Next technology name</label><input id="rss-tech-title-input" maxlength="120" placeholder="Research priority">
-        <label for="rss-tech-notes-input">Technology plan</label><textarea id="rss-tech-notes-input" rows="3" maxlength="2500" placeholder="What are we researching next?"></textarea>
-        <label for="rss-tech-progress-input">Research progress (%)</label><input id="rss-tech-progress-input" type="number" min="0" max="100" step="0.01" placeholder="Leave blank if unknown">
+        <label for="rss-tech-stage-input">Research stage</label><input id="rss-tech-stage-input" maxlength="120" placeholder="e.g. Last Research (5/5)">
+        <label for="rss-tech-notes-input">Technology plan</label><textarea id="rss-tech-notes-input" rows="3" maxlength="2500" placeholder="Research notes (optional)"></textarea>
+        <label for="rss-tech-remaining-input">Time remaining (HH:MM:SS)</label><input id="rss-tech-remaining-input" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,3}:[0-5][0-9]:[0-5][0-9]" placeholder="01:45:00" autocomplete="off">
+        <p class="rss-time-hint">Enter the time left when you save. The countdown keeps running even after you leave the website. Leave it blank to remove the countdown.</p>
       </fieldset>
       <fieldset class="rss-editor-group"><legend>Territory buffs (%)</legend>
         <div class="form-columns"><div><label for="rss-buff-input-troop_attack">Troop Attack</label><input id="rss-buff-input-troop_attack" type="number" min="0" max="1000" step="0.01" placeholder="Not recorded"></div><div><label for="rss-buff-input-troop_defense">Troop Defense</label><input id="rss-buff-input-troop_defense" type="number" min="0" max="1000" step="0.01" placeholder="Not recorded"></div><div><label for="rss-buff-input-troop_hp">Troop HP</label><input id="rss-buff-input-troop_hp" type="number" min="0" max="1000" step="0.01" placeholder="Not recorded"></div><div><label for="rss-buff-input-resource_gathering">Resource Gathering</label><input id="rss-buff-input-resource_gathering" type="number" min="0" max="1000" step="0.01" placeholder="Not recorded"></div></div>
