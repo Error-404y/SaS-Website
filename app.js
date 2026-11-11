@@ -4,7 +4,8 @@
   const site = { entries: [], settings: {}, admin: false, csrf: null, page: 'events', selected: null };
   const labels = { events: 'Events', alliance: 'Alliance Events', rss: 'Alliance RSS', updates: 'Website Updates', announcements: 'HR Announcements' };
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
-  const toTime = value => new Date(value.replace(' ', 'T') + 'Z').getTime();
+  const calendar = window.SasCalendar;
+  const toTime = value => calendar.utcTime(value);
   const currentUtc = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
   let toastTimer;
 
@@ -30,9 +31,7 @@
   }
 
   function status(item) {
-    const now = Date.now();
-    if (toTime(item.end_utc) <= now) return 'ended';
-    return toTime(item.start_utc) <= now ? 'active' : 'upcoming';
+    return calendar.eventStatus(item);
   }
 
   function statusTag(state) {
@@ -95,7 +94,8 @@
         '<td>' + escapeHtml(item.category) + '</td>' +
         '<td class="date-cell">' + escapeHtml(item.start_utc) + '</td>' +
         '<td class="date-cell">' + escapeHtml(item.end_utc) + '</td>' +
-        '<td>' + statusTag(status(item)) + '</td></tr>';
+        '<td class="event-status-cell">' + statusTag(status(item)) +
+        '<span class="event-countdown" data-countdown-id="' + item.id + '">' + calendar.countdown(item) + '</span></td></tr>';
     }).join('') || '<tr><td class="empty-row" colspan="5">No ' + (kind === 'alliance' ? 'alliance ' : '') + 'events match your filters.</td></tr>';
   }
 
@@ -126,6 +126,40 @@
     posts('updates');
     posts('announcements');
     rss();
+    refreshCountdowns();
+  }
+
+  function refreshCountdowns() {
+    const now = Date.now();
+    const events = new Map(site.entries.filter(item => item.kind === 'events' || item.kind === 'alliance')
+      .map(item => [item.id, item]));
+    let changed = false;
+    all('.event-row[data-id]').forEach(row => {
+      const item = events.get(Number(row.dataset.id));
+      const badge = row.querySelector('.status-pill');
+      if (item && badge && !badge.classList.contains('status-' + calendar.eventStatus(item, now))) {
+        changed = true;
+      }
+    });
+    if (changed) {
+      eventRows('events');
+      eventRows('alliance');
+    }
+    all('[data-countdown-id]').forEach(node => {
+      const item = events.get(Number(node.dataset.countdownId));
+      if (item) node.textContent = calendar.countdown(item, now);
+    });
+    for (const kind of ['events', 'alliance']) {
+      const items = site.entries.filter(item => item.kind === kind);
+      one('#' + kind + '-active').textContent = items.filter(item => calendar.eventStatus(item, now) === 'active').length;
+      one('#' + kind + '-upcoming').textContent = items.filter(item => calendar.eventStatus(item, now) === 'upcoming').length;
+    }
+    if (one('#detail-dialog').open) {
+      const item = events.get(site.selected);
+      if (item) {
+        one('#detail-status').textContent = { active: 'In Progress', upcoming: 'Upcoming', ended: 'Ended' }[calendar.eventStatus(item, now)];
+      }
+    }
   }
 
   async function reload() {
@@ -144,6 +178,9 @@
     if (!item) return;
     site.selected = id;
     one('#detail-title').textContent = item.title;
+    one('#detail-countdown').dataset.countdownId = String(item.id);
+    one('#detail-countdown').textContent = calendar.countdown(item);
+    one('#google-calendar-link').href = calendar.googleCalendarUrl(item);
     const fields = [
       ['Category', item.category],
       ['Status', { active: 'In Progress', upcoming: 'Upcoming', ended: 'Ended' }[status(item)]],
@@ -153,10 +190,25 @@
       ['Details', item.details || 'No additional details']
     ];
     one('#detail-body').innerHTML = fields.map(([label, value]) =>
-      '<div class="detail-item"><span>' + label + '</span><p>' + escapeHtml(value).replace(/\n/g, '<br>') + '</p></div>'
+      '<div class="detail-item"><span>' + label + '</span><p' + (label === 'Status' ? ' id="detail-status"' : '') + '>' + escapeHtml(value).replace(/\n/g, '<br>') + '</p></div>'
     ).join('');
     one('#detail-edit').hidden = !site.admin;
     openDialog('detail-dialog');
+  }
+
+  function downloadCalendar() {
+    const item = site.entries.find(entry => entry.id === site.selected);
+    if (!item) return;
+    const data = calendar.calendarFile(item);
+    const blob = new Blob([data], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'sas-event-' + item.id + '.ics';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function edit(kind, id = null) {
@@ -315,6 +367,7 @@
   one('#login-form').addEventListener('submit', login);
   one('#entry-form').addEventListener('submit', saveEntry);
   one('#entry-delete').addEventListener('click', deleteEntry);
+  one('#download-calendar').addEventListener('click', downloadCalendar);
   one('#detail-edit').addEventListener('click', () => {
     const item = site.entries.find(entry => entry.id === site.selected);
     if (item) { one('#detail-dialog').close(); edit(item.kind, item.id); }
@@ -330,7 +383,10 @@
     if (event.target === node) node.close();
   }));
   updateClock();
-  setInterval(updateClock, 1000);
+  setInterval(() => {
+    updateClock();
+    if (!document.hidden) refreshCountdowns();
+  }, 1000);
   if (sessionStorage.getItem('sas-entered') === '1') {
     one('#entrance').classList.add('hidden');
     one('#website').classList.remove('hidden');
