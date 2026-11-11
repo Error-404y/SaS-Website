@@ -46,6 +46,18 @@ class WebsiteTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             server.validate_entry({"kind": "announcements", "title": "News", "author": "R3"})
 
+    def test_welcome_uses_sharp_crest_and_animated_entrance(self):
+        html = (server.ROOT / "index.html").read_text(encoding="utf-8")
+        css = (server.ROOT / "styles.css").read_text(encoding="utf-8")
+        crest = (server.ROOT / "assets" / "crest.avif").read_bytes()
+        self.assertIn('id="enter-site"', html)
+        self.assertIn("Bring me in!", html)
+        self.assertEqual(html.count('/assets/crest.avif'), 3)
+        self.assertGreater(len(crest), 10000)
+        self.assertEqual(crest[4:12], b"ftypavif")
+        self.assertIn("@keyframes crestReveal", css)
+        self.assertIn(".entrance.leave", css)
+
     def test_webhook_validation(self):
         self.assertTrue(server.webhook_valid("https://discord.com/api/webhooks/12345/validToken_abc"))
         self.assertFalse(server.webhook_valid("https://evil.example/api/webhooks/12345/validToken_abc"))
