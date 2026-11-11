@@ -585,12 +585,9 @@ class Handler(BaseHTTPRequestHandler):
                 if "resources" in data or "buffs" in data:
                     values = validate_rss(data)
                     current = datetime.now(timezone.utc)
-                    with LOCK, connect() as db:
-                        latest_spending_id = db.execute("SELECT COALESCE(MAX(id),0) FROM rss_spending").fetchone()[0]
                     updates = {
                         "rss_resources": json.dumps(values["resources"], separators=(",", ":")),
                         "rss_base_at": current.isoformat(timespec="seconds"),
-                        "rss_base_spend_id": str(latest_spending_id),
                         "rss_buffs": json.dumps(values["buffs"], separators=(",", ":")),
                         "rss_tech_name": values["tech_name"],
                         "tech_plan": values["tech_plan"],
@@ -610,6 +607,13 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError("Enter a numeric hourly RSS amount.")
                     updates = {"rss_hour": hourly, "tech_plan": tech, "rss_updated_at": datetime.now(timezone.utc).isoformat(timespec="microseconds")}
                 with LOCK, connect() as db:
+                    stored_revision = db.execute("SELECT value FROM settings WHERE key='rss_updated_at'").fetchone()
+                    current_revision = stored_revision["value"] if stored_revision else ""
+                    if "revision" in data and data["revision"] != current_revision:
+                        return self.respond(409, {"error": "Alliance RSS changed while you were editing. Reload the page and try again."})
+                    if "rss_resources" in updates:
+                        latest_spending_id = db.execute("SELECT COALESCE(MAX(id),0) FROM rss_spending").fetchone()[0]
+                        updates["rss_base_spend_id"] = str(latest_spending_id)
                     for key, value in updates.items():
                         db.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                                    (key, value))
