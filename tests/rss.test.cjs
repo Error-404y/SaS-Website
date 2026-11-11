@@ -58,3 +58,37 @@ test('last update uses UTC and never claims a timestamp without one', () => {
   assert.equal(rss.formatUpdated('2026-11-11T02:45:09+00:00'),
     'Last updated: 2026-11-11 02:45 UTC');
 });
+
+
+test('research time accepts HH:MM:SS and counts down from an absolute deadline', () => {
+  assert.equal(rss.parseDuration('01:45:00'), 6300);
+  assert.equal(rss.parseDuration('00:00:00'), 0);
+  assert.equal(rss.parseDuration(''), null);
+  assert.throws(() => rss.parseDuration('01:75:00'));
+  assert.throws(() => rss.parseDuration('45%'));
+  const start = Date.parse('2026-11-11T02:00:00Z');
+  assert.equal(rss.remainingSeconds('2026-11-11T03:45:00+00:00', start), 6300);
+  assert.equal(rss.remainingSeconds('2026-11-11T03:45:00+00:00', start + 1000), 6299);
+  assert.equal(rss.remainingSeconds('2026-11-11T03:45:00+00:00', start + 9000000), 0);
+  assert.equal(rss.formatDuration(6300), '01:45:00');
+  assert.equal(rss.formatDuration(0), '00:00:00');
+});
+
+test('resource estimates accrue at the hourly rate and cannot pass capacity', () => {
+  const item = { current: 1000, stored: 1000, per_hour: 3600, limit: 1200 };
+  const start = Date.parse('2026-11-11T02:00:00Z');
+  assert.equal(rss.estimateBalance(item, '2026-11-11T02:00:00Z', start), 1000);
+  assert.equal(rss.estimateBalance(item, '2026-11-11T02:00:00Z', start + 50000), 1050);
+  assert.equal(rss.estimateBalance(item, '2026-11-11T02:00:00Z', start + 3600000), 1200);
+  assert.equal(rss.estimateBalance({ ...item, current: null }, '2026-11-11T02:00:00Z', start), null);
+});
+
+test('default resource limits are 1.2 million but stored limits are configurable', () => {
+  const blank = rss.normalize();
+  assert.equal(blank.resources.ammo.limit, 1200000);
+  const configured = rss.normalize({
+    resources: { ammo: { stored: 0, current: 12, per_hour: 12, limit: 300000 } }
+  });
+  assert.equal(configured.resources.ammo.limit, 300000);
+  assert.equal(configured.resources.ammo.current, 12);
+});
