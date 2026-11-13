@@ -597,11 +597,13 @@ class Handler(BaseHTTPRequestHandler):
                     members.register(db, values)
                 return self.respond(201, {"status": "pending", "message": "Registration submitted for administrator review."})
             if path == "/api/member/login" and method == "POST":
-                source = self.client_address[0]
-                if login_throttled("member", source):
-                    return self.respond(429, {"error": "Too many login attempts. Try again later."})
                 data = self.read_json()
                 username = str(data.get("username", "")).strip()
+                # Include the login identifier to avoid locking out unrelated players
+                # when they share a reverse proxy IP.
+                source = self.client_address[0] + ":" + hashlib.sha256(username.casefold().encode()).hexdigest()[:20]
+                if login_throttled("member", source):
+                    return self.respond(429, {"error": "Too many login attempts. Try again later."})
                 password = data.get("password", "")
                 with LOCK, connect() as db:
                     row = db.execute("SELECT * FROM members WHERE username=? OR email=?", (username, username)).fetchone()
