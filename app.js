@@ -844,6 +844,7 @@
     const active = banRecords.filter(item => item.status === 'pending' || item.status === 'active');
     const finished = banRecords.filter(item => item.status !== 'pending' && item.status !== 'active');
     const count = banRecords.filter(item => item.status === 'pending').length;
+    one('#ban-queue-cancel-all').hidden = count === 0;
     const accountPending = (site.accounts || []).filter(item => item.status === 'pending').length;
     const resets = (site.passwordRequests || []).filter(item => item.status === 'pending').length;
     const total = count + accountPending + resets;
@@ -865,6 +866,23 @@
       finished.slice(0,30).map(item => '<p class="accounts-muted">'+
         escapeHtml(item.username)+' · '+escapeHtml(item.kind)+' · '+escapeHtml(item.status)+'</p>').join('')+
       '</details>' : '');
+  }
+
+  async function cancelAllPendingBans() {
+    if (!site.admin) return;
+    const pending = banRecords.filter(item => item.status === 'pending').length;
+    if (!pending) return;
+    if (!await confirmAction({
+      title: 'Cancel all pending bans?',
+      message: 'Undo all '+pending+' ban requests that have not yet taken effect? Active bans will not be changed.',
+      buttonLabel: 'Undo All Pending Bans'
+    })) return;
+    try {
+      const result = await request('/api/bans/cancel-pending',
+        {method:'POST', body:'{}'});
+      notify(result.cancelled+' pending ban(s) cancelled.');
+      await loadBans();
+    } catch(error){notify(error.message);}
   }
 
   async function undoBan(id) {
@@ -1222,6 +1240,7 @@
   one('#entry-form').addEventListener('submit', saveEntry);
   one('#ban-form').addEventListener('submit', queueBan);
   one('#ban-queue-refresh').addEventListener('click', loadBans);
+  one('#ban-queue-cancel-all').addEventListener('click', cancelAllPendingBans);
   one('#entry-delete').addEventListener('click', deleteEntry);
   one('#download-calendar').addEventListener('click', downloadCalendar);
   one('#detail-edit').addEventListener('click', () => {
