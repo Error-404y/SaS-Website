@@ -231,7 +231,7 @@
     one('#' + kind + '-rows').innerHTML = filtered.map(item => {
       const urgency = status(item) === 'upcoming' ? window.SasReference.upcomingUrgency(item.start_utc, Date.now()) : 'normal';
       return '<tr class="event-row event-soon-' + urgency + '" tabindex="0" role="button" data-id="' + item.id + '" aria-label="View ' + escapeHtml(item.title) + ' details">' +
-        '<td><strong>' + escapeHtml(item.title) + '</strong><span class="mobile-date">' + escapeHtml(item.start_utc) + ' UTC</span></td>' +
+        '<td><strong>' + escapeHtml(item.title) + '</strong><span class="event-click-hint">Click me · View details</span><span class="mobile-date">' + escapeHtml(item.start_utc) + ' UTC</span></td>' +
         '<td>' + escapeHtml(item.category) + '</td>' +
         '<td class="date-cell">' + escapeHtml(item.start_utc) + '</td>' +
         '<td class="date-cell">' + escapeHtml(item.end_utc) + '</td>' +
@@ -471,7 +471,9 @@
       ['Start (UTC)', item.start_utc],
       ['End (UTC)', item.end_utc],
       ['Rewards', item.rewards || 'Not specified'],
-      ['Details', item.details || 'No additional details']
+      ['Points / Milestones', item.points || 'Not specified'],
+      ['How to Earn Points', item.scoring || 'Not specified'],
+      ['Event Information', item.details || 'No additional details']
     ];
     one('#detail-body').innerHTML = fields.map(([label, value]) =>
       '<div class="detail-item"><span>' + label + '</span><p' + (label === 'Status' ? ' id="detail-status"' : '') + '>' + escapeHtml(value).replace(/\n/g, '<br>') + '</p></div>'
@@ -514,6 +516,8 @@
       one('#entry-start').value = item.start_utc;
       one('#entry-end').value = item.end_utc;
       one('#entry-rewards').value = item.rewards;
+      one('#entry-points').value = item.points || '';
+      one('#entry-scoring').value = item.scoring || '';
       one('#entry-details').value = item.details;
       one('#entry-author').value = item.author || 'R4';
     } else if (kind === 'events' || kind === 'alliance') {
@@ -535,6 +539,8 @@
       start_utc: one('#entry-start').value,
       end_utc: one('#entry-end').value,
       rewards: one('#entry-rewards').value,
+      points: one('#entry-points').value,
+      scoring: one('#entry-scoring').value,
       details: one('#entry-details').value,
       author: one('#entry-author').value
     };
@@ -768,6 +774,102 @@
     }
   }
 
+  let banRecords = [];
+
+  function banTime(timestamp) {
+    return new Date(timestamp * 1000).toISOString().replace('T',' ').slice(0,19) + ' UTC';
+  }
+
+  function openBanDialog(id) {
+    if (!site.admin) return;
+    const member = (site.accounts || []).find(item => item.id === id);
+    if (!member) return;
+    one('#ban-form').reset();
+    one('#ban-member-id').value = String(id);
+    one('#ban-member-name').textContent = member.player_name + ' (@' + member.username + ')';
+    one('#ban-error').textContent = '';
+    const hasIP = !!member.last_ip;
+    for (const option of one('#ban-kind').options) {
+      if (option.value === 'ip' || option.value === 'everything') {
+        option.disabled = !hasIP;
+      }
+    }
+    one('#ban-kind').value = hasIP ? 'ip' : 'email';
+    one('#ban-ip-warning').textContent = hasIP
+      ? 'Last verified connection IP: ' + member.last_ip + '. Shared networks may affect multiple players.'
+      : 'No verified IP is available yet. IP and Everything bans require this account to register or sign in again after the update.';
+    openDialog('ban-dialog');
+  }
+
+  async function queueBan(event) {
+    event.preventDefault();
+    if (!site.admin) return;
+    const button = one('#ban-form button[type="submit"]');
+    button.disabled = true;
+    try {
+      await request('/api/bans', {method:'POST', body:JSON.stringify({
+        member_id:Number(one('#ban-member-id').value),
+        kind:one('#ban-kind').value,
+        reason:one('#ban-reason').value
+      })});
+      one('#ban-dialog').close();
+      notify('Ban scheduled. It will activate after 2 hours unless cancelled.');
+      await loadBans();
+    } catch(error){
+      one('#ban-error').textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function loadBans() {
+    if (!site.admin) return;
+    try {
+      const result = await request('/api/bans');
+      banRecords = result.bans || [];
+      renderBans();
+    } catch (error) {
+      one('#ban-queue-list').textContent = 'Could not load bans: '+error.message;
+    }
+  }
+
+  function renderBans() {
+    const active = banRecords.filter(item => item.status === 'pending' || item.status === 'active');
+    const finished = banRecords.filter(item => item.status !== 'pending' && item.status !== 'active');
+    one('#ban-queue-list').innerHTML = active.map(item =>
+      '<article class="ban-queue-row '+escapeHtml(item.status)+'"><div class="account-row-info">'+
+      '<strong>@'+escapeHtml(item.username)+' · '+escapeHtml(item.kind.toUpperCase())+' BAN</strong>'+
+      '<span>'+ (item.status === 'pending'
+        ? 'Pending · Activates '+escapeHtml(banTime(item.effective_at))
+        : 'Active · Since '+escapeHtml(banTime(item.effective_at)))+'</span>'+
+      (item.reason ? '<p>'+escapeHtml(item.reason)+'</p>' : '')+'</div>'+
+      '<div class="account-actions"><span class="account-pill '+(item.status==='pending'?'pending':'rejected')+'">'+
+      escapeHtml(item.status)+'</span><button class="small-button" type="button" data-ban-undo="'+item.id+'">'+
+      (item.status === 'pending' ? 'Undo '+escapeHtml(item.kind.toUpperCase())+' Ban' : 'Unban')+
+      '</button></div></article>'
+    ).join('') + (active.length ? '' : '<p class="accounts-muted">No pending or active bans.</p>') +
+    (finished.length ? '<details class="tool-settings"><summary>Previous bans ('+finished.length+')</summary>'+
+      finished.slice(0,30).map(item => '<p class="accounts-muted">'+
+        escapeHtml(item.username)+' · '+escapeHtml(item.kind)+' · '+escapeHtml(item.status)+'</p>').join('')+
+      '</details>' : '');
+  }
+
+  async function undoBan(id) {
+    if (!site.admin) return;
+    const item = banRecords.find(row => row.id === id);
+    if (!item) return;
+    if (!await confirmAction({
+      title: item.status === 'pending' ? 'Cancel scheduled ban?' : 'Lift active ban?',
+      message: 'Remove the '+item.kind.toUpperCase()+' ban for @'+item.username+'?',
+      buttonLabel: item.status === 'pending' ? 'Undo Ban' : 'Unban'
+    })) return;
+    try {
+      await request('/api/bans/'+id,{method:'DELETE',body:'{}'});
+      await loadBans();
+      notify('Ban cancelled or removed.');
+    } catch(error){notify(error.message);}
+  }
+
   async function loadAccounts() {
     if (!site.admin) return;
     try {
@@ -775,6 +877,7 @@
       site.accounts = data.accounts || [];
       site.passwordRequests = data.password_requests || [];
       renderAccounts();
+      await loadBans();
     } catch (error) { notify(error.message); }
   }
 
@@ -795,6 +898,7 @@
         (item.status !== 'approved' ? '<button type="button" class="account-approve" data-account-approve="' + item.id + '">Accept</button>' : '') +
         (item.status !== 'rejected' ? '<button type="button" class="account-reject" data-account-reject="' + item.id + '">Reject</button>' : '') +
         '<button type="button" class="account-edit" data-account-edit="' + item.id + '">Edit</button>' +
+        '<button type="button" class="account-ban" data-account-ban="' + item.id + '">Ban</button>' +
         '<button type="button" class="account-delete" data-account-delete="' + item.id + '">Delete</button>';
       return '<article class="account-row status-' + item.status + '"><div class="account-row-info"><button class="account-detail-open" type="button" data-account-detail="' + item.id + '">' + escapeHtml(item.player_name) + '</button>' +
         '<span>@' + escapeHtml(item.username) + ' · ' + escapeHtml(item.email) +
@@ -1045,6 +1149,10 @@
     if (resetReject && site.admin) rejectPasswordChange(Number(resetReject.dataset.resetReject));
     const editAccountButton = event.target.closest('[data-account-edit]');
     if (editAccountButton && site.admin) editAccount(Number(editAccountButton.dataset.accountEdit));
+    const banButton = event.target.closest('[data-account-ban]');
+    if (banButton && site.admin) openBanDialog(Number(banButton.dataset.accountBan));
+    const undoButton = event.target.closest('[data-ban-undo]');
+    if (undoButton && site.admin) undoBan(Number(undoButton.dataset.banUndo));
     const deleteAccountButton = event.target.closest('[data-account-delete]');
     if (deleteAccountButton && site.admin) deleteAccount(Number(deleteAccountButton.dataset.accountDelete));
     const approve = event.target.closest('[data-account-approve]');
@@ -1098,6 +1206,8 @@
   one('#admin-toggle').addEventListener('click', toggleAdmin);
   one('#login-form').addEventListener('submit', login);
   one('#entry-form').addEventListener('submit', saveEntry);
+  one('#ban-form').addEventListener('submit', queueBan);
+  one('#ban-queue-refresh').addEventListener('click', loadBans);
   one('#entry-delete').addEventListener('click', deleteEntry);
   one('#download-calendar').addEventListener('click', downloadCalendar);
   one('#detail-edit').addEventListener('click', () => {
