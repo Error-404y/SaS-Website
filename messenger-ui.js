@@ -48,11 +48,13 @@
   function contactMarkup(item) {
     return '<button type="button" class="messenger-contact'+(item.id===activePeer?' is-active':'')+
       (item.id==='alliance'?' messenger-alliance-pinned':'')+
-      '" data-messenger-peer="'+escape(item.id)+'" role="listitem">'+
+      (item.self?' messenger-own-profile':'')+
+      '" '+(item.self?'disabled aria-label="Your profile"':'data-messenger-peer="'+escape(item.id)+'"')+' role="listitem">'+
       '<span class="messenger-avatar'+(item.group?' is-group':'')+'">'+escape(avatar(item))+'</span>'+
       '<span class="messenger-contact-details"><strong>'+escape(item.username)+
       (item.id==='alliance'?' <span class="messenger-group-pin">PINNED</span>':'')+'</strong>'+
-      '<small>'+escape(item.last_message || (item.group ? 'Alliance group chat' : (item.player_name||'Say hello')))+'</small></span>'+
+      '<small>'+escape(item.self ? 'Your profile · '+(item.player_name||'') :
+        (item.last_message || (item.group ? 'Group chat' : (item.player_name||'Say hello'))))+'</small></span>'+
       '<span class="messenger-contact-meta"><small>'+escape(showTime(item.last_at))+'</small>'+
       (item.unread ? '<span class="messenger-contact-badge">'+Math.min(item.unread,99)+(item.unread>99?'+':'')+'</span>':'')+
       '</span></button>';
@@ -164,7 +166,7 @@
     finally{busy=false;$('messenger-send').disabled=false;}
   }
   function approvedPlayers() {
-    return contacts.filter(c=>!c.group && c.id!=='admin' && c.id.startsWith('member:'));
+    return contacts.filter(c=>!c.group && !c.self && c.id!=='admin' && c.id.startsWith('member:'));
   }
   function renderGroupPicker() {
     const search=$('messenger-group-player-search').value.trim().toLowerCase();
