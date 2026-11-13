@@ -886,6 +886,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(403, {"error": "Cross-origin request rejected."})
             if path != "/api/login" and self.banned_client():
                 return self.respond(403, {"error": "Access restricted."})
+            if path == "/api/bans/cancel-pending" and method == "POST":
+                if not self.authorized():
+                    return
+                now = int(time.time())
+                with LOCK, connect() as db:
+                    cursor = db.execute("""UPDATE moderation_bans SET cancelled_at=?
+                        WHERE cancelled_at IS NULL AND revoked_at IS NULL AND effective_at>?""",
+                        (now, now))
+                return self.respond(200, {"ok": True, "cancelled": cursor.rowcount})
             if path == "/api/bans" and method == "POST":
                 if not self.authorized():
                     return
