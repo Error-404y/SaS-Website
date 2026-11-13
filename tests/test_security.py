@@ -146,6 +146,42 @@ class SecurityBoundaryTests(unittest.TestCase):
         self.assertEqual(self.call("/api/state", cookie=cookie)[0], 401)
         self.assertNotIn(b'id="website"', self.call("/", cookie=cookie)[1])
 
+
+    def test_admin_can_approve_and_edit_entries(self):
+        self.register("ApplicantUser", "pending")
+        cookie, csrf = self.login_admin()
+        status, raw, _ = self.call("/api/accounts", cookie=cookie)
+        self.assertEqual(status, 200)
+        item = next(row for row in json.loads(raw)["accounts"] if row["username"] == "ApplicantUser")
+        self.assertEqual(self.call("/api/accounts/" + str(item["id"]), "PATCH",
+                                   {"status": "approved"}, cookie, csrf)[0], 200)
+        player_cookie, _ = self.login_member("ApplicantUser")
+        self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 200)
+        event = {
+            "kind": "events", "title": "Security verification event", "category": "Events",
+            "start_utc": "2026-12-01 00:00:00", "end_utc": "2026-12-01 01:00:00",
+            "details": "Only admins create events."
+        }
+        status, raw, _ = self.call("/api/entries", "POST", event, cookie, csrf)
+        self.assertEqual(status, 201, raw)
+        self.assertIn("id", json.loads(raw))
+        self.assertEqual(self.call("/api/entries", "POST", event, player_cookie)[0], 403)
+        self.assertEqual(self.call("/api/accounts/" + str(item["id"]), "PATCH",
+                                   {"status": "rejected", "message": "Not in alliance"}, cookie, csrf)[0], 200)
+        self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 401)
+
+    def test_member_logout_and_cookie_flags(self):
+        self.register("LogoutPlayer", "approved")
+        cookie, csrf = self.login_member("LogoutPlayer")
+        status, _, _ = self.call("/api/member/logout", "POST", {}, cookie)
+        self.assertEqual(status, 403)  # CSRF required
+        status, _, headers = self.call("/api/member/logout", "POST", {}, cookie, csrf)
+        self.assertEqual(status, 200)
+        self.assertIn("HttpOnly", self.call("/api/member/login", "POST", {
+            "username": "LogoutPlayer", "password": "member-password-long"
+        })[2].get("Set-Cookie"))
+        self.assertEqual(self.call("/api/state", cookie=cookie)[0], 401)
+
     def test_admin_login_rate_limit(self):
         for _ in range(10):
             status, _, _ = self.call("/api/login", "POST", {
