@@ -358,13 +358,13 @@ def current_session(handler):
     return dict(row) if row else None
 
 
-def login_throttled(category, source):
+def login_throttled(category, source, limit=10):
     cutoff = int(time.time()) - 900
     with LOCK, connect() as db:
         db.execute("DELETE FROM auth_failures WHERE happened_at<?", (cutoff,))
         count = db.execute("SELECT COUNT(*) FROM auth_failures WHERE category=? AND source=? AND happened_at>=?",
                            (category, source, cutoff)).fetchone()[0]
-    return count >= 10
+    return count >= limit
 
 def note_login_failure(category, source):
     with LOCK, connect() as db:
@@ -568,9 +568,13 @@ class Handler(BaseHTTPRequestHandler):
             if not self.valid_request_origin():
                 return self.respond(403, {"error": "Cross-origin request rejected."})
             if path == "/api/password/request" and method == "POST":
+                source = self.client_address[0]
+                if login_throttled("password-request", source, limit=25):
+                    return self.respond(429, {"error": "Too many password requests. Try later."})
                 data = self.read_json()
                 with LOCK, connect() as db:
                     result = members.request_password_reset(db, data.get("identifier"))
+                note_login_failure("password-request", source)
                 return self.respond(200, result)
             if path == "/api/password/complete" and method == "POST":
                 data = self.read_json()
@@ -592,9 +596,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, {"ok": True, "reset_code": code,
                     "message": "Share the reset code privately with the player. It expires in one hour and is shown only once." if code else "Request rejected."})
             if path == "/api/register" and method == "POST":
+                source = self.client_address[0]
+                if login_throttled("registration", source, limit=25):
+                    return self.respond(429, {"error": "Too many registrations. Try later."})
                 values = self.read_json()
                 with LOCK, connect() as db:
                     members.register(db, values)
+                note_login_failure("registration", source)
                 return self.respond(201, {"status": "pending", "message": "Registration submitted for administrator review."})
             if path == "/api/member/login" and method == "POST":
                 data = self.read_json()
