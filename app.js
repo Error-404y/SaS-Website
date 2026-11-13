@@ -635,7 +635,7 @@
         '<button type="button" class="account-reject" data-account-reject="' + item.id + '">Revoke access</button>' :
         '<button type="button" class="account-approve" data-account-approve="' + item.id + '">Approve</button>';
       return '<article class="account-row"><div class="account-row-info"><button class="account-detail-open" type="button" data-account-detail="' + item.id + '">' + escapeHtml(item.player_name) + '</button>' +
-        '</strong><span>@' + escapeHtml(item.username) + ' · ' + escapeHtml(item.email) +
+        '<span>@' + escapeHtml(item.username) + ' · ' + escapeHtml(item.email) +
         '</span><span>Registered ' + escapeHtml(item.created_at.slice(0, 10)) + '</span>' +
         (item.review_message ? '<p>Review note: ' + escapeHtml(item.review_message) + '</p>' : '') +
         '</div><div class="account-actions"><span class="account-pill ' + item.status + '">' + item.status +
