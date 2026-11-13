@@ -65,12 +65,13 @@
     return '<button type="button" class="messenger-contact'+(item.id===activePeer?' is-active':'')+
       (item.id==='alliance'?' messenger-alliance-pinned':'')+
       (item.self?' messenger-own-profile':'')+
-      '" '+(item.self?'disabled aria-label="Your profile"':'data-messenger-peer="'+escape(item.id)+'"')+' role="listitem">'+
+      '" data-messenger-peer="'+escape(item.id)+'" role="listitem">'+
       '<span class="messenger-avatar'+(item.group?' is-group':'')+'">'+escape(avatar(item))+'</span>'+
       '<span class="messenger-contact-details"><strong>'+escape(item.username)+
       (item.id==='alliance'?' <span class="messenger-group-pin">PINNED</span>':'')+'</strong>'+
-      '<small>'+escape(item.self ? 'Your profile · '+(item.player_name||'') :
-        (item.last_message || (item.group ? 'Group chat' : (item.player_name||'Say hello'))))+'</small></span>'+
+      '<small>'+escape(item.self ? (item.last_message || 'Private notes · Only you can see this') :
+        (item.id==='alliance' && !item.joined ? 'Join to see all messages' :
+          (item.last_message || (item.group ? 'Group chat' : (item.player_name||'Say hello')))))+'</small></span>'+
       '<span class="messenger-contact-meta"><small>'+escape(showTime(item.last_at))+'</small>'+
       (item.unread ? '<span class="messenger-contact-badge">'+Math.min(item.unread,99)+(item.unread>99?'+':'')+'</span>':'')+
       '</span></button>';
@@ -120,22 +121,31 @@
     error();
     const contact=contacts.find(c=>c.id===peer);
     $('messenger-active-name').textContent=contact.username;
-    $('messenger-active-detail').textContent=contact.group ? (contact.id==='alliance'?'All approved SaS members':'Private group · '+contact.player_name) :
-      (contact.player_name || 'Private conversation');
+    $('messenger-active-detail').textContent=contact.self ? 'Notes to self · Private' :
+      (contact.group ? (contact.id==='alliance'?'All joined SaS members':'Private group · '+contact.player_name) :
+      (contact.player_name || 'Private conversation'));
+    const locked=peer==='alliance' && !contact.joined;
+    $('messenger-alliance-lock').hidden=!locked;
     $('messenger-active-avatar').textContent=avatar(contact);
     $('messenger-history').innerHTML='<p class="messenger-loading">Loading conversation…</p>';
-    $('messenger-message').disabled=false;
-    $('messenger-send').disabled=false;
+    $('messenger-message').disabled=locked;
+    $('messenger-send').disabled=locked;
     $('messenger-shell').classList.add('chat-open');
     renderContacts();
-    await loadMessages(true);
+    if (locked) {
+      $('messenger-history').innerHTML='<div class="messenger-empty">Join SaS Group to unlock the conversation.</div>';
+    } else {
+      await loadMessages(true);
+    }
   }
   function messagesMarkup(messages) {
-    if (!messages.length) return '<div class="messenger-empty">No messages yet. Say hello!</div>';
+    if (!messages.length) return '<div class="messenger-empty">No messages yet. '+(activePeer===identity?'Save a note to yourself!':'Say hello!')+'</div>';
     return messages.map(msg => {
       const mine = msg.sender_key===identity;
-      const sender = msg.sender_key==='admin' ? 'SaS Admin' :
-        (contacts.find(c=>c.id===msg.sender_key)?.username || (mine ? 'You' : 'Former member'));
+      const sender = msg.sender_key==='system' ? 'SaS Group' :
+        (msg.sender_key==='admin' ? 'SaS Admin' :
+        (contacts.find(c=>c.id===msg.sender_key)?.username || (mine ? 'You' : 'Former member')));
+      if (msg.sender_key==='system') return '<div class="messenger-system-message">'+escape(msg.body)+'</div>';
       return '<div class="messenger-line'+(mine?' mine':'')+'">'+
         '<div class="messenger-bubble">'+
         ((activePeer==='alliance'||activePeer.startsWith('group:')) ? '<strong>'+escape(mine?'You':sender)+'</strong>' : '')+
@@ -144,7 +154,8 @@
     }).join('');
   }
   async function loadMessages(force=false) {
-    if (!running || !activePeer || !currentPage) return;
+    if (!running || !activePeer || !currentPage ||
+        (activePeer==='alliance' && contacts.some(c=>c.id==='alliance' && !c.joined))) return;
     const targetPeer=activePeer;
     if (loadingPeer===targetPeer) return;
     const generation=sessionGeneration;
@@ -198,6 +209,21 @@
       input.focus();
     } catch(e){error(e.message);}
     finally{busy=false;$('messenger-send').disabled=false;}
+  }
+  async function joinAlliance() {
+    if (!running || activePeer!=='alliance') return;
+    const button=$('messenger-join-alliance');
+    button.disabled=true;
+    error();
+    try {
+      await api('/api/messenger/alliance/join',{method:'POST',body:'{}'});
+      const result=await api('/api/messenger');
+      identity=result.me;
+      contacts=Array.isArray(result.contacts)?result.contacts:[];
+      renderContacts();
+      await openPeer('alliance');
+    } catch(e){error(e.message);}
+    finally{button.disabled=false;}
   }
   function approvedPlayers() {
     return contacts.filter(c=>!c.group && !c.self && c.id!=='admin' && c.id.startsWith('member:'));
@@ -255,13 +281,17 @@
     $('messenger-message').disabled=true;
     $('messenger-send').disabled=true;
     $('messenger-history').innerHTML='<div class="messenger-empty">No Conversation has been Made</div>';
+    $('messenger-alliance-lock').hidden=true;
     renderContacts();
   }
   function onPage(name){
     currentPage=name==='messenger';
     if (currentPage && running) {
       loadList();
-      if (activePeer) loadMessages();
+      if (activePeer) {
+        const contact=contacts.find(c=>c.id===activePeer);
+        if (activePeer!=='alliance' || contact?.joined) loadMessages();
+      }
     }
   }
   function init(){
@@ -270,6 +300,7 @@
       if (button) openPeer(button.dataset.messengerPeer);
     });
     $('messenger-search').addEventListener('input',renderContacts);
+    $('messenger-join-alliance').addEventListener('click',joinAlliance);
     $('messenger-create-group').addEventListener('click',openGroupDialog);
     $('messenger-group-player-search').addEventListener('input',renderGroupPicker);
     $('messenger-group-players').addEventListener('change', event=>{
