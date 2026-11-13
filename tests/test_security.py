@@ -286,6 +286,57 @@ class SecurityBoundaryTests(unittest.TestCase):
             row = db.execute("SELECT COUNT(*) FROM member_reads").fetchone()[0]
         self.assertEqual(row, 1)
 
+    def test_discord_account_notifications_only_on_success(self):
+        from unittest.mock import patch
+        events = []
+        signaled = threading.Event()
+
+        def record(*args):
+            events.append(args)
+            signaled.set()
+
+        with patch.object(server, "discord_account_notice", side_effect=record):
+            status, raw, _ = self.call("/api/register", "POST", {
+                "username": "NewApplicant", "player_name": "Chief Tester",
+                "email": "chief@example.com", "password": "super-secret-pass-123"
+            })
+            self.assertEqual(status, 201, raw)
+            self.assertTrue(signaled.wait(2))
+            self.assertEqual(events[0], ("registration", "MEMBER",
+                                         "NewApplicant", "chief@example.com", "Chief Tester"))
+            signaled.clear()
+
+            bad = self.call("/api/member/login", "POST", {
+                "username": "NewApplicant", "password": "incorrect-password"
+            })
+            self.assertEqual(bad[0], 401)
+            pending = self.call("/api/member/login", "POST", {
+                "username": "NewApplicant", "password": "super-secret-pass-123"
+            })
+            self.assertEqual(pending[0], 403)
+            self.assertEqual(len(events), 1)
+
+            with server.connect() as db:
+                db.execute("UPDATE members SET status='approved' WHERE username='NewApplicant'")
+            status, raw, _ = self.call("/api/member/login", "POST", {
+                "username": "NewApplicant", "password": "super-secret-pass-123"
+            })
+            self.assertEqual(status, 200, raw)
+            self.assertTrue(signaled.wait(2))
+            self.assertEqual(events[1], ("login", "MEMBER", "NewApplicant", "chief@example.com"))
+            signaled.clear()
+            self.assertEqual(self.call("/api/login", "POST", {
+                "username": server.ADMIN_USER, "password": "wrong"
+            })[0], 401)
+            self.assertEqual(len(events), 2)
+            admin_cookie, _ = self.login_admin()
+            self.assertIn("sas_session=", admin_cookie)
+            self.assertTrue(signaled.wait(2))
+            self.assertEqual(events[2], ("login", "ADMIN", server.ADMIN_USER))
+            self.assertEqual(len(events), 3)
+            self.assertNotIn("super-secret-pass-123", repr(events))
+            self.assertNotIn("incorrect-password", repr(events))
+
     def test_admin_login_rate_limit(self):
         for _ in range(10):
             status, _, _ = self.call("/api/login", "POST", {

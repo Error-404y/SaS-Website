@@ -42,13 +42,14 @@
       el('planner-capacity').getAttribute('aria-pressed') === 'true',
       el('planner-training-reduction').value);
     if (!data) return;
-    const html = P.RESOURCES.map(r => stat(r[0].toUpperCase() + r.slice(1), P.fmt(data.costs[r]))).join('') +
-      stat('Original time (adjusted)', P.duration(data.originalSeconds)) +
-      stat('With time reduction', P.duration(data.seconds));
+    const html = stat('Troops', readable(data.quantity)) +
+      stat('Training time', P.duration(data.seconds)) +
+      P.RESOURCES.map(r => stat(r[0].toUpperCase() + r.slice(1) + ' needed', P.fmt(data.costs[r]))).join('') +
+      stat('Before time reduction', P.duration(data.originalSeconds));
     el('planner-training-results').innerHTML = html;
     el('planner-training-notes').textContent = P.TROOPS[key].name + ' · ' +
       readable(data.quantity) + ' troops · ' +
-      (data.capacityMultiplier === 3 ? 'Training Capacity UP active (×3 capacity and time)' : 'Normal capacity');
+      (data.capacityMultiplier === 2 ? '2× boost ON — RSS and time are doubled' : 'Normal training — no boost applied');
   }
   function renderBuildings() {
     const level = el('planner-building-level').value;

@@ -692,9 +692,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .tool-stat span{color:#69778d;font-weight:660;font-size:12px}
 .tool-stat strong{font-size:clamp(18px,2.1vw,25px);letter-spacing:-.025em;color:#1c2841;overflow-wrap:anywhere}
 .capacity-toggle{border:1px solid #d6dae8;background:#f7f8fc;border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 17px;color:#3b4962;font-weight:720;text-align:left}
-.capacity-toggle strong{background:#dbe2ed;color:#5b6574;padding:7px 13px;border-radius:99px;min-width:60px;text-align:center}
+.capacity-toggle #planner-capacity-state{background:#dbe2ed;color:#5b6574;padding:7px 13px;border-radius:99px;min-width:60px;text-align:center}
 .capacity-toggle[aria-pressed=true]{border-color:#b69bd4;background:#f2ebfa}
-.capacity-toggle[aria-pressed=true] strong{background:#5c3d7e;color:#fff}
+.capacity-toggle[aria-pressed=true] #planner-capacity-state{background:#5c3d7e;color:#fff}
 .tool-footnote{margin:0;font-size:12px;line-height:1.6;color:#677488}
 .tool-metadata{color:#5a6880;font-size:12px}
 .tool-total{background:linear-gradient(110deg,#f4effa,#fff);border:1px solid #e8e0f0;border-radius:13px;padding:19px;display:flex;flex-direction:column;gap:7px}
@@ -734,3 +734,27 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   .tool-form-grid,.tool-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:425px){.tool-form-grid,.tool-inputs{grid-template-columns:1fr}.tool-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.tool-stat{padding:11px}.tool-stat strong{font-size:17px}}
+
+/* Beginner-friendly calculator landing and simple step instructions */
+.tool-welcome{display:flex;justify-content:space-between;align-items:center;gap:18px;background:linear-gradient(110deg,#f3edf9,#ffffff);border:1px solid #e3d7f0;border-radius:16px;padding:19px 23px;margin-bottom:20px}
+.tool-welcome>div{display:grid;gap:5px}
+.tool-welcome strong{font-size:18px;color:#34254c}
+.tool-welcome span:not(.tool-welcome-symbol){font-size:13px;color:#65738b;line-height:1.5}
+.tool-welcome-symbol{font-size:34px;color:#8d67ba;flex:none}
+.tool-feature small{font-size:12px;color:#69778a;line-height:1.5;font-weight:500}
+.tool-steps{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:-5px 0 20px}
+.tool-steps span{display:inline-flex;gap:8px;align-items:center;border-radius:99px;border:1px solid #e2dfec;background:#fff;padding:8px 12px;color:#52627c;font-size:12px;font-weight:650}
+.tool-steps b{display:grid;place-items:center;border-radius:50%;width:20px;height:20px;background:#eee6f6;color:#654085;font-size:11px}
+.tool-small-label{font-size:12px;font-weight:750;color:#425472;margin:0 0 -10px}
+.capacity-toggle>span:first-child{display:flex;flex-direction:column;gap:4px}
+.capacity-toggle .capacity-title{font-size:14px;color:#49385e;background:transparent;border:0;min-width:0;padding:0;border-radius:0;text-align:left}
+.capacity-toggle small{font-size:11px;color:#768096;font-weight:500}
+#planner-training-results .tool-stat:first-child{background:#f3eafb;border-color:#e3d5f0}
+#planner-training-results .tool-stat:nth-child(2){background:#edf5ff;border-color:#d8e6f5}
+@media(max-width:750px){
+  .tool-welcome{padding:15px 17px}
+  .tool-steps{gap:6px}
+  .tool-steps span{font-size:11px;padding:7px 8px}
+  .tool-welcome-symbol{display:none}
+  .tool-feature{padding:18px;gap:9px}
+}

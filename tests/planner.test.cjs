@@ -33,13 +33,17 @@ test('five screenshot-backed troop snapshots for 722 troops', () => {
   assert.equal(p.troops('not-observed', 722), null);
 });
 
-test('training capacity boost adds 200 percent to time as in screenshot', () => {
+test('Training Capacity button doubles all four RSS costs and training time', () => {
   const regular = p.troops('biker-9', 722);
   const boosted = p.troops('biker-9', 722, true);
-  assert.equal(boosted.seconds, regular.seconds * 3);
-  assert.equal(boosted.costs.ammo, regular.costs.ammo);
-  assert.equal(boosted.capacityMultiplier, 3);
+  assert.equal(boosted.seconds, regular.seconds * 2);
+  for (const resource of p.RESOURCES) {
+    assert.equal(boosted.costs[resource], regular.costs[resource] * 2);
+  }
+  assert.equal(boosted.capacityMultiplier, 2);
   assert.equal(p.troops('biker-9', 722, false, 50).seconds, regular.seconds / 2);
+  assert.equal(p.troops('biker-9', 722, true, 50).seconds, regular.seconds);
+  assert.equal(p.troops('biker-9', 722).seconds, regular.seconds);
 });
 
 test('recorded building upgrade costs are not falsely extrapolated', () => {
