@@ -206,12 +206,16 @@
     const search=$('messenger-group-player-search').value.trim().toLowerCase();
     const eligible=approvedPlayers().filter(p=>p.username.toLowerCase().includes(search) ||
       (p.player_name||'').toLowerCase().includes(search));
-    $('messenger-group-players').innerHTML=eligible.length?eligible.map(p=>
+    const own=contacts.find(c=>c.self);
+    const ownLine=own ? '<div class="messenger-player-option messenger-own-profile">'+
+      '<span class="messenger-avatar">'+escape(avatar(own))+'</span>'+
+      '<span><strong>'+escape(own.username)+' (You)</strong><small>Group creator · included automatically</small></span></div>' : '';
+    $('messenger-group-players').innerHTML=ownLine + (eligible.length?eligible.map(p=>
       '<label class="messenger-player-option"><input type="checkbox" data-group-player="'+escape(p.id)+'"'+
       (selectedGroupPlayers.has(p.id)?' checked':'')+'><span class="messenger-avatar">'+escape(avatar(p))+'</span>'+
       '<span><strong>'+escape(p.username)+'</strong><small>'+escape(p.player_name||'')+'</small></span></label>'
-    ).join(''):'<p class="messenger-loading">No matching approved players.</p>';
-    $('messenger-group-selected').textContent=selectedGroupPlayers.size+' player(s) selected';
+    ).join(''):'<p class="messenger-loading">No other approved players found. Your account is already included.</p>');
+    $('messenger-group-selected').textContent=selectedGroupPlayers.size+' other player(s) selected · You are included automatically';
   }
   function openGroupDialog(){
     selectedGroupPlayers=new Set();
@@ -273,7 +277,7 @@
       if (!checkbox) return;
       if (checkbox.checked) selectedGroupPlayers.add(checkbox.dataset.groupPlayer);
       else selectedGroupPlayers.delete(checkbox.dataset.groupPlayer);
-      $('messenger-group-selected').textContent=selectedGroupPlayers.size+' player(s) selected';
+      $('messenger-group-selected').textContent=selectedGroupPlayers.size+' other player(s) selected · You are included automatically';
     });
     $('messenger-group-form').addEventListener('submit',createGroup);
     $('messenger-compose').addEventListener('submit',send);
