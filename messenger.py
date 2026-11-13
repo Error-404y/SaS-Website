@@ -3,11 +3,11 @@
 Only server-derived sender identities are accepted; no client-supplied sender,
 role, recipient display name, or membership information is trusted.
 """
-import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 MAX_MESSAGE = 2000
 MAX_HISTORY = 80
+MAX_MESSAGES_PER_MINUTE = 30
 ADMIN = "admin"
 ALLIANCE = "alliance"
 
@@ -26,6 +26,8 @@ def setup(db):
     )""")
     db.execute("""CREATE INDEX IF NOT EXISTS chat_thread_messages
         ON chat_messages(thread_key,id DESC)""")
+    db.execute("""CREATE INDEX IF NOT EXISTS chat_sender_rate
+        ON chat_messages(sender_key,created_at)""")
     db.execute("""CREATE TABLE IF NOT EXISTS chat_reads (
         member_key TEXT NOT NULL,
         thread_key TEXT NOT NULL,
@@ -141,6 +143,11 @@ def send(db, actor, target, body):
     if any(ord(char) < 32 and char not in "\n\t" for char in message):
         raise ValueError("Invalid message characters.")
     created = now_utc()
+    since = (datetime.now(timezone.utc) - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
+    recent = db.execute("""SELECT COUNT(*) FROM chat_messages
+        WHERE sender_key=? AND created_at>=?""", (actor, since)).fetchone()[0]
+    if recent >= MAX_MESSAGES_PER_MINUTE:
+        raise ValueError("Too many messages. Try again in a minute.")
     cur = db.execute("""INSERT INTO chat_messages(thread_key,sender_key,body,created_at)
         VALUES(?,?,?,?)""", (thread,actor,message,created))
     return {"id": cur.lastrowid, "sender_key": actor, "body": message,
