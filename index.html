@@ -486,6 +486,19 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </div>
 
+  <dialog id="confirm-action-dialog" class="dialog confirm-action-dialog" aria-labelledby="confirm-action-title" aria-describedby="confirm-action-message">
+    <div class="dialog-top">
+      <div><span class="section-kicker">SAINTS AND SINNERS</span><h2 id="confirm-action-title">Please confirm</h2></div>
+      <button type="button" class="close-button" data-confirm-choice="cancel" aria-label="Close">×</button>
+    </div>
+    <p id="confirm-action-message" class="confirm-action-message"></p>
+    <p class="form-error" id="confirm-action-error" aria-live="polite"></p>
+    <div class="dialog-actions">
+      <button type="button" class="small-button" data-confirm-choice="cancel">Cancel</button>
+      <button type="button" class="danger-button confirm-action-submit" data-confirm-choice="accept">Delete permanently</button>
+    </div>
+  </dialog>
+
   <dialog id="account-edit-dialog" class="dialog">
     <form id="account-edit-form">
       <div class="dialog-top"><div><span class="section-kicker">SaS – ACCOUNTS</span><h2>Edit player account</h2></div><button type="button" class="close-button" data-close="account-edit-dialog" aria-label="Close">×</button></div>
