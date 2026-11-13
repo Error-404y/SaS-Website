@@ -645,3 +645,17 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .account-approve{border:0;background:#2c8059;color:white;border-radius:8px;padding:9px 13px;font-size:12px;font-weight:700}
 .account-reject{border:1px solid #efcbd0;background:white;color:#ae414d;border-radius:8px;padding:9px 13px;font-size:12px;font-weight:700}
 @media(max-width:720px){.account-row{align-items:flex-start;flex-direction:column}.accounts-stats{grid-template-columns:1fr}.auth-gate{justify-content:flex-start}.auth-card{margin-top:14px}.auth-brand{position:static;align-self:flex-start}}
+
+
+/* Account detail popup and password request management */
+.account-detail-open{display:inline;align-self:start;text-align:left;border:0;padding:0;background:transparent;color:var(--navy);font-size:15px;font-weight:750;cursor:pointer}
+.account-detail-open:hover{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
+.account-detail-grid{display:grid;gap:12px;margin:20px 0}
+.account-detail-grid>div{display:grid;gap:6px;padding:12px 14px;background:#f7f8fb;border:1px solid #e8ebf1;border-radius:10px;overflow-wrap:anywhere}
+.account-detail-grid span{color:#738096;font-size:11px;font-weight:650;letter-spacing:.03em}
+.account-detail-grid strong{font-size:13px;font-weight:650}
+.accounts-muted{color:#728096;font-size:13px;margin-bottom:15px}
+#reset-code-dialog textarea{width:100%;font:600 13px ui-monospace,monospace;overflow-wrap:anywhere;background:#f6f7fa;border:1px solid #d8e0eb;border-radius:9px;padding:14px;resize:none}
+#reset-code-dialog p{line-height:1.6;color:#69788a}
+.auth-form .auth-admin-link{text-align:center;align-self:center;margin-top:12px}
+.auth-form .auth-admin-link+ .auth-admin-link{margin-top:4px}
