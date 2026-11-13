@@ -773,3 +773,22 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 #account-edit-dialog input{display:block;width:100%;border:1px solid #dbe2ec;border-radius:10px;padding:12px;margin:6px 0 15px}
 #password-requests-badge{display:inline-flex;vertical-align:middle;font-size:11px}
 #password-requests-badge[hidden]{display:none}
+
+
+/* Alliance RSS temporarily unavailable; visual blur and truly inert controls */
+#page-rss{position:relative;min-height:570px;isolation:isolate}
+#page-rss>.rss-underlay{filter:blur(8px);opacity:.34;pointer-events:none;user-select:none;max-height:900px;overflow:hidden}
+#page-rss>.rss-construction{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:22px;pointer-events:auto}
+.rss-construction-card{width:min(420px,95%);padding:55px 25px;text-align:center;border:1px solid #e0d2ee;border-radius:22px;background:rgba(255,255,255,.92);box-shadow:0 18px 65px rgba(44,25,76,.13);backdrop-filter:blur(12px)}
+.rss-construction-mark{display:block;color:#9470b2;font-size:34px;margin-bottom:14px}
+.rss-construction-card h2{font-size:clamp(19px,3vw,27px);letter-spacing:.10em;color:#322449;font-weight:800;margin:0}
+.locked-troops{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.locked-troop{display:inline-flex;align-items:center;gap:6px;border:1px solid #dccde6;color:#857592;background:#f7f3fa;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:750;cursor:pointer}
+.locked-troop:hover,.locked-troop:focus-visible{background:#eee5f4;border-color:#a58ab9}
+.locked-troop svg{flex:0 0 auto}
+.locked-troop-notice{display:grid;justify-items:center;text-align:center;gap:9px;padding:20px 8px;color:#6a4f82}
+.locked-troop-notice p{font-size:16px;font-weight:700;margin:0;color:#342848}
+#locked-troop-dialog::backdrop{background:rgba(28,23,45,.4);backdrop-filter:blur(7px)}
+#reset-approve-dialog::backdrop{background:rgba(28,23,45,.4);backdrop-filter:blur(5px)}
+#reset-approve-dialog p{line-height:1.6;color:#5e687b}
+@media(max-width:750px){#page-rss{min-height:480px}.rss-construction-card{padding:42px 20px}}
