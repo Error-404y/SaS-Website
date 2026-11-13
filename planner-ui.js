@@ -156,10 +156,10 @@
       : 'Set a target to see how many points remain';
     el('planner-event-source').textContent = phase === 'faceoff'
       ? 'Alliance Faceoff gathering: 2,000 Ammo/Cash, 400 Electricity or 100 Gas = 2 pts. Day 1/3.'
-      : phase === '3' ? 'Screenshot: Phase 3, Officer Training (Lv4–10).'
-      : phase === '4' ? 'Screenshot: Phase 4, Resource Confiscation.'
-      : phase === '5' ? 'Screenshot: Phase 5, Power Sprint.'
-      : 'Screenshot: Phase 1, PD Construction. Phase 2 has not been documented.';
+      : phase === '3' ? 'Phase 3 · Officer Training (Lv4–10).'
+      : phase === '4' ? 'Phase 4 · Resource Confiscation.'
+      : phase === '5' ? 'Phase 5 · Power Sprint.'
+      : 'Phase 1 · PD Construction. Phase 2 is not available yet.';
     const custom = el('planner-custom-points');
     if (regenerate || custom.dataset.phase !== phase) {
       custom.dataset.phase = phase;

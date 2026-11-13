@@ -1,6 +1,7 @@
 import hmac
 import hashlib
 import members
+import reminder_cards
 import json
 import logging
 import math
@@ -105,6 +106,18 @@ def init():
             created_at TEXT NOT NULL
         )""")
         db.execute("""CREATE INDEX IF NOT EXISTS rss_spending_order ON rss_spending(spent_at,id)""")
+        db.execute("""CREATE TABLE IF NOT EXISTS reminder_messages (
+            event_id INTEGER NOT NULL,
+            stage TEXT NOT NULL CHECK(stage IN ('yellow','red')),
+            event_start_utc TEXT NOT NULL,
+            message_id TEXT NOT NULL DEFAULT '',
+            sent_at INTEGER NOT NULL DEFAULT 0,
+            attempt_at INTEGER NOT NULL DEFAULT 0,
+            deleted_at INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(event_id,stage,event_start_utc)
+        )""")
+        db.execute("""CREATE INDEX IF NOT EXISTS reminder_messages_cleanup
+            ON reminder_messages(deleted_at,sent_at)""")
         db.execute("""CREATE TABLE IF NOT EXISTS sessions (
             token_hash TEXT PRIMARY KEY,
             csrf TEXT NOT NULL,
@@ -482,51 +495,148 @@ def discord_account_notice(category, role, username, email="", player_name=""):
         fields.append({"name": "Email", "value": str(email)[:254], "inline": False})
     if player_name and category == "registration":
         fields.append({"name": "In-game name", "value": str(player_name)[:70], "inline": False})
+    if category == "login":
+        fields.append({"name": "Login (UTC)", "value": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"), "inline": False})
     payload = {"username": "SaS Account Notifications", "allowed_mentions": {"parse": []},
                "embeds": [{"title": title, "color": 5916792, "fields": fields}]}
     threading.Thread(target=discord_send, args=(category, url, payload),
         name="sas-discord-account-notice", daemon=True).start()
 
+REMINDER_STAGES = (
+    ("yellow", 7200, 6600), # 2h before start; allow a 10-minute delivery window
+    ("red", 3600, 3000),    # 1h before start; allow a 10-minute delivery window
+)
+
+def reminder_stage_due(start_epoch, now_epoch, stage):
+    for kind, upper, lower in REMINDER_STAGES:
+        if kind == stage:
+            remaining = start_epoch - now_epoch
+            return lower <= remaining <= upper
+    return False
+
+def reminder_expiry(stage, sent_at):
+    # Yellow disappears 50 minutes after its actual send. Red disappears after 24h.
+    return sent_at + (50 * 60 if stage == "yellow" else 24 * 3600)
+
+def reminder_cleanup_once(now_epoch=None):
+    """Delete outdated cards, with the Discord ID persisted for restart recovery."""
+    if not WEBHOOK or not webhook_valid(WEBHOOK):
+        return
+    now_epoch = int(time.time()) if now_epoch is None else int(now_epoch)
+    with LOCK, connect() as db:
+        rows = db.execute("""SELECT r.*,
+            e.start_utc AS current_start
+            FROM reminder_messages r LEFT JOIN entries e ON r.event_id=e.id
+            WHERE r.message_id != '' AND r.deleted_at=0 AND r.attempt_at<?
+            ORDER BY r.sent_at LIMIT 35""", (now_epoch - 60,)).fetchall()
+    for row in rows:
+        # Edits and removals must not leave stale reminders visible.
+        stale = row["current_start"] is None or row["current_start"] != row["event_start_utc"]
+        if not stale and now_epoch < reminder_expiry(row["stage"], row["sent_at"]):
+            continue
+        with LOCK, connect() as db:
+            db.execute("""UPDATE reminder_messages SET attempt_at=?
+                WHERE event_id=? AND stage=? AND event_start_utc=?""",
+                (now_epoch, row["event_id"], row["stage"], row["event_start_utc"]))
+        try:
+            if reminder_cards.delete_card(WEBHOOK, row["message_id"]):
+                with LOCK, connect() as db:
+                    db.execute("""UPDATE reminder_messages SET deleted_at=?
+                        WHERE event_id=? AND stage=? AND event_start_utc=? AND message_id=?""",
+                        (now_epoch, row["event_id"], row["stage"], row["event_start_utc"], row["message_id"]))
+        except Exception as exc:
+            logging.warning("Discord reminder cleanup failed: %s", type(exc).__name__)
+
+def reminder_send_once(now_epoch=None):
+    """Publish at most one due card, never duplicate an already acknowledged stage."""
+    if not WEBHOOK or not webhook_valid(WEBHOOK):
+        return False
+    now_epoch = int(time.time()) if now_epoch is None else int(now_epoch)
+    with LOCK, connect() as db:
+        events = db.execute("""SELECT id,kind,title,start_utc,reminded_at
+            FROM entries WHERE kind IN ('events','alliance')
+            AND start_utc>? AND start_utc<=?
+            ORDER BY start_utc,id LIMIT 100""", (
+                datetime.fromtimestamp(now_epoch + 3000, timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                datetime.fromtimestamp(now_epoch + 7200, timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            )).fetchall()
+        candidates=[]
+        for event in events:
+            try:
+                start = parse_utc(event["start_utc"])
+            except ValueError:
+                continue
+            for stage, upper, lower in REMINDER_STAGES:
+                if not reminder_stage_due(start, now_epoch, stage):
+                    continue
+                # Pre-migration 1h reminders had no stored message id.
+                if stage == "red" and event["reminded_at"] is not None:
+                    continue
+                rec = db.execute("""SELECT message_id,attempt_at FROM reminder_messages
+                    WHERE event_id=? AND stage=? AND event_start_utc=?""",
+                    (event["id"], stage, event["start_utc"])).fetchone()
+                if rec and (rec["message_id"] or rec["attempt_at"] > now_epoch - 90):
+                    continue
+                candidates.append((event,stage))
+        if not candidates:
+            return False
+        event,stage=candidates[0]
+        db.execute("""INSERT INTO reminder_messages(event_id,stage,event_start_utc,attempt_at)
+            VALUES(?,?,?,?)
+            ON CONFLICT(event_id,stage,event_start_utc)
+            DO UPDATE SET attempt_at=excluded.attempt_at""",
+            (event["id"],stage,event["start_utc"],now_epoch))
+    # POST outside the database lock: slow Discord responses must not block logins.
+    try:
+        msg_id = reminder_cards.send_card(WEBHOOK, event["title"], event["start_utc"], stage)
+        with LOCK, connect() as db:
+            db.execute("""UPDATE reminder_messages SET message_id=?,sent_at=?
+                WHERE event_id=? AND stage=? AND event_start_utc=?""",
+                (msg_id,now_epoch,event["id"],stage,event["start_utc"]))
+            if stage == "red":
+                db.execute("""UPDATE entries SET reminded_at=?
+                    WHERE id=? AND start_utc=?""",(now_epoch,event["id"],event["start_utc"]))
+        with LOCK:
+            NOTICE_STATUS["reminder"]["last_attempt"] = now_utc()
+            NOTICE_STATUS["reminder"]["last_result"] = "delivered"
+        return True
+    except Exception as exc:
+        # Never log the webhook secret or sensitive HTTP exception text.
+        with LOCK:
+            NOTICE_STATUS["reminder"]["last_attempt"] = now_utc()
+            NOTICE_STATUS["reminder"]["last_result"] = "failed (" + type(exc).__name__ + ")"
+        logging.warning("Discord %s reminder delivery failed (%s)", stage, type(exc).__name__)
+        return False
+
 def reminder_loop():
     if not WEBHOOK:
         return
     if not webhook_valid(WEBHOOK):
-        logging.error("Discord webhook URL is invalid.")
+        logging.error("Discord reminder webhook URL is invalid.")
         return
-    logging.info("Discord event reminders enabled.")
+    logging.info("Discord image reminders enabled: 2h yellow, 1h red.")
     while True:
         try:
-            current = int(time.time())
-            cutoff = datetime.fromtimestamp(current + 3600, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            moment = datetime.fromtimestamp(current, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            with LOCK, connect() as db:
-                row = db.execute("""SELECT * FROM entries WHERE kind IN ('events','alliance')
-                    AND start_utc>? AND start_utc<=? AND reminded_at IS NULL
-                    AND (reminder_claimed_at IS NULL OR reminder_claimed_at<?)
-                    ORDER BY start_utc LIMIT 1""", (moment, cutoff, current - 120)).fetchone()
-                if row:
-                    db.execute("UPDATE entries SET reminder_claimed_at=? WHERE id=?", (current, row["id"]))
-            if row:
-                data = {
-                    "content": "@everyone An event starts within the next hour.",
-                    "allowed_mentions": {"parse": ["everyone"]},
-                    "embeds": [{"title": row["title"], "fields": [
-                        {"name": "Start (UTC)", "value": row["start_utc"]},
-                        {"name": "End (UTC)", "value": row["end_utc"]},
-                        {"name": "Section", "value": "Alliance Events" if row["kind"] == "alliance" else "Events"}
-                    ]}]
-                }
-                if discord_send("reminder", WEBHOOK, data):
-                    with LOCK, connect() as db:
-                        db.execute("UPDATE entries SET reminded_at=? WHERE id=? AND start_utc=?",
-                            (current, row["id"], row["start_utc"]))
-                else:
-                    logging.warning("Event reminder delivery failed and will be retried.")
-            else:
+            reminder_cleanup_once()
+            if not reminder_send_once():
                 time.sleep(25)
         except Exception:
-            logging.exception("Reminder check failed.")
+            logging.exception("Reminder scheduler error")
             time.sleep(30)
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    init()
+    for kind, url in (("reminder", WEBHOOK), ("registration", REGISTRATION_WEBHOOK), ("login", LOGIN_WEBHOOK)):
+        logging.info("Discord %s webhook: %s", kind,
+            "ready" if url and webhook_valid(url) else "invalid URL" if url else "NOT CONFIGURED")
+    if WEBHOOK:
+        threading.Thread(target=reminder_loop, daemon=True).start()
+    logging.info("SaS Website listening on %s:%s", HOST, PORT)
+    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+
+if __name__ == "__main__":
+    main()
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "SaSWebsite"
