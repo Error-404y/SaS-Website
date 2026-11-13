@@ -16,7 +16,7 @@
     exclusive: "Hero's Exclusive Equipment materials used", ammo: 'Ammo confiscated / gathered',
     cash: 'Cash confiscated / gathered', electricity: 'Electricity confiscated / gathered',
     gas: 'Gas confiscated / gathered' };
-  let identity = 'anonymous', overrides = {}, phaseInputs = {};
+  let identity = 'anonymous', overrides = {}, phaseInputs = {}, trainingTimes = {};
 
   function dataKey() { return 'sas-planner-v1:' + identity; }
   function loadCustom() {
@@ -27,9 +27,44 @@
   function saveCustom() {
     try { localStorage.setItem(dataKey(), JSON.stringify(overrides)); } catch (_) {}
   }
+  function trainingStorageKey() { return 'sas-training-times-v1:' + identity; }
+  function loadTrainingTimes() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(trainingStorageKey()) || '{}');
+      trainingTimes = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+    } catch (_) { trainingTimes = {}; }
+  }
+  function saveTrainingTimes() {
+    try { localStorage.setItem(trainingStorageKey(), JSON.stringify(trainingTimes)); } catch (_) {}
+  }
+  function syncTrainingSample() {
+    const key = el('planner-troop').value;
+    el('planner-actual-sample').value = trainingTimes[key] || '';
+  }
+  function readActualTrainingSample() {
+    const text = el('planner-actual-sample').value.trim();
+    const hint = el('planner-actual-help');
+    if (!text) {
+      hint.textContent = 'Enter the actual time displayed by your game for 722 of these troops to calculate Actual Time.';
+      return null;
+    }
+    const seconds = P.parseGameDuration(text);
+    const origin = P.TROOPS[el('planner-troop').value]?.seconds;
+    if (seconds === null || seconds <= 0 || seconds > origin) {
+      hint.textContent = 'Use HH:MM:SS or 1d HH:MM:SS. Actual Time must be shorter than or equal to Origin Time.';
+      return null;
+    }
+    hint.textContent = 'Actual Time is based on your recorded 722-troop training time.';
+    return seconds;
+  }
   function setIdentity(username) {
     identity = String(username || 'admin');
     loadCustom();
+    loadTrainingTimes();
+    if (el('planner-actual-sample')) {
+      syncTrainingSample();
+      renderTraining();
+    }
     renderEvents(true);
   }
   function stat(title, value) {
@@ -40,7 +75,7 @@
     return P.troopsForTargetPoints(el('planner-troop').value,
       el('planner-target-points').value,
       el('planner-capacity').getAttribute('aria-pressed') === 'true',
-      el('planner-training-reduction').value);
+      readActualTrainingSample());
   }
   function renderTraining() {
     const data = targetTraining();
@@ -51,10 +86,13 @@
       stat('Minimum troops needed', readable(data.requiredTroops)) +
       stat('Troops in selected batch', readable(data.quantity)) +
       stat('Event points earned', readable(data.actualPoints)) +
-      stat('Training time', P.duration(data.seconds)) +
-      P.RESOURCES.map(r => stat(r[0].toUpperCase() + r.slice(1) + ' needed', P.fmt(data.costs[r]))).join('') +
-      stat('Before time reduction', P.duration(data.originalSeconds));
+      stat('Origin Time', P.duration(data.originSeconds)) +
+      stat('Actual Time', data.actualSeconds === null ? 'Enter actual time above' : P.duration(data.actualSeconds)) +
+      P.RESOURCES.map(r => stat(r[0].toUpperCase() + r.slice(1) + ' needed', P.fmt(data.costs[r]))).join('');
     el('planner-training-results').innerHTML = html;
+    el('planner-send-speedups').disabled = data.actualSeconds === null;
+    el('planner-send-speedups').title = data.actualSeconds === null
+      ? 'Enter the actual training time first.' : 'Calculate speedups for Actual Time.';
     el('planner-training-notes').textContent = P.TROOPS[data.key].name + ' · ' +
       readable(data.requiredTroops) + ' troops needed for ' + readable(data.targetPoints) +
       ' Phase 3 points' + (data.capacityMultiplier === 3
@@ -199,8 +237,19 @@
   }
   function init() {
     if (!el('planner-troop')) return;
-    for (const selector of ['#planner-troop', '#planner-target-points', '#planner-training-reduction'])
-      el(selector.slice(1)).addEventListener('input', renderTraining);
+    el('planner-troop').addEventListener('change', () => {
+      syncTrainingSample();
+      renderTraining();
+    });
+    el('planner-target-points').addEventListener('input', renderTraining);
+    el('planner-actual-sample').addEventListener('input', () => {
+      const key = el('planner-troop').value;
+      const value = el('planner-actual-sample').value.trim();
+      if (value) trainingTimes[key] = value;
+      else delete trainingTimes[key];
+      saveTrainingTimes();
+      renderTraining();
+    });
     document.querySelectorAll('[data-locked-troop]').forEach(button =>
       button.addEventListener('click', () => el('locked-troop-dialog').showModal()));
     el('planner-capacity').addEventListener('click', () => {
@@ -212,7 +261,8 @@
     el('planner-send-speedups').addEventListener('click', () => {
       const result = targetTraining();
       if (!result) return;
-      const minutes = Math.ceil(result.seconds / 60);
+      if (result.actualSeconds === null) return;
+      const minutes = Math.ceil(result.actualSeconds / 60);
       el('planner-speed-days').value = Math.floor(minutes / 1440);
       el('planner-speed-hours').value = Math.floor(minutes % 1440 / 60);
       el('planner-speed-minutes').value = minutes % 60;
@@ -252,6 +302,8 @@
     for (const id of ['planner-speed-days', 'planner-speed-hours', 'planner-speed-minutes'])
       el(id).addEventListener('input', renderSpeedups);
     el('planner-speed-inventory').addEventListener('input', renderSpeedups);
+    loadTrainingTimes();
+    syncTrainingSample();
     renderTraining();
     renderBuildings();
     renderGathering();
