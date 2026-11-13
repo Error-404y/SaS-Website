@@ -6,6 +6,24 @@ The website now requires an approved SaS member account. New players register wi
 
 The Saints and Sinners crest appears on the welcome screen, in the header and in the navigation. The entrance uses a sharper transparent AVIF crest derived from the supplied artwork with a WebP fallback, subtle motion, and a smooth transition after **Bring me in!** is pressed. The rest of the website keeps its clean, light design. Motion is reduced when the visitor enables reduced-motion accessibility settings. The website is responsive and works on desktop, tablet and mobile.
 
+## Website maintenance / Under Construction
+
+Set the following value in your host's environment settings or `.env` file (the key name is case-sensitive):
+
+```dotenv
+Const-Web=true
+```
+
+**true:** The server responds at `/` with the standalone **Under Construction** page (HTTP 503). There is no navigation or account login. All API routes, registration, logins, administrator functions, private HTML/JS, and changes are disabled for everyone, **including administrators with an existing session**. Only the logo asset required by the maintenance page is served.
+
+**false:** Normal website operation resumes, including registration, player login, admin login, and the usual server-side access controls.
+
+```dotenv
+Const-Web=false
+```
+
+**Restart the Python application after changing this value.** Changing the `.env` file alone does not update a running server. The switch changes access control, not the database: accounts, events and RSS information remain saved. Keep `SAS_DB_PATH` persistent. The maintenance document is `maintenance.html` and is intentionally separate from the login and application pages.
+
 ## Sections
 
 **Events** lists current and upcoming game events, their categories, exact UTC start/end times and statuses. Click an event to see its rewards and notes. Each upcoming event has a live `Starts in` countdown, and each ongoing event has a live `Ends in` countdown.
