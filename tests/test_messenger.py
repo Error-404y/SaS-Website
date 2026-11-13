@@ -98,6 +98,9 @@ class MessengerTests(unittest.TestCase):
         self.assertNotIn("Pending",json.dumps(data))
         self.assertNotIn("Rejected",json.dumps(data))
         self.assertEqual(data["unread"],0)
+        own = next(item for item in data["contacts"] if item["id"]==aid)
+        self.assertTrue(own["self"])
+        self.assertEqual(own["username"],"Alpha")
         self.assertEqual(self.call("/api/messenger/messages","POST",
             {"peer":bid,"body":"Secret for Bravo","sender_key":cid},a)[0],403)
         status,data=self.call("/api/messenger/messages","POST",
