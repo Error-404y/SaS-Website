@@ -987,3 +987,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .messenger-player-option>span:last-child{display:grid;gap:3px;min-width:0}
 .messenger-player-option strong{font-size:12px;color:#343550}
 .messenger-player-option small{font-size:11px;color:#788096}
+
+
+.messenger-own-profile{opacity:.78;cursor:default!important;background:#f7f6fa!important;border-style:dashed!important}
+.messenger-own-profile .messenger-contact-details strong{color:#716280}
