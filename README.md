@@ -24,6 +24,22 @@ Const-Web=false
 
 **Restart the Python application after changing this value.** Changing the `.env` file alone does not update a running server. The switch changes access control, not the database: accounts, events and RSS information remain saved. Keep `SAS_DB_PATH` persistent. The maintenance document is `maintenance.html` and is intentionally separate from the login and application pages. It contains the approved purple SaS Under Construction artwork embedded as a self-contained WebP image (no separate image upload is required), with **no navigation or sign-in controls**. During maintenance **every other path**, including images, scripts, private pages and API routes, returns HTTP 503.
 
+## SaS Messenger
+
+The approved-member website includes a dedicated **SaS Messenger** page with the same purple glass-style UI used elsewhere:
+
+- **Direct messages:** click an approved member in the conversation list to write privately. Each private thread can only be read by its two participants. The administrator appears as a direct-message contact for every approved member.
+- **Alliance group chat:** a common chat for all currently approved members and the administrator.
+- **Account contacts:** usernames and in-game names of approved players appear in the searchable sidebar. Member emails, passwords and reset requests are **not** exposed.
+- **Unread notifications:** server-persisted unread counts appear beside each chat and on the website's Messenger tab. Opening a conversation marks that conversation as read without affecting other conversations.
+- **Live refresh:** the visible conversation refreshes approximately every 5 seconds, while the unread/contact list refreshes approximately every 15 seconds. No third-party real-time chat provider is required.
+- **Message history:** stored in existing SQLite under `chat_messages`; the most recent 80 messages per thread load in chronological order.
+- **Mobile UI:** conversations list and individual chat open in separate phone-sized views with a back arrow.
+- **Safety:** requests enforce approved-member or administrator sessions and valid CSRF tokens for writes. Message text is length-limited to 2,000 characters, escaped in the browser, and never used as raw HTML. Only sender identities from the validated server session are saved. Pending/rejected accounts and guests cannot access the messenger. Messages are not sent to Discord.
+- **Account deletion:** erases direct-message threads involving the deleted member; their existing alliance-group messages are anonymized so the group conversation still makes sense.
+
+The existing account approval flow, 30-minute administrator inactivity logout, maintenance mode and event tools are unchanged. Back up SQLite before deploying; the two new messenger tables are created automatically on startup. Chat requires a single persistent database across app restarts, and concurrent application instances should share one properly managed database (SQLite is best deployed as a single writer on this hosting setup).
+
 ## New Police Chief game guides
 
 The **Calculators → GAME GUIDES** left sidebar has four additional separate pages. All data is bundled in `reference-data.js` and rendered by `reference-ui.js`, available only after approved member/admin authentication:
