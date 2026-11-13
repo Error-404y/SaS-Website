@@ -31,7 +31,7 @@ def _font(size, bold=False):
             continue
     return ImageFont.load_default()
 
-def make_card(event_title, start_utc, stage):
+def make_card(event_title, start_utc, stage, remaining_seconds=None):
     """Generate a fresh PNG with a legible dynamic title and UTC event start."""
     from PIL import Image, ImageDraw
     if stage not in ("yellow", "red"):
@@ -56,7 +56,11 @@ def make_card(event_title, start_utc, stage):
     draw.line((48, 155, 1032, 155), fill=(100, 101, 112), width=2)
     draw.text((48, 183), "Starts in", font=_font(24), fill=muted)
     draw.text((548, 183), "Start (UTC)", font=_font(24), fill=muted)
-    draw.text((48, 232), "2h 00m" if stage == "yellow" else "1h 00m",
+    if remaining_seconds is None:
+        remaining_seconds = 7200 if stage == "yellow" else 3600
+    total_minutes = max(0, int((remaining_seconds + 59) // 60))
+    hours, minutes = divmod(total_minutes, 60)
+    draw.text((48, 232), f"{hours}h {minutes:02d}m",
               font=_font(49, bold=True), fill=color)
     draw.text((548, 239), start_utc[:16], font=_font(31, bold=True), fill=white)
     output = io.BytesIO()
@@ -72,7 +76,9 @@ def message_url(webhook, message_id):
 
 def send_card(webhook, title, start_utc, stage):
     """Send a fresh PNG as an attachment; return Discord message ID or raise."""
-    png = make_card(title, start_utc, stage)
+    start = datetime.strptime(start_utc, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    remaining = max(0, int((start - datetime.now(timezone.utc)).total_seconds()))
+    png = make_card(title, start_utc, stage, remaining_seconds=remaining)
     # wait=true is essential: Discord otherwise responds 204 without the message ID.
     boundary = "sas-" + __import__("secrets").token_hex(12)
     payload = {
