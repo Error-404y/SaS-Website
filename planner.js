@@ -81,10 +81,10 @@
     if (!t) return null;
     const qty = whole(quantity);
     const factor = qty / SAMPLE_SIZE;
-    const boost = capacityBoost ? 2 : 1; // User-defined toggle: double training resources and time
+    const boost = capacityBoost ? 3 : 1; // +200% capacity means 300% of base troops: screenshots 722 -> 2166
     const reduction = Math.min(99.99, numeric(timeReduction));
     const costs = Object.fromEntries(RESOURCES.map(r => [r, t[r] * factor * boost]));
-    return { key, quantity: qty, costs, seconds: t.seconds * factor * boost * (1 - reduction / 100),
+    return { key, baseQuantity: qty, quantity: qty * boost, costs, seconds: t.seconds * factor * boost * (1 - reduction / 100),
       originalSeconds: t.seconds * factor * boost, capacityMultiplier: boost, snapshot: SAMPLE_SIZE };
   }
   function build(level) { return BUILDINGS[String(level)] || null; }
