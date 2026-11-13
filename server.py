@@ -744,9 +744,17 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if MAINTENANCE_MODE:
             return self.maintenance_response(path)
-        if self.banned_client() and path not in ("/", "/auth.js", "/styles.css",
-            "/assets/logo.webp", "/assets/crest.avif", "/api/session"):
-            return self.respond(403, {"error": "Access restricted."})
+        if self.banned_client():
+            if path == "/api/session":
+                return self.respond(200, {"admin": False, "approved": False, "csrf": None,
+                    "username": None, "status": "restricted", "review_message": "",
+                    "admin_idle_timeout_seconds": None})
+            if path == "/":
+                # Keep the sign-in page available so administrators on shared IPs
+                # can recover and lift a ban, but never serve the member app.
+                return self.asset("login.html", "text/html; charset=utf-8", private=True)
+            if path not in ("/auth.js", "/styles.css", "/assets/logo.webp", "/assets/crest.avif"):
+                return self.respond(403, {"error": "Access restricted."})
         if path in ("/api/messenger", "/api/messenger/messages"):
             actor, csrf = self.messenger_actor()
             if actor is None:
