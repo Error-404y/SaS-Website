@@ -547,7 +547,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b"{}")
                 return
-            account_match = re.fullmatch(r"/api/accounts/(\\d+)", path)
+            account_match = re.fullmatch(r"/api/accounts/(\d+)", path)
             if account_match and method == "PATCH":
                 if not self.authorized():
                     return
