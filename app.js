@@ -713,16 +713,34 @@
     }).join('') || '<p class="rss-empty-spending">No password change requests.</p>';
   }
 
-  async function approvePasswordChange(id) {
-    if (!site.admin || !confirm('Approve this password change request? You will receive a one-time code to share privately with the player.')) return;
+  function approvePasswordChange(id) {
+    if (!site.admin) return;
+    const entry = (site.passwordRequests || []).find(item => item.id === id && item.status === 'pending');
+    if (!entry) return;
+    one('#reset-approve-id').value = String(id);
+    one('#reset-approve-player').textContent = 'Player: ' + entry.player_name + ' (@' + entry.username + ')';
+    one('#reset-approve-error').textContent = '';
+    openDialog('reset-approve-dialog');
+  }
+
+  async function submitResetApproval(event) {
+    event.preventDefault();
+    if (!site.admin) return;
+    const button = one('#reset-approve-form button[type="submit"]');
+    button.disabled = true;
     try {
-      const result = await request('/api/password/requests/' + id, {
+      const result = await request('/api/password/requests/' + one('#reset-approve-id').value, {
         method: 'PATCH', body: JSON.stringify({ decision: 'approved' })
       });
+      one('#reset-approve-dialog').close();
       one('#admin-reset-code').value = result.reset_code;
       openDialog('reset-code-dialog');
       await loadAccounts();
-    } catch (error) { notify(error.message); }
+    } catch (error) {
+      one('#reset-approve-error').textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function rejectPasswordChange(id) {
@@ -872,6 +890,7 @@
   one('#password-request-form').addEventListener('submit', requestPasswordChange);
   one('#password-complete-form').addEventListener('submit', completePasswordChange);
   one('#reset-review-form').addEventListener('submit', submitPasswordReview);
+  one('#reset-approve-form').addEventListener('submit', submitResetApproval);
   one('#copy-reset-code').addEventListener('click', () => {
     const value = one('#admin-reset-code').value;
     if (value) navigator.clipboard.writeText(value).then(() => notify('Reset code copied. Share privately.'))

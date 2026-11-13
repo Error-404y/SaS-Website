@@ -49,7 +49,7 @@
     el('planner-training-results').innerHTML = html;
     el('planner-training-notes').textContent = P.TROOPS[key].name + ' · ' +
       readable(data.quantity) + ' troops · ' +
-      (data.capacityMultiplier === 2 ? '2× boost ON — RSS and time are doubled' : 'Normal training — no boost applied');
+      (data.capacityMultiplier === 3 ? '+200% boost ON — ' + readable(data.baseQuantity) + ' base → ' + readable(data.quantity) + ' troops; RSS/time ×3' : 'Normal training — no boost applied');
   }
   function renderBuildings() {
     const level = el('planner-building-level').value;
@@ -190,6 +190,8 @@
     if (!el('planner-troop')) return;
     for (const selector of ['#planner-troop', '#planner-count', '#planner-training-reduction'])
       el(selector.slice(1)).addEventListener('input', renderTraining);
+    document.querySelectorAll('[data-locked-troop]').forEach(button =>
+      button.addEventListener('click', () => el('locked-troop-dialog').showModal()));
     el('planner-capacity').addEventListener('click', () => {
       const active = el('planner-capacity').getAttribute('aria-pressed') !== 'true';
       el('planner-capacity').setAttribute('aria-pressed', String(active));
@@ -212,7 +214,10 @@
       const troop = P.TROOPS[el('planner-troop').value];
       if (!troop) return;
       el('planner-phase').value = '3';
-      phaseInputs['3'] = { ...(phaseInputs['3'] || {}), ['officer' + troop.tier]: P.whole(el('planner-count').value) };
+      const result = P.troops(el('planner-troop').value, el('planner-count').value,
+        el('planner-capacity').getAttribute('aria-pressed') === 'true',
+        el('planner-training-reduction').value);
+      phaseInputs['3'] = { ...(phaseInputs['3'] || {}), ['officer' + troop.tier]: result.quantity };
       renderEvents(true);
       document.querySelector('[data-view="tool-events"]').click();
     });

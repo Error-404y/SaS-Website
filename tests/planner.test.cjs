@@ -33,17 +33,25 @@ test('five screenshot-backed troop snapshots for 722 troops', () => {
   assert.equal(p.troops('not-observed', 722), null);
 });
 
-test('Training Capacity button doubles all four RSS costs and training time', () => {
-  const regular = p.troops('biker-9', 722);
-  const boosted = p.troops('biker-9', 722, true);
-  assert.equal(boosted.seconds, regular.seconds * 2);
+test('new game screenshots: +200% capacity is 3x troops, resources and time', () => {
+  const base = p.troops('marksman-10', 722);
+  const boosted = p.troops('marksman-10', 722, true);
+  assert.equal(base.quantity, 722);
+  assert.equal(boosted.baseQuantity, 722);
+  assert.equal(boosted.quantity, 2166);
+  assert.equal(boosted.capacityMultiplier, 3);
+  assert.equal(boosted.originalSeconds, 3 * 109744); // 3d 19h 27m 12s
+  assert.equal(p.duration(boosted.originalSeconds), '3d 19h 27m 12s');
   for (const resource of p.RESOURCES) {
-    assert.equal(boosted.costs[resource], regular.costs[resource] * 2);
+    assert.equal(boosted.costs[resource], base.costs[resource] * 3);
   }
-  assert.equal(boosted.capacityMultiplier, 2);
-  assert.equal(p.troops('biker-9', 722, false, 50).seconds, regular.seconds / 2);
-  assert.equal(p.troops('biker-9', 722, true, 50).seconds, regular.seconds);
-  assert.equal(p.troops('biker-9', 722).seconds, regular.seconds);
+  assert.equal(boosted.costs.electricity, 937800);
+  const guard = p.troops('guard-10', 722, true);
+  assert.equal(guard.quantity, 2166);
+  assert.equal(guard.costs.ammo, 6000000);
+  assert.equal(guard.costs.cash, 4500000);
+  assert.equal(p.troops('biker-9', 722, false, 50).seconds, p.troops('biker-9', 722).seconds / 2);
+  assert.equal(p.troops('biker-9', 722, true, 50).seconds, p.troops('biker-9', 722).seconds * 1.5);
 });
 
 test('recorded building upgrade costs are not falsely extrapolated', () => {

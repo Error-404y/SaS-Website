@@ -33,8 +33,8 @@
         <button type="submit" class="auth-primary">Submit registration</button>
       </form>
       <form id="password-request-form" class="auth-form hidden">
-        <label for="reset-identifier">Username or email</label>
-        <input id="reset-identifier" required maxlength="254" autocomplete="username" placeholder="Enter your account username or email">
+        <label for="reset-identifier">Username, email or in-game name</label>
+        <input id="reset-identifier" required maxlength="254" autocomplete="username" placeholder="e.g. ZER, email or OgX">
         <button type="submit" class="auth-primary">Request password change</button>
         <div class="auth-recovery-actions">
           <button type="button" class="auth-admin-link" id="have-reset-code">I have a reset code</button>
@@ -42,7 +42,7 @@
         </div>
       </form>
       <form id="password-complete-form" class="auth-form hidden">
-        <label for="reset-username">Username</label>
+        <label for="reset-username">Username, email or in-game name</label>
         <input id="reset-username" required autocomplete="username">
         <label for="reset-code">Reset code provided by an administrator</label>
         <input id="reset-code" required autocomplete="off">
