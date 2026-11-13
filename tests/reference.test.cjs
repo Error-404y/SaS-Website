@@ -103,7 +103,7 @@ test('Messenger exposes player list, pinned alliance and private group creation'
   assert.match(ui,/GROUP CHATS/);
   assert.match(ui,/PLAYERS/);
   assert.match(ui,/messenger-alliance-pinned/);
-  assert.match(ui,/Your profile/);
+  assert.match(ui,/Your Profile/);
   assert.match(ui,/api\/messenger\/groups/);
 });
 test('Troop Training now takes desired Phase 3 points, not an editable troop count',()=>{
