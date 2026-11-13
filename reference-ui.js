@@ -35,7 +35,7 @@ function renderEvent(kind){
     '<div class="table-container"><table class="tool-table ref-table"><thead><tr><th>Action</th><th>Points per unit</th><th>Needed alone</th><th>Planned amount</th></tr></thead><tbody id="ref-'+kind+'-actions">'+current.actions.map((a,i)=>actionRow(a,i,goal)).join('')+'</tbody></table></div>'+
     '<div class="ref-totals"><span>Planned points <strong id="ref-'+kind+'-planned">0</strong></span><span>Remaining after plan <strong id="ref-'+kind+'-after">'+fmt(goal)+'</strong></span></div>';
   nav.querySelectorAll('[data-reference-day]').forEach(b=>b.addEventListener('click',()=>{
-    selected[kind]=Number(b.dataset.referenceDay);renderEvent(kind);
+    selected[kind]=Number(b.dataset.referenceDay);resetEvent(kind);
   }));
   target.addEventListener('input',()=>updateEvent(kind),{signal:daySignals[kind].signal});
   target.addEventListener('change',()=>updateEvent(kind),{signal:daySignals[kind].signal});
