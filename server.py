@@ -104,6 +104,13 @@ def init():
             expires_at INTEGER NOT NULL
         )""")
         members.setup(db)
+        db.execute("""CREATE TABLE IF NOT EXISTS auth_failures (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT NOT NULL,
+            source TEXT NOT NULL,
+            happened_at INTEGER NOT NULL
+        )""")
+        db.execute("CREATE INDEX IF NOT EXISTS auth_failures_recent ON auth_failures(category,source,happened_at)")
         db.execute("""CREATE TABLE IF NOT EXISTS meta (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -350,6 +357,24 @@ def current_session(handler):
         row = db.execute("SELECT * FROM sessions WHERE token_hash=? AND expires_at>?", (token_hash, int(time.time()))).fetchone()
     return dict(row) if row else None
 
+
+def login_throttled(category, source):
+    cutoff = int(time.time()) - 900
+    with LOCK, connect() as db:
+        db.execute("DELETE FROM auth_failures WHERE happened_at<?", (cutoff,))
+        count = db.execute("SELECT COUNT(*) FROM auth_failures WHERE category=? AND source=? AND happened_at>=?",
+                           (category, source, cutoff)).fetchone()[0]
+    return count >= 10
+
+def note_login_failure(category, source):
+    with LOCK, connect() as db:
+        db.execute("INSERT INTO auth_failures(category,source,happened_at) VALUES(?,?,?)",
+                   (category, source, int(time.time())))
+
+def clear_login_failures(category, source):
+    with LOCK, connect() as db:
+        db.execute("DELETE FROM auth_failures WHERE category=? AND source=?", (category, source))
+
 def get_state():
     with LOCK, connect() as db:
         rows = db.execute("""SELECT id,kind,title,category,start_utc,end_utc,rewards,details,author,created_at,modified_at
@@ -421,10 +446,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; object-src 'none'")
         self.end_headers()
         self.wfile.write(body)
 
-    def asset(self, filename, mime):
+    def asset(self, filename, mime, private=False):
         path = ROOT / filename
         try:
             data = path.read_bytes()
@@ -435,7 +462,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", mime)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Cache-Control", "public, max-age=300")
+        self.send_header("Cache-Control", "private, no-store" if private else "public, max-age=300")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "same-origin")
+        self.send_header("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; object-src 'none'")
+        if private:
+            self.send_header("Vary", "Cookie")
         self.end_headers()
         self.wfile.write(data)
 
@@ -445,6 +477,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Set-Cookie", f"{name}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={30 * 86400 if name == 'sas_member' else 43200}{secure}")
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Frame-Options", "DENY")
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(result)))
         self.end_headers()
@@ -474,8 +507,15 @@ class Handler(BaseHTTPRequestHandler):
                 "status": player["status"] if player else None,
                 "review_message": player["review_message"] if player else "",
                 "csrf": session["csrf"] if session else (player["csrf"] if player else None)})
-        assets = {"/": ("index.html", "text/html; charset=utf-8"),
-                  "/index.html": ("index.html", "text/html; charset=utf-8"),
+        if path in ("/", "/index.html", "/app"):
+            player = members.member_session(self, connect, LOCK)
+            permitted = bool(current_session(self)) or bool(player and player["status"] == "approved")
+            if permitted:
+                return self.asset("index.html", "text/html; charset=utf-8", private=True)
+            if path == "/":
+                return self.asset("login.html", "text/html; charset=utf-8", private=True)
+            return self.respond(401, {"error": "An approved account is required."})
+        assets = {"/auth.js": ("auth.js", "text/javascript; charset=utf-8"),
                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/calendar.js": ("calendar.js", "text/javascript; charset=utf-8"),
                   "/rss.js": ("rss.js", "text/javascript; charset=utf-8"),
@@ -502,6 +542,19 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Invalid form.")
         return value
 
+    def valid_request_origin(self):
+        # Cross-origin requests must never be allowed to use authenticated browser cookies.
+        if self.headers.get("Sec-Fetch-Site", "").lower() == "cross-site":
+            return False
+        origin = self.headers.get("Origin")
+        if origin:
+            parsed = urlsplit(origin)
+            host = self.headers.get("Host", "").lower()
+            return (parsed.scheme in ("http", "https") and parsed.netloc.lower() == host
+                    and (parsed.scheme == "https" or not COOKIE_SECURE)
+                    and not parsed.username and not parsed.password)
+        return True
+
     def authorized(self):
         session = current_session(self)
         if not session or not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), session["csrf"]):
@@ -512,6 +565,8 @@ class Handler(BaseHTTPRequestHandler):
     def write(self, method):
         path = urlsplit(self.path).path
         try:
+            if not self.valid_request_origin():
+                return self.respond(403, {"error": "Cross-origin request rejected."})
             if path == "/api/password/request" and method == "POST":
                 data = self.read_json()
                 with LOCK, connect() as db:
@@ -542,18 +597,23 @@ class Handler(BaseHTTPRequestHandler):
                     members.register(db, values)
                 return self.respond(201, {"status": "pending", "message": "Registration submitted for administrator review."})
             if path == "/api/member/login" and method == "POST":
+                source = self.client_address[0]
+                if login_throttled("member", source):
+                    return self.respond(429, {"error": "Too many login attempts. Try again later."})
                 data = self.read_json()
                 username = str(data.get("username", "")).strip()
                 password = data.get("password", "")
                 with LOCK, connect() as db:
                     row = db.execute("SELECT * FROM members WHERE username=? OR email=?", (username, username)).fetchone()
                     if not row or not isinstance(password, str) or not members.check_password(password, row["password_hash"]):
+                        note_login_failure("member", source)
                         time.sleep(0.5)
                         return self.respond(401, {"error": "Invalid username or password."})
                     if row["status"] != "approved":
                         return self.respond(403, {"error": "Your account is awaiting approval." if row["status"] == "pending" else
                             "Your application was declined: " + (row["review_message"] or "Contact an administrator.")})
                     token, csrf = members.new_session(db, row["id"])
+                clear_login_failures("member", source)
                 self.session_cookie("sas_member", token, {"approved": True, "admin": False, "csrf": csrf, "username": row["username"]})
                 return
             if path == "/api/member/logout" and method == "POST":
@@ -595,8 +655,12 @@ class Handler(BaseHTTPRequestHandler):
                         db.execute("DELETE FROM member_sessions WHERE member_id=?", (int(account_match.group(1)),))
                 return self.respond(200, {"ok": True})
             if path == "/api/login" and method == "POST":
+                source = self.client_address[0]
+                if login_throttled("admin", source):
+                    return self.respond(429, {"error": "Too many login attempts. Try again later."})
                 data = self.read_json()
                 if not ADMIN_PASSWORD or not hmac.compare_digest(str(data.get("username", "")), ADMIN_USER) or not hmac.compare_digest(str(data.get("password", "")), ADMIN_PASSWORD):
+                    note_login_failure("admin", source)
                     time.sleep(0.5)
                     return self.respond(401, {"error": "Incorrect credentials or administrator login is not configured."})
                 token = secrets.token_urlsafe(32)
@@ -605,6 +669,7 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK, connect() as db:
                     db.execute("DELETE FROM sessions WHERE expires_at<?", (int(time.time()),))
                     db.execute("INSERT INTO sessions VALUES(?,?,?)", (digest, csrf, int(time.time()) + 43200))
+                clear_login_failures("admin", source)
                 self.session_cookie("sas_session", token, {"admin": True, "csrf": csrf})
                 return
             if not self.authorized():
