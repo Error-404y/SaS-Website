@@ -196,7 +196,11 @@
         members:[...selectedGroupPlayers]
       })});
       $('messenger-group-dialog').close();
-      await loadList();
+      // Fetch this player's new membership immediately even if a background list poll is running.
+      const fresh = await api('/api/messenger');
+      identity = fresh.me;
+      contacts = Array.isArray(fresh.contacts) ? fresh.contacts : [];
+      renderContacts();
       await openPeer(result.id);
     }catch(e){$('messenger-group-error').textContent=e.message;}
     finally{button.disabled=false;}
