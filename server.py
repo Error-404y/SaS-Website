@@ -432,6 +432,39 @@ def webhook_valid(url):
         and not parts.password and parts.port in (None, 443) and not parts.query and not parts.fragment
         and re.fullmatch(r"/api/webhooks/\d+/[A-Za-z0-9_-]+", parts.path) is not None)
 
+def discord_send(kind, url, payload):
+    """Deliver a Discord webhook safely, reporting only status without exposing its secret."""
+    with LOCK:
+        NOTICE_STATUS[kind]["last_attempt"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if not url or not webhook_valid(url):
+        state = "not configured" if not url else "invalid URL"
+        with LOCK:
+            NOTICE_STATUS[kind]["last_result"] = state
+        return False
+    try:
+        request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "User-Agent": "SaS-Website/1.0"},
+            method="POST")
+        with urllib.request.urlopen(request, timeout=10) as response:
+            code = response.status
+        success = 200 <= code < 300
+        with LOCK:
+            NOTICE_STATUS[kind]["last_result"] = "delivered" if success else "HTTP " + str(code)
+        if not success:
+            logging.warning("Discord %s webhook: HTTP %s", kind, code)
+        return success
+    except urllib.error.HTTPError as exc:
+        # Do not log exception strings or the webhook URL, which contains a secret.
+        with LOCK:
+            NOTICE_STATUS[kind]["last_result"] = "HTTP " + str(exc.code)
+        logging.warning("Discord %s webhook: HTTP %s", kind, exc.code)
+    except Exception as exc:
+        state = type(exc).__name__
+        with LOCK:
+            NOTICE_STATUS[kind]["last_result"] = "network error (" + state + ")"
+        logging.warning("Discord %s webhook failed: %s", kind, state)
+    return False
+
 def discord_account_notice(category, role, username, email="", player_name=""):
     """Best-effort minimal audit event. Webhook tokens are read only from private environment."""
     url = REGISTRATION_WEBHOOK if category == "registration" else LOGIN_WEBHOOK if category == "login" else ""
@@ -451,17 +484,8 @@ def discord_account_notice(category, role, username, email="", player_name=""):
         fields.append({"name": "In-game name", "value": str(player_name)[:70], "inline": False})
     payload = {"username": "SaS Account Notifications", "allowed_mentions": {"parse": []},
                "embeds": [{"title": title, "color": 5916792, "fields": fields}]}
-    def deliver():
-        try:
-            request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(request, timeout=5) as response:
-                if response.status >= 300:
-                    logging.warning("Account Discord notification returned a non-success status.")
-        except Exception:
-            # Do not log the secret URL or response body containing webhook credentials.
-            logging.warning("Unable to deliver account notification.")
-    threading.Thread(target=deliver, name="sas-discord-account-notice", daemon=True).start()
+    threading.Thread(target=discord_send, args=(category, url, payload),
+        name="sas-discord-account-notice", daemon=True).start()
 
 def reminder_loop():
     if not WEBHOOK:
@@ -492,16 +516,12 @@ def reminder_loop():
                         {"name": "Section", "value": "Alliance Events" if row["kind"] == "alliance" else "Events"}
                     ]}]
                 }
-                request = urllib.request.Request(WEBHOOK, data=json.dumps(data).encode(), headers={"Content-Type": "application/json"}, method="POST")
-                try:
-                    with urllib.request.urlopen(request, timeout=10) as response:
-                        if response.status >= 300:
-                            raise RuntimeError("Notification unsuccessful.")
+                if discord_send("reminder", WEBHOOK, data):
                     with LOCK, connect() as db:
                         db.execute("UPDATE entries SET reminded_at=? WHERE id=? AND start_utc=?",
                             (current, row["id"], row["start_utc"]))
-                except Exception:
-                    logging.warning("Unable to send event reminder.")
+                else:
+                    logging.warning("Event reminder delivery failed and will be retried.")
             else:
                 time.sleep(25)
         except Exception:
@@ -592,6 +612,12 @@ class Handler(BaseHTTPRequestHandler):
             if not current_session(self) and not (player and player["status"] == "approved"):
                 return self.respond(401, {"error": "An approved account is required."})
             return self.respond(200, get_state())
+        if path == "/api/notifications/status":
+            if not current_session(self):
+                return self.respond(403, {"error": "Administrator access required."})
+            with LOCK:
+                status = {key: dict(value) for key, value in NOTICE_STATUS.items()}
+            return self.respond(200, {"channels": status})
         if path == "/api/accounts":
             if not current_session(self):
                 return self.respond(403, {"error": "Administrator access required."})
@@ -676,6 +702,22 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self.valid_request_origin():
                 return self.respond(403, {"error": "Cross-origin request rejected."})
+            if path == "/api/notifications/test" and method == "POST":
+                if not self.authorized():
+                    return
+                values = self.read_json()
+                channel = values.get("channel")
+                urls = {"registration": REGISTRATION_WEBHOOK,
+                    "login": LOGIN_WEBHOOK, "reminder": WEBHOOK}
+                if channel not in urls:
+                    return self.respond(400, {"error": "Choose registration, login or reminder."})
+                notice = {"username": "SaS Notifications", "allowed_mentions": {"parse": []},
+                    "embeds": [{"title": "SaS notification test",
+                        "description": "Test message for " + channel + " notifications."}]}
+                delivered = discord_send(channel, urls[channel], notice)
+                return self.respond(200 if delivered else 502,
+                    {"ok": delivered, "channel": channel,
+                     "result": NOTICE_STATUS[channel]["last_result"]})
             if path == "/api/admin/activity" and method == "POST":
                 if not self.authorized():
                     return
@@ -1003,6 +1045,9 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     init()
+    for kind, url in (("reminder", WEBHOOK), ("registration", REGISTRATION_WEBHOOK), ("login", LOGIN_WEBHOOK)):
+        logging.info("Discord %s webhook: %s", kind,
+            "ready" if url and webhook_valid(url) else "invalid URL" if url else "NOT CONFIGURED")
     if WEBHOOK:
         threading.Thread(target=reminder_loop, daemon=True).start()
     logging.info("SaS Website listening on %s:%s", HOST, PORT)
