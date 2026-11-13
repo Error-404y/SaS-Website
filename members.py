@@ -109,10 +109,12 @@ def public_member(row):
 def request_password_reset(db, identifier):
     """Issue a generic response for known/unknown users. Limit one request per 15 min."""
     if not isinstance(identifier, str) or not 1 <= len(identifier.strip()) <= 254:
-        raise ValueError("Enter your account username or email.")
+        raise ValueError("Enter your username, email or in-game name.")
     identifier = identifier.strip()
-    row = db.execute("SELECT id FROM members WHERE username=? OR email=?",
-                     (identifier, identifier)).fetchone()
+    matches = db.execute("SELECT id FROM members WHERE username=? OR email=? OR player_name=? COLLATE NOCASE LIMIT 2",
+                         (identifier, identifier, identifier)).fetchall()
+    # In-game names need not be unique; avoid choosing the wrong player.
+    row = matches[0] if len(matches) == 1 else None
     if row:
         now = int(time.time())
         recent = db.execute("""SELECT id FROM password_requests
@@ -167,8 +169,10 @@ def complete_password_reset(db, username, code, new_password):
         raise ValueError("Invalid or expired reset code.")
     row = db.execute("""SELECT p.id,p.member_id,p.code_hash,p.code_expires_at
         FROM password_requests p JOIN members m ON p.member_id=m.id
-        WHERE m.username=? AND p.status='approved' ORDER BY p.id DESC LIMIT 1""",
-        (username.strip(),)).fetchone()
+        WHERE (m.username=? OR m.email=? OR m.player_name=? COLLATE NOCASE)
+          AND p.status='approved' AND p.code_hash=?
+        ORDER BY p.id DESC LIMIT 1""",
+        (username.strip(), username.strip(), username.strip(), hashlib.sha256(code.encode()).hexdigest())).fetchone()
     if not row or not row["code_hash"] or not row["code_expires_at"] or row["code_expires_at"] < int(time.time()) or not hmac.compare_digest(hashlib.sha256(code.encode()).hexdigest(),row["code_hash"]):
         raise ValueError("Invalid or expired reset code.")
     db.execute("UPDATE members SET password_hash=? WHERE id=?",
