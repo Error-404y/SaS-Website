@@ -45,7 +45,11 @@ MAINTENANCE_MODE = os.environ.get("Const-Web", "false").strip().lower() in ("tru
 WEBHOOK = os.environ.get("SAS_DISCORD_WEBHOOK_URL", "")
 REGISTRATION_WEBHOOK = os.environ.get("SAS_DISCORD_REGISTRATION_WEBHOOK_URL", "")
 LOGIN_WEBHOOK = os.environ.get("SAS_DISCORD_LOGIN_WEBHOOK_URL", "")
+ADMIN_IDLE_SECONDS = 30 * 60
 LOCK = threading.RLock()
+NOTICE_STATUS = {kind: {"configured": bool(url), "last_result": "not attempted",
+    "last_attempt": None} for kind, url in (
+    ("registration", REGISTRATION_WEBHOOK), ("login", LOGIN_WEBHOOK), ("reminder", WEBHOOK))}
 KINDS = ("events", "alliance", "updates", "announcements")
 CATEGORIES = ("Events", "Deals", "Alliance", "Port Inspection", "Other")
 RSS_RESOURCES = ("ammo", "cash", "electricity", "gas")
@@ -104,8 +108,14 @@ def init():
         db.execute("""CREATE TABLE IF NOT EXISTS sessions (
             token_hash TEXT PRIMARY KEY,
             csrf TEXT NOT NULL,
-            expires_at INTEGER NOT NULL
+            expires_at INTEGER NOT NULL,
+            last_activity_at INTEGER NOT NULL DEFAULT 0
         )""")
+        if "last_activity_at" not in [row["name"] for row in db.execute("PRAGMA table_info(sessions)")]:
+            db.execute("ALTER TABLE sessions ADD COLUMN last_activity_at INTEGER NOT NULL DEFAULT 0")
+        # Previously issued sessions lack a trustworthy human-activity timestamp.
+        # Re-authentication is required to establish a new 30-minute idle window.
+        db.execute("DELETE FROM sessions WHERE last_activity_at=0")
         members.setup(db)
         db.execute("""CREATE TABLE IF NOT EXISTS auth_failures (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -356,8 +366,12 @@ def current_session(handler):
     if not value:
         return None
     token_hash = __import__("hashlib").sha256(value.value.encode()).hexdigest()
+    now = int(time.time())
     with LOCK, connect() as db:
-        row = db.execute("SELECT * FROM sessions WHERE token_hash=? AND expires_at>?", (token_hash, int(time.time()))).fetchone()
+        row = db.execute("""SELECT * FROM sessions WHERE token_hash=? AND expires_at>?
+            AND last_activity_at>?""", (token_hash, now, now - ADMIN_IDLE_SECONDS)).fetchone()
+        if not row:
+            db.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash,))
     return dict(row) if row else None
 
 
@@ -594,7 +608,8 @@ class Handler(BaseHTTPRequestHandler):
                 "username": player["username"] if player else (ADMIN_USER if session else None),
                 "status": player["status"] if player else None,
                 "review_message": player["review_message"] if player else "",
-                "csrf": session["csrf"] if session else (player["csrf"] if player else None)})
+                "csrf": session["csrf"] if session else (player["csrf"] if player else None),
+                "admin_idle_timeout_seconds": ADMIN_IDLE_SECONDS if session else None})
         if path in ("/", "/index.html", "/app"):
             player = members.member_session(self, connect, LOCK)
             permitted = bool(current_session(self)) or bool(player and player["status"] == "approved")
@@ -661,6 +676,20 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self.valid_request_origin():
                 return self.respond(403, {"error": "Cross-origin request rejected."})
+            if path == "/api/admin/activity" and method == "POST":
+                if not self.authorized():
+                    return
+                cookie = SimpleCookie()
+                cookie.load(self.headers.get("Cookie", ""))
+                digest = hashlib.sha256(cookie["sas_session"].value.encode()).hexdigest()
+                now = int(time.time())
+                with LOCK, connect() as db:
+                    updated = db.execute("""UPDATE sessions SET last_activity_at=?
+                        WHERE token_hash=? AND expires_at>? AND last_activity_at>?""",
+                        (now, digest, now, now - ADMIN_IDLE_SECONDS))
+                if not updated.rowcount:
+                    return self.respond(403, {"error": "Administrator session expired."})
+                return self.respond(200, {"ok": True, "idle_timeout_seconds": ADMIN_IDLE_SECONDS})
             if path == "/api/reads" and method == "POST":
                 player = members.member_session(self, connect, LOCK)
                 if not player or player["status"] != "approved":
@@ -832,9 +861,11 @@ class Handler(BaseHTTPRequestHandler):
                 digest = __import__("hashlib").sha256(token.encode()).hexdigest()
                 with LOCK, connect() as db:
                     db.execute("DELETE FROM sessions WHERE expires_at<?", (int(time.time()),))
-                    db.execute("INSERT INTO sessions VALUES(?,?,?)", (digest, csrf, int(time.time()) + 43200))
+                    stamp = int(time.time())
+                    db.execute("""INSERT INTO sessions(token_hash,csrf,expires_at,last_activity_at)
+                        VALUES(?,?,?,?)""", (digest, csrf, stamp + 43200, stamp))
                 clear_login_failures("admin", source)
-                self.session_cookie("sas_session", token, {"admin": True, "csrf": csrf})
+                self.session_cookie("sas_session", token, {"admin": True, "csrf": csrf, "idle_timeout_seconds": ADMIN_IDLE_SECONDS})
                 discord_account_notice("login", "ADMIN", ADMIN_USER)
                 return
             if not self.authorized():
