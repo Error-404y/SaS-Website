@@ -224,22 +224,27 @@
           <div class="post-list" id="announcements-list"></div>
         </section>
         <section class="page hidden" id="page-tool-overview" data-section="tool-overview">
-          <div class="page-title"><div><p class="section-kicker">SaS TOOLS</p><h1>Calculators</h1></div></div>
+          <div class="page-title"><div><p class="section-kicker">SAINTS AND SINNERS</p><h1>What do you want to calculate?</h1></div></div>
+          <div class="tool-welcome">
+            <div><strong>Welcome to SaS Tools</strong><span>Pick a tool below. Enter your game values and your results appear automatically.</span></div>
+            <span class="tool-welcome-symbol" aria-hidden="true">✦</span>
+          </div>
           <div class="tool-feature-grid">
-            <button type="button" data-view="tool-events" class="tool-feature"><span>Event Points</span><strong>Calculate points by phase</strong><span class="tool-feature-arrow">Open →</span></button>
-            <button type="button" data-view="tool-training" class="tool-feature"><span>Troop Training</span><strong>RSS costs &amp; training time</strong><span class="tool-feature-arrow">Open →</span></button>
-            <button type="button" data-view="tool-buildings" class="tool-feature"><span>Building Costs</span><strong>Verified upgrade milestones</strong><span class="tool-feature-arrow">Open →</span></button>
-            <button type="button" data-view="tool-speedups" class="tool-feature"><span>Speedups</span><strong>1m / 5m / 1h / 3h / 8h</strong><span class="tool-feature-arrow">Open →</span></button>
-            <button type="button" data-view="tool-gathering" class="tool-feature"><span>RSS Gathering</span><strong>Levels &amp; gathering bonuses</strong><span class="tool-feature-arrow">Open →</span></button>
-            <button type="button" data-view="rss" class="tool-feature"><span>Alliance Treasury</span><strong>RSS production, balances &amp; spending</strong><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-events" class="tool-feature"><span>01 · EVENT POINTS</span><strong>How many points will I earn?</strong><small>Select an event and enter the actions you plan.</small><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-training" class="tool-feature"><span>02 · TROOP TRAINING</span><strong>What will my troops cost?</strong><small>Choose troops, count and optional boost.</small><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-buildings" class="tool-feature"><span>03 · BUILDING COSTS</span><strong>What does this upgrade cost?</strong><small>Choose a building level to check RSS.</small><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-speedups" class="tool-feature"><span>04 · SPEEDUPS</span><strong>How many speedups do I need?</strong><small>Enter the time left and see all options.</small><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-gathering" class="tool-feature"><span>05 · RSS GATHERING</span><strong>How much can I collect?</strong><small>Choose a resource, node and bonus.</small><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="rss" class="tool-feature"><span>06 · ALLIANCE RSS</span><strong>How much RSS does SaS have?</strong><small>Review production, balances and spending.</small><span class="tool-feature-arrow">Open →</span></button>
           </div>
         </section>
 
         <section class="page hidden" id="page-tool-training" data-section="tool-training">
           <div class="page-title"><h1>Troop Training</h1></div>
+          <div class="tool-steps" aria-label="Training calculator instructions"><span><b>1</b> Choose troops</span><span><b>2</b> Enter amount</span><span><b>3</b> See costs &amp; time</span></div>
           <div class="tool-panel">
             <div class="tool-form-grid">
-              <label>Troop
+              <label>Which troops?
                 <select id="planner-troop">
                   <option value="guard-9">Guard IX — Honored</option>
                   <option value="guard-10">Guard X — Royal</option>
@@ -248,22 +253,24 @@
                   <option value="marksman-10">Marksman X — Royal</option>
                 </select>
               </label>
-              <label>Troop count<input id="planner-count" type="number" min="0" step="1" value="722"></label>
-              <label>Time reduction (%)<input id="planner-training-reduction" type="number" min="0" max="99.99" step="0.1" value="0"></label>
+              <label>How many troops?<input id="planner-count" type="number" min="0" step="1" value="722"></label>
+              <label>Training time reduction (%)<input id="planner-training-reduction" type="number" min="0" max="99.99" step="0.1" value="0"></label>
             </div>
-            <button id="planner-capacity" class="capacity-toggle" type="button" aria-pressed="false"><span>Training Capacity UP (2h)</span><strong id="planner-capacity-state">OFF</strong></button>
+            <button id="planner-capacity" class="capacity-toggle" type="button" aria-pressed="false"><span><strong class="capacity-title">Training Capacity UP (2h)</strong><small>Optional · doubles RSS costs and training time</small></span><strong id="planner-capacity-state">OFF</strong></button>
+            <h2 class="tool-subtitle">Your training estimate</h2>
             <div class="tool-stats" id="planner-training-results" aria-live="polite"></div>
             <div class="tool-metadata" id="planner-training-notes"></div>
             <div class="tool-actions">
               <button type="button" id="planner-send-speedups" class="small-button">Calculate speedups →</button>
               <button type="button" id="planner-send-event" class="small-button">Officer event points →</button>
             </div>
-            <p class="tool-footnote">Measured game screenshots show the cost for 722 troops. Other quantities are proportional estimates from rounded values. Training Capacity UP adds 200% to capacity <em>and</em> training time while active (3× each). It costs 3K Diamonds to buy in the screenshot.</p>
+            <details class="tool-settings"><summary>How are these numbers calculated?</summary><p class="tool-footnote">The screenshots show rounded costs and training time for 722 troops. Other quantities are proportional estimates, not guaranteed in-game totals. With the optional boost ON, RSS and time are doubled (2×) as requested. The pictured boost costs 3K Diamonds.</p></details>
           </div>
         </section>
 
         <section class="page hidden" id="page-tool-buildings" data-section="tool-buildings">
           <div class="page-title"><h1>Building Costs</h1></div>
+          <div class="tool-steps"><span><b>1</b> Choose upgrade level</span><span><b>2</b> Check required RSS</span></div>
           <div class="tool-panel">
             <div class="tool-form-grid">
               <label>Building<select disabled><option>Chief's Office</option></select></label>
@@ -300,17 +307,19 @@
 
         <section class="page hidden" id="page-tool-events" data-section="tool-events">
           <div class="page-title"><h1>Event Points</h1></div>
+          <div class="tool-steps"><span><b>1</b> Select phase</span><span><b>2</b> Enter planned actions</span><span><b>3</b> See your score</span></div>
           <div class="tool-panel">
             <div class="tool-form-grid">
-              <label>Event / Phase<select id="planner-phase">
+              <label>Which event phase?<select id="planner-phase">
                 <option value="1">Phase 1 — PD Construction</option>
                 <option value="3">Phase 3 — Officer Training</option>
                 <option value="4">Phase 4 — Resource Confiscation</option>
                 <option value="5">Phase 5 — Power Sprint</option>
                 <option value="faceoff">Alliance Faceoff — Gathering (Day 1/3)</option>
               </select></label>
-              <label>Point target<input id="planner-target" type="number" min="0" step="1" value="1000000"></label>
+              <label>Points you want to reach<input id="planner-target" type="number" min="0" step="1" value="1000000"></label>
             </div>
+            <p class="tool-small-label">Enter how much you plan to do</p>
             <div id="planner-event-fields" class="tool-inputs"></div>
             <div class="tool-total" aria-live="polite">
               <span>Estimated event points</span><strong id="planner-event-total">0</strong>
@@ -327,6 +336,7 @@
 
         <section class="page hidden" id="page-tool-speedups" data-section="tool-speedups">
           <div class="page-title"><h1>Speedups</h1></div>
+          <div class="tool-steps"><span><b>1</b> Enter time left</span><span><b>2</b> See speedups needed</span></div>
           <div class="tool-panel">
             <div class="tool-form-grid">
               <label>Days<input type="number" min="0" max="365" step="1" value="1" id="planner-speed-days"></label>
@@ -334,9 +344,9 @@
               <label>Minutes<input type="number" min="0" max="59" step="1" value="0" id="planner-speed-minutes"></label>
             </div>
             <div class="tool-total"><span>Time to skip</span><strong id="planner-speed-total">24h</strong></div>
-            <h2 class="tool-subtitle">If using only one speedup type</h2>
+            <h2 class="tool-subtitle">Choose one speedup type</h2>
             <div class="tool-stats" id="planner-speed-singles" aria-live="polite"></div>
-            <h2 class="tool-subtitle">My available speedups</h2>
+            <h2 class="tool-subtitle">Or use the speedups you already have</h2>
             <div class="tool-form-grid" id="planner-speed-inventory">
               <label>1 minute<input type="number" min="0" step="1" data-speed-owned="1m" value="0"></label>
               <label>5 minutes<input type="number" min="0" step="1" data-speed-owned="5m" value="0"></label>
@@ -351,6 +361,7 @@
 
         <section class="page hidden" id="page-tool-gathering" data-section="tool-gathering">
           <div class="page-title"><h1>RSS Gathering</h1></div>
+          <div class="tool-steps"><span><b>1</b> Choose RSS &amp; node</span><span><b>2</b> Add bonus</span><span><b>3</b> See RSS per hour</span></div>
           <div class="tool-panel">
             <div class="tool-form-grid">
               <label>Resource<select id="planner-gather-type"><option value="ammo">Ammo</option><option value="cash">Cash</option><option value="electricity">Electricity</option><option value="gas">Gas</option></select></label>
