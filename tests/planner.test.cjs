@@ -83,3 +83,22 @@ test('gathering rates include only sourced values for low-tier nodes', () => {
   assert.equal(p.gathering('gas', 5), 19008);
   assert.equal(p.gathering('electricity', 2), null);
 });
+
+test('Phase 3 training calculates required troops from points instead of input troop count', () => {
+  const ix = p.troopsForTargetPoints('guard-9', 1072170);
+  assert.equal(ix.rate, 1485);
+  assert.equal(ix.requiredTroops, 722);
+  assert.equal(ix.baseQuantity, 722);
+  assert.equal(ix.quantity, 722);
+  assert.equal(ix.actualPoints, 1072170);
+  const x = p.troopsForTargetPoints('guard-10', 196001);
+  assert.equal(x.rate, 1960);
+  assert.equal(x.requiredTroops, 101);
+  const boost = p.troopsForTargetPoints('marksman-10', 196001, true);
+  assert.equal(boost.requiredTroops, 101);
+  assert.equal(boost.baseQuantity, 34);
+  assert.equal(boost.quantity, 102);
+  assert.equal(boost.actualPoints, 102 * 1960);
+  assert.equal(p.troopsForTargetPoints('guard-9', 0).quantity, 0);
+  assert.equal(p.troopsForTargetPoints('biker-10', 1000), null);
+});

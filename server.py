@@ -918,6 +918,17 @@ class Handler(BaseHTTPRequestHandler):
                     except LookupError:
                         return self.respond(404, {"error": "Ban not found."})
                 return self.respond(200, {"ok": True, "undone": cancelled})
+            if path == "/api/messenger/groups" and method == "POST":
+                actor, csrf = self.messenger_actor()
+                if actor is None:
+                    return self.respond(401, {"error": "An approved account is required."})
+                if not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), csrf):
+                    return self.respond(403, {"error": "Invalid CSRF token."})
+                data = self.read_json()
+                with LOCK, connect() as db:
+                    group_id = messenger.create_group(db, actor, data.get("name"),
+                        data.get("members"))
+                return self.respond(201, {"id": group_id})
             if path in ("/api/messenger/messages", "/api/messenger/read") and method == "POST":
                 actor, csrf = self.messenger_actor()
                 if actor is None:

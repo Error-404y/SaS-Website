@@ -29,12 +29,15 @@ Const-Web=false
 The approved-member website includes a dedicated **SaS Messenger** page with the same purple glass-style UI used elsewhere:
 
 - **Direct messages:** click an approved member in the conversation list to write privately. Each private thread can only be read by its two participants. The administrator appears as a direct-message contact for every approved member.
-- **Alliance group chat:** a common chat for all currently approved members and the administrator.
+- **SaS - Group Chat:** a pinned, highlighted alliance chat at the top of the Group Chats section. Its unread messages appear on the chat and Messenger sidebar badge. All currently approved members and the administrator can participate.
+- **Private custom groups:** click **Create Group**, enter a name, search approved players and select participants (1–24). Only the creator and invited members can see the group in their contact list or access its messages/read receipts. A non-member, including an administrator who was not invited, cannot open a private group by guessing its URL or ID. Group membership is stored in SQLite.
+- **Player directory:** a visible Players section lists all approved accounts by username and in-game name, with search. The currently signed-in player's account is also shown as **Your profile** (not a self-chat). Pending, rejected or unregistered accounts are deliberately not listed.
 - **Account contacts:** usernames and in-game names of approved players appear in the searchable sidebar. Member emails, passwords and reset requests are **not** exposed.
 - **Unread notifications:** server-persisted unread counts appear beside each chat and on the website's Messenger tab. Opening a conversation marks that conversation as read without affecting other conversations.
 - **Live refresh:** the visible conversation refreshes approximately every 5 seconds, while the unread/contact list refreshes approximately every 15 seconds. No third-party real-time chat provider is required.
 - **Message history:** stored in existing SQLite under `chat_messages`; the most recent 80 messages per thread load in chronological order.
 - **Mobile UI:** conversations list and individual chat open in separate phone-sized views with a back arrow.
+- **Training points target:** Troop Training now takes the number of desired **Phase 3 Officer Training event points** as its input and computes the minimum required Tier IX/X troops (IX = 1,485 points; X = 1,960 points) and estimated resources/time. The +200% capacity toggle rounds up to a whole batch, shows any extra troops/points, and still feeds the speedup and event-points calculators.
 - **Safety:** requests enforce approved-member or administrator sessions and valid CSRF tokens for writes. Message text is length-limited to 2,000 characters and **30 sends per minute per account**, escaped in the browser, and never used as raw HTML. Only sender identities from the validated server session are saved. Pending/rejected accounts and guests cannot access the messenger. Messages are not sent to Discord.
 - **Account deletion:** erases direct-message threads involving the deleted member; their existing alliance-group messages are anonymized so the group conversation still makes sense.
 

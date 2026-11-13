@@ -36,20 +36,31 @@
     return '<div class="tool-stat"><span>' + esc(title) + '</span><strong>' + esc(value) + '</strong></div>';
   }
 
-  function renderTraining() {
-    const key = el('planner-troop').value;
-    const data = P.troops(key, el('planner-count').value,
+  function targetTraining() {
+    return P.troopsForTargetPoints(el('planner-troop').value,
+      el('planner-target-points').value,
       el('planner-capacity').getAttribute('aria-pressed') === 'true',
       el('planner-training-reduction').value);
+  }
+  function renderTraining() {
+    const data = targetTraining();
     if (!data) return;
-    const html = stat('Troops', readable(data.quantity)) +
+    el('planner-count').value = String(data.baseQuantity);
+    const html = stat('Target points', readable(data.targetPoints)) +
+      stat('Points per troop', readable(data.rate)) +
+      stat('Minimum troops needed', readable(data.requiredTroops)) +
+      stat('Troops in selected batch', readable(data.quantity)) +
+      stat('Event points earned', readable(data.actualPoints)) +
       stat('Training time', P.duration(data.seconds)) +
       P.RESOURCES.map(r => stat(r[0].toUpperCase() + r.slice(1) + ' needed', P.fmt(data.costs[r]))).join('') +
       stat('Before time reduction', P.duration(data.originalSeconds));
     el('planner-training-results').innerHTML = html;
-    el('planner-training-notes').textContent = P.TROOPS[key].name + ' · ' +
-      readable(data.quantity) + ' troops · ' +
-      (data.capacityMultiplier === 3 ? '+200% boost ON — ' + readable(data.baseQuantity) + ' base → ' + readable(data.quantity) + ' troops; RSS/time ×3' : 'Normal training — no boost applied');
+    el('planner-training-notes').textContent = P.TROOPS[data.key].name + ' · ' +
+      readable(data.requiredTroops) + ' troops needed for ' + readable(data.targetPoints) +
+      ' Phase 3 points' + (data.capacityMultiplier === 3
+        ? ' · +200% capacity: ' + readable(data.baseQuantity) + ' base → ' +
+          readable(data.quantity) + ' in batch · ' + readable(data.extraPoints) + ' surplus points'
+        : ' · no capacity boost');
   }
   function renderBuildings() {
     const level = el('planner-building-level').value;
@@ -188,7 +199,7 @@
   }
   function init() {
     if (!el('planner-troop')) return;
-    for (const selector of ['#planner-troop', '#planner-count', '#planner-training-reduction'])
+    for (const selector of ['#planner-troop', '#planner-target-points', '#planner-training-reduction'])
       el(selector.slice(1)).addEventListener('input', renderTraining);
     document.querySelectorAll('[data-locked-troop]').forEach(button =>
       button.addEventListener('click', () => el('locked-troop-dialog').showModal()));
@@ -199,9 +210,7 @@
       renderTraining();
     });
     el('planner-send-speedups').addEventListener('click', () => {
-      const result = P.troops(el('planner-troop').value, el('planner-count').value,
-        el('planner-capacity').getAttribute('aria-pressed') === 'true',
-        el('planner-training-reduction').value);
+      const result = targetTraining();
       if (!result) return;
       const minutes = Math.ceil(result.seconds / 60);
       el('planner-speed-days').value = Math.floor(minutes / 1440);
@@ -214,9 +223,7 @@
       const troop = P.TROOPS[el('planner-troop').value];
       if (!troop) return;
       el('planner-phase').value = '3';
-      const result = P.troops(el('planner-troop').value, el('planner-count').value,
-        el('planner-capacity').getAttribute('aria-pressed') === 'true',
-        el('planner-training-reduction').value);
+      const result = targetTraining();
       phaseInputs['3'] = { ...(phaseInputs['3'] || {}), ['officer' + troop.tier]: result.quantity };
       renderEvents(true);
       document.querySelector('[data-view="tool-events"]').click();

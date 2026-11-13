@@ -87,6 +87,19 @@
     return { key, baseQuantity: qty, quantity: qty * boost, costs, seconds: t.seconds * factor * boost * (1 - reduction / 100),
       originalSeconds: t.seconds * factor * boost, capacityMultiplier: boost, snapshot: SAMPLE_SIZE };
   }
+  function troopsForTargetPoints(key, targetPoints, capacityBoost = false, timeReduction = 0) {
+    const troop = TROOPS[key];
+    if (!troop) return null;
+    const rate = OFFICERS[troop.tier];
+    if (!rate) return null;
+    const goal = Math.max(0, Math.floor(Number(targetPoints) || 0));
+    const needed = Math.ceil(goal / rate);
+    const multiplier = capacityBoost ? 3 : 1;
+    const baseQuantity = Math.ceil(needed / multiplier);
+    const result = troops(key, baseQuantity, capacityBoost, timeReduction);
+    return {...result, rate, targetPoints:goal, requiredTroops:needed,
+      actualPoints:result.quantity * rate, extraPoints:result.quantity * rate - goal};
+  }
   function build(level) { return BUILDINGS[String(level)] || null; }
   function eventPoints(phase, inputs = {}, rules = PHASE_RULES) {
     const rule = rules[String(phase)] || {};
@@ -142,7 +155,7 @@
     }
     return { counts, used, remaining, waste: Math.max(0, used - target) };
   }
-  const api = { RESOURCES, SPEEDUPS, GATHERING, TROOPS, SAMPLE_SIZE, BUILDINGS, OFFICERS,
+  const api = { RESOURCES, SPEEDUPS, GATHERING, TROOPS, SAMPLE_SIZE, BUILDINGS, OFFICERS, troopsForTargetPoints,
     FACE_OFF, PHASE4, PHASE_RULES, numeric, whole, fmt, parseAmount, duration,
     gathering, troops, build, eventPoints, faceoffPoints, speedupSingles, speedupMix };
   root.SasPlanner = api;
