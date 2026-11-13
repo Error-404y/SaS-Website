@@ -610,6 +610,8 @@ class Handler(BaseHTTPRequestHandler):
                   "/unread.js": ("unread.js", "text/javascript; charset=utf-8"),
                   "/planner.js": ("planner.js", "text/javascript; charset=utf-8"),
                   "/planner-ui.js": ("planner-ui.js", "text/javascript; charset=utf-8"),
+                  "/reference-data.js": ("reference-data.js", "text/javascript; charset=utf-8"),
+                  "/reference-ui.js": ("reference-ui.js", "text/javascript; charset=utf-8"),
                   "/styles.css": ("styles.css", "text/css; charset=utf-8"),
                   "/assets/logo.webp": ("assets/logo.webp", "image/webp"),
                   "/assets/crest.avif": ("assets/crest.avif", "image/avif")}

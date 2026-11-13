@@ -24,6 +24,21 @@ Const-Web=false
 
 **Restart the Python application after changing this value.** Changing the `.env` file alone does not update a running server. The switch changes access control, not the database: accounts, events and RSS information remain saved. Keep `SAS_DB_PATH` persistent. The maintenance document is `maintenance.html` and is intentionally separate from the login and application pages. It contains the approved purple SaS Under Construction artwork embedded as a self-contained WebP image (no separate image upload is required), with **no navigation or sign-in controls**. During maintenance **every other path**, including images, scripts, private pages and API routes, returns HTTP 503.
 
+## New Police Chief game guides
+
+The **Calculators → GAME GUIDES** left sidebar has four additional separate pages. All data is bundled in `reference-data.js` and rendered by `reference-ui.js`, available only after approved member/admin authentication:
+
+- **SvS Prep Week:** Day 1–5 personal chest thresholds and scoring actions, plus a separate Day 6 Final Showdown. Based on *State Showdown*, game reference 0.1.179, **state age Day 50–110**. Select a day and chest, enter already earned points, view how many of each action are needed, and enter a combination of planned actions. Speedup quantities are measured in **minutes** (not speedup items); Diamond-completed speedups do not score.
+- **Chief Almighty:** Seven daily tabs with chest milestones and scoring actions from **edition 5**, **starting PD under 19**, **state age Day 1–112**. Other server ages / PD bands / event editions can differ, so this edition is visibly labeled and must be verified in-game before use.
+- **Hero Star-Up:** Six shard steps for each of five stars, star totals **10 / 40 / 115 / 300 / 600**, and cumulative totals **10 / 50 / 165 / 465 / 1,065**, excluding initial recruitment. Source: [Police Chief Wiki](https://policechief-wiki.com/en/topics/fragments/).
+- **PD Office L1–30:** Full list of each level's published Ammo/Cash/Electricity/Gas and base construction time, with a current-level-to-target calculator. Some source numbers are rounded K/M values; summed costs are therefore approximate and the list does not claim exact underlying game integers. Source: [BetterPoliceChief Chief's Office](https://betterpolicechief.com/buildings/chiefs-office/).
+
+Source events: [State Showdown](https://betterpolicechief.com/events/state-showdown/) and [Chief Almighty](https://betterpolicechief.com/events/chief-almighty/). Reference-version labels on each page are part of the UI because the guide itself supports multiple editions and different reward thresholds.
+
+**Troops:** Royal Guard X and Royal Marksman X are selectable again using screenshot-backed estimates; **only Royal Biker X remains locked** because its costs were not provided. A lock uses an SVG, not an emoji.
+
+**Event colours:** Existing Events and Alliance Events automatically highlight upcoming starts in yellow when starting within 4 hours (but more than 1 hour away), and red when starting within 1 hour. Both row shading and countdown emphasis update as the time progresses. Current/ended events do not receive these warnings.
+
 ## Calculators and game reference data
 
 The **Calculators** item opens a separate tool workspace with its own **left navigation** on desktop and horizontally scrollable tabs on mobile. Existing Events, Alliance Events, Alliance RSS, Website Updates, HR Announcements and SaS – Accounts remain separate pages.

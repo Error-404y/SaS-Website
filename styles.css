@@ -792,3 +792,66 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 #reset-approve-dialog::backdrop{background:rgba(28,23,45,.4);backdrop-filter:blur(5px)}
 #reset-approve-dialog p{line-height:1.6;color:#5e687b}
 @media(max-width:750px){#page-rss{min-height:480px}.rss-construction-card{padding:42px 20px}}
+
+
+/* State vs State / Chief Almighty / Hero shards / PD charts */
+.tools-nav-heading{display:block;padding:18px 10px 5px;font-size:10px;letter-spacing:.16em;font-weight:800;color:#a38cba}
+.reference-intro{display:flex;flex-direction:column;gap:6px;padding:18px 22px;margin:0 0 20px;border-radius:15px;background:linear-gradient(110deg,#f2eafa 0%,#f9f7ff 74%,#fff 100%);border:1px solid #e2d4ef;color:#2f2651}
+.reference-intro strong{font-size:16px}.reference-intro>span{font-size:12px;color:#69758b;line-height:1.6}
+.reference-days{display:flex;flex-wrap:wrap;gap:8px}
+.reference-days button{background:#f7f8fc;border:1px solid #dfe2ec;border-radius:11px;min-width:100px;flex:1;text-align:left;padding:11px 12px;display:grid;gap:5px;font-size:13px;font-weight:800;color:#37425a;cursor:pointer}
+.reference-days button small{font-size:10px;font-weight:550;color:#77849a;line-height:1.3}
+.reference-days button.active{border-color:#9e78c6;background:#efe6f8;color:#542d7b;box-shadow:0 2px 10px rgba(121,83,163,.1)}
+.reference-days button.active small{color:#6a488c}
+.ref-day-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:8px 0 18px}
+.ref-day-header h2{font-size:clamp(19px,3vw,26px);color:#1c2d46;margin:4px 0}
+.ref-goal-label{padding:10px 17px;background:#f3eff9;border:1px solid #e0d4ef;border-radius:10px;display:flex;flex-direction:column;gap:5px;text-align:right;min-width:130px}
+.ref-goal-label span{font-size:10px;color:#796c8c;font-weight:750}.ref-goal-label strong{font-size:20px;color:#58327d}
+.ref-chests{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-bottom:18px}
+.ref-milestone{border:1px solid #e5dff0;background:#fbfaff;border-radius:11px;padding:13px 14px;display:grid;gap:8px}
+.ref-milestone span{font-size:11px;color:#7a7891}.ref-milestone strong{font-size:clamp(16px,2.3vw,23px);color:#2e3553}
+.ref-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.ref-controls label{display:grid;gap:7px;color:#40516e;font-size:12px;font-weight:750}
+.ref-controls input,.ref-controls select{border:1px solid #dfe1ea;border-radius:9px;background:white;padding:12px;min-width:0;width:100%;font-size:14px}
+.ref-result{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#ece8f5;border:1px solid #dcd1eb;padding:15px 18px;border-radius:12px}
+.ref-result span{font-size:13px;color:#5b5879;font-weight:730}.ref-result strong{font-size:clamp(22px,3vw,31px);color:#583480}
+.ref-table td small{display:block;color:#77879b;font-size:10px;font-weight:500;margin-top:5px;line-height:1.4}
+.ref-table input{background:white;border:1px solid #dce4ee;border-radius:8px;padding:10px;min-width:84px;width:100%;max-width:120px;color:#263850}
+.ref-table th{white-space:nowrap}
+.ref-totals{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;border-top:1px solid #e2e1e8;padding-top:16px}
+.ref-totals span{display:grid;gap:4px;font-size:11px;color:#6d7c90}.ref-totals strong{font-size:21px;color:#2b3752}
+.ref-source-link{color:#62478f;font-size:12px;text-decoration:underline;text-underline-offset:3px}
+.reference-shard-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:11px}
+.ref-shard-card{background:linear-gradient(145deg,#f8f4fd,#fff);border:1px solid #e3dcee;border-radius:12px;padding:14px 11px;display:grid;gap:7px}
+.ref-shard-card>span{color:#7957a3;font-size:14px;font-weight:900}
+.ref-shard-card strong{font-size:16px;color:#263451}.ref-shard-card small{font-size:11px;color:#728096}
+.ref-selected-row{background:#f3eefb}
+.ref-selected-row td:first-child{border-left:3px solid #9264bd}
+.event-row.event-soon-yellow td{background:#fffbeb!important}
+.event-row.event-soon-yellow td:first-child{box-shadow:inset 4px 0 #e4ad32}
+.event-row.event-soon-yellow .status-pill{background:#f8e6af!important;color:#916500!important;border-color:#e6ce7e!important}
+.event-row.event-soon-yellow .event-countdown{color:#9a710a;font-weight:850}
+.event-row.event-soon-red td{background:#fff0f1!important}
+.event-row.event-soon-red td:first-child{box-shadow:inset 4px 0 #d74b5c}
+.event-row.event-soon-red .status-pill{background:#f9d6db!important;color:#b52037!important;border-color:#ecabb3!important}
+.event-row.event-soon-red .event-countdown{color:#b6263a;font-weight:850}
+@media(max-width:800px){
+ .reference-days{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x proximity}
+ .reference-days button{min-width:111px;max-width:160px;scroll-snap-align:start}
+ .tools-nav-heading{padding:10px 8px;align-self:center;white-space:nowrap}
+ .ref-chests{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .reference-shard-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .ref-day-header{flex-direction:column}.ref-goal-label{text-align:left}
+}
+@media(max-width:425px){.ref-controls{grid-template-columns:1fr}.ref-result{align-items:flex-start;flex-direction:column}}
+
+
+.ref-speed-chart{border:1px solid #e3dcef;border-radius:12px;padding:14px;background:#fcfbfe}
+.ref-speed-chart summary{cursor:pointer;color:#574080;font-weight:800;font-size:13px}
+.ref-speed-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:15px 0}
+.ref-speed-tile{display:grid;gap:5px;padding:12px;background:white;border:1px solid #e7e2ef;border-radius:9px}
+.ref-speed-tile span{font-size:11px;color:#765b98;font-weight:700}
+.ref-speed-tile strong{font-size:16px;color:#28364f}
+.ref-speed-tile small{font-size:10px;color:#73849b}
+@media(max-width:750px){.ref-speed-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:430px){.ref-speed-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

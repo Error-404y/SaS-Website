@@ -12,6 +12,8 @@
   <script src="/rss.js" defer></script>
   <script src="/unread.js" defer></script>
   <script src="/planner.js" defer></script>
+  <script src="/reference-data.js" defer></script>
+  <script src="/reference-ui.js" defer></script>
   <script src="/planner-ui.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
@@ -113,6 +115,11 @@
           <button type="button" data-view="tool-buildings">Building Costs</button>
           <button type="button" data-view="tool-speedups">Speedups</button>
           <button type="button" data-view="tool-gathering">RSS Gathering</button>
+          <span class="tools-nav-heading">GAME GUIDES</span>
+          <button type="button" data-view="tool-svs">SvS Prep Week</button>
+          <button type="button" data-view="tool-chief">Chief Almighty</button>
+          <button type="button" data-view="tool-shards">Hero Star-Up</button>
+          <button type="button" data-view="tool-pd">PD L1–30</button>
         </nav>
       </aside>
       <main class="content" id="main-content">
@@ -245,7 +252,55 @@
             <button type="button" data-view="tool-buildings" class="tool-feature"><span>03 · BUILDING COSTS</span><strong>What does this upgrade cost?</strong><small>Choose a building level to check RSS.</small><span class="tool-feature-arrow">Open →</span></button>
             <button type="button" data-view="tool-speedups" class="tool-feature"><span>04 · SPEEDUPS</span><strong>How many speedups do I need?</strong><small>Enter the time left and see all options.</small><span class="tool-feature-arrow">Open →</span></button>
             <button type="button" data-view="tool-gathering" class="tool-feature"><span>05 · RSS GATHERING</span><strong>How much can I collect?</strong><small>Choose a resource, node and bonus.</small><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-svs" class="tool-feature"><span>07 · EVENT GUIDE</span><strong>State vs. State Prep Week</strong><small>Chest targets, day-by-day point rates and required items.</small><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-chief" class="tool-feature"><span>08 · EVENT GUIDE</span><strong>Chief Almighty</strong><small>Seven days of milestones and point calculations.</small><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-shards" class="tool-feature"><span>09 · HERO GROWTH</span><strong>Hero Star-Up Shards</strong><small>All six steps per star and cumulative totals.</small><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-pd" class="tool-feature"><span>10 · BUILDING GUIDE</span><strong>PD Office: Level 1–30</strong><small>Costs and base construction time at every level.</small><span class="tool-feature-arrow">Open →</span></button>
             <button type="button" data-view="rss" class="tool-feature"><span>06 · ALLIANCE RSS</span><strong>How much RSS does SaS have?</strong><small>Review production, balances and spending.</small><span class="tool-feature-arrow">Open →</span></button>
+          </div>
+        </section>
+
+        <section class="page hidden" id="page-tool-svs" data-section="tool-svs">
+          <div class="page-title"><div><p class="section-kicker">EVENT GUIDE</p><h1>State vs. State</h1></div></div>
+          <div class="reference-intro"><strong>Prep Week Planner</strong><span>Choose a day. See the reward chests and the amount needed for every scoring action.</span></div>
+          <div class="tool-panel">
+            <p class="tool-footnote">Reference: State Showdown v0.1.179, state age days 50–110. Days 1–5 are Prep; day 6 is Final Showdown. Other editions may have different thresholds.</p>
+            <div class="reference-days" id="ref-svs-days" role="group" aria-label="SvS event days"></div>
+            <div id="ref-svs-content" aria-live="polite"></div>
+            <a class="ref-source-link" href="https://betterpolicechief.com/events/state-showdown/" target="_blank" rel="noopener noreferrer">Reference: State Showdown guide</a>
+          </div>
+        </section>
+        <section class="page hidden" id="page-tool-chief" data-section="tool-chief">
+          <div class="page-title"><div><p class="section-kicker">EVENT GUIDE</p><h1>Chief Almighty</h1></div></div>
+          <div class="reference-intro"><strong>Daily Reward Planner</strong><span>Seven days, four point chests and scoring actions for each event day.</span></div>
+          <div class="tool-panel">
+            <p class="tool-footnote">Reference: edition 5, PD under 19, state age days 1–112. Different PD groups/editions need different reward targets—verify against your game.</p>
+            <div class="reference-days" id="ref-chief-days" role="group" aria-label="Chief Almighty event days"></div>
+            <div id="ref-chief-content" aria-live="polite"></div>
+            <a class="ref-source-link" href="https://betterpolicechief.com/events/chief-almighty/" target="_blank" rel="noopener noreferrer">Reference: Chief Almighty guide</a>
+          </div>
+        </section>
+        <section class="page hidden" id="page-tool-shards" data-section="tool-shards">
+          <div class="page-title"><div><p class="section-kicker">HERO GROWTH</p><h1>Hero Star-Up Shards</h1></div></div>
+          <div class="reference-intro"><strong>1,065 shards to 5 stars</strong><span>Excludes the initial hero recruitment cost.</span></div>
+          <div class="tool-panel">
+            <div class="reference-shard-cards" id="ref-shards-cards"></div>
+            <div class="table-container"><table class="tool-table ref-table"><thead><tr><th>Star</th><th>Step 1</th><th>Step 2</th><th>Step 3</th><th>Step 4</th><th>Step 5</th><th>Step 6</th><th>Per star</th><th>Cumulative</th></tr></thead><tbody id="ref-shards-table"></tbody></table></div>
+            <a class="ref-source-link" href="https://policechief-wiki.com/en/topics/fragments/" target="_blank" rel="noopener noreferrer">Reference: Police Chief Wiki</a>
+          </div>
+        </section>
+        <section class="page hidden" id="page-tool-pd" data-section="tool-pd">
+          <div class="page-title"><div><p class="section-kicker">BUILDING GUIDE</p><h1>PD Office: Levels 1–30</h1></div></div>
+          <div class="reference-intro"><strong>Level-by-level upgrade costs</strong><span>Base building time before research, help or other reductions.</span></div>
+          <div class="tool-panel">
+            <div class="tool-form-grid">
+              <label>Current PD Level<select id="ref-pd-current"></select></label>
+              <label>Target PD Level<select id="ref-pd-target"></select></label>
+            </div>
+            <div id="ref-pd-summary" class="tool-stats" aria-live="polite"></div>
+            <div class="table-container"><table class="tool-table ref-table"><thead><tr><th>Level</th><th>Ammo</th><th>Cash</th><th>Electricity</th><th>Gas</th><th>Base time</th></tr></thead><tbody id="ref-pd-table"></tbody></table></div>
+            <p class="tool-footnote">Values mirror the guide's published display. Some amounts are rounded (K/M), so cumulative totals are estimates, not exact game units.</p>
+            <a class="ref-source-link" href="https://betterpolicechief.com/buildings/chiefs-office/" target="_blank" rel="noopener noreferrer">Reference: Chief's Office guide</a>
           </div>
         </section>
 
@@ -260,14 +315,13 @@
 
                   <option value="biker-9">Biker IX — Honored</option>
                   <option value="marksman-9">Marksman IX — Honored</option>
+                  <option value="guard-10">Guard X — Royal</option>
+                  <option value="marksman-10">Marksman X — Royal</option>
 
                 </select>
                 <div class="locked-troops" aria-label="Unavailable level ten troops">
-                  <button class="locked-troop" type="button" data-locked-troop="Royal Guard — T10" aria-label="Royal Guard T10 locked">
-                    <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Guard X
-                  </button>
-                  <button class="locked-troop" type="button" data-locked-troop="Royal Marksman — T10" aria-label="Royal Marksman T10 locked">
-                    <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Marksman X
+                  <button class="locked-troop" type="button" data-locked-troop="Royal Biker — T10" aria-label="Biker T10 locked">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Biker X
                   </button>
                 </div>
               </label>
@@ -417,7 +471,7 @@
           <button type="button" data-view="updates"><span>Website Updates</span><span class="nav-unread" data-unread="updates" hidden aria-label="No new updates">0</span></button>
           <button type="button" data-view="announcements"><span>HR Announcements</span><span class="nav-unread" data-unread="announcements" hidden aria-label="No new updates">0</span></button>
           <span class="nav-group-label">TOOLS</span>
-          <button type="button" data-view="tool-overview"><span>Calculators</span><span class="nav-hint">6 sections</span></button>
+          <button type="button" data-view="tool-overview"><span>Calculators</span><span class="nav-hint">10 sections</span></button>
           <button type="button" class="admin-only" data-view="accounts" hidden><span>SaS – Accounts</span><span id="accounts-badge" class="nav-unread" hidden>0</span></button>
         </nav>
         <div class="sidebar-footer"><span>SaS Alliance</span><span>All event times are UTC.</span></div>
