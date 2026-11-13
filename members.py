@@ -127,11 +127,17 @@ def request_password_reset(db, identifier):
                        (row["id"], now))
     return {"message": "If the account exists, a password change request has been submitted for administrator review."}
 
+RESET_REVIEW_VISIBLE_SECONDS = 48 * 3600
+
 def list_password_requests(db):
+    """Show new requests and reviewed requests for 48 hours, without deleting their audit history."""
+    cutoff = int(time.time()) - RESET_REVIEW_VISIBLE_SECONDS
     return [dict(row) for row in db.execute("""SELECT p.id,p.member_id,p.status,p.created_at,
         p.reviewed_at,p.review_message,p.code_expires_at,m.username,m.player_name,m.email
         FROM password_requests p JOIN members m ON m.id=p.member_id
-        ORDER BY CASE p.status WHEN 'pending' THEN 0 ELSE 1 END,p.created_at DESC LIMIT 300""")]
+        WHERE p.status='pending'
+           OR (p.reviewed_at IS NOT NULL AND p.reviewed_at>=?)
+        ORDER BY CASE p.status WHEN 'pending' THEN 0 ELSE 1 END,p.created_at DESC LIMIT 300""", (cutoff,))]
 
 def review_password_request(db, request_id, decision, message=""):
     if decision not in ("approved", "rejected"):
