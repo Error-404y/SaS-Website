@@ -67,7 +67,10 @@ const svs = {
       ...hero(350,1220,3040),...gathering(1000,1000,200,50,2)]},
     {name:'Arresting Criminals',chests:[80000,150000,300000],actions:[
       action('Badge rating increase',1,70),action('Lucky Wheel spin',1,8000),
-      ...hero(350,1220,3040),action('Defeat Crime Boss rally',1,30000),
+      ...hero(350,1220,3040),
+      action('K9 breakthrough rating increase',1,50),
+      action('Premium Whistle',1,15000),action('Normal Whistle',1,1150),
+      action('Defeat Crime Boss rally',1,30000),
       action('Defeat Lv 1–10 Criminal',1,9000),action('Defeat Lv 11–15 Criminal',1,9750),
       action('Defeat Lv 16–20 Criminal',1,10500),action('Defeat Lv 21–25 Criminal',1,11250),
       action('Defeat Lv 26–30 Criminal',1,12000)]},
