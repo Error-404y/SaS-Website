@@ -458,6 +458,11 @@
           <div class="page-title" style="margin-top:32px"><h2>Password change requests <span id="password-requests-badge" class="nav-unread" hidden>0</span></h2><button type="button" class="small-button" id="password-requests-refresh">Refresh requests</button></div>
           <p class="accounts-muted">New requests appear here. Approve to generate a one-time code and share it privately. Reviewed requests disappear from this list after 48 hours; unused codes expire after 1 hour.</p>
           <div id="password-requests-list" class="accounts-list"></div>
+          <div class="page-title" style="margin-top:32px"><h2>Discord notifications</h2><button type="button" class="small-button" id="discord-status-refresh">Refresh status</button></div>
+          <p class="accounts-muted">Check each webhook configuration and send a test message directly from the admin panel.</p>
+          <div class="discord-status-grid" id="discord-status-grid" aria-live="polite">
+            <p class="accounts-muted">Loading notification channels…</p>
+          </div>
         </section>
       </main>
 
