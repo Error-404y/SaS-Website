@@ -16,6 +16,39 @@
   const toTime = value => calendar.utcTime(value);
   const currentUtc = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
   let toastTimer;
+  let adminLastInteraction = Date.now();
+  let adminActivityLastSent = 0;
+  let adminActivitySending = false;
+  const ADMIN_IDLE_MS = 30 * 60 * 1000;
+
+  function adminExpired() {
+    site.entries = [];
+    site.accounts = [];
+    site.rss = null;
+    site.member = false;
+    setAdmin(false);
+    window.location.replace('/');
+  }
+
+  function trackAdminInteraction(event) {
+    if (!site.admin || (event.type === 'keydown' && (
+      event.key === 'Shift' || event.key === 'Control' || event.key === 'Alt'))) return;
+    const now = Date.now();
+    if (now - adminLastInteraction >= ADMIN_IDLE_MS) {
+      adminExpired();
+      return;
+    }
+    adminLastInteraction = now;
+    if (adminActivitySending || now - adminActivityLastSent < 60000) return;
+    adminActivityLastSent = now;
+    adminActivitySending = true;
+    request('/api/admin/activity', { method: 'POST', body: '{}' })
+      .catch(() => adminExpired())
+      .finally(() => { adminActivitySending = false; });
+  }
+
+  ['pointerdown', 'keydown', 'touchstart'].forEach(type =>
+    document.addEventListener(type, trackAdminInteraction, { passive: true }));
 
   async function request(path, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
@@ -557,6 +590,8 @@
       }) });
       site.member = false;
       setAdmin(true, data.csrf);
+      adminLastInteraction = Date.now();
+      adminActivityLastSent = adminLastInteraction;
       unlockSite();
       one('#login-form').reset();
       one('#login-dialog').close();
@@ -1031,6 +1066,8 @@
   request('/api/session').then(async session => {
     site.member = !!session.approved && !session.admin;
     setAdmin(!!session.admin, session.csrf);
+    adminLastInteraction = Date.now();
+    adminActivityLastSent = adminLastInteraction;
     if (session.admin || session.approved) {
       window.SasPlannerUI?.setIdentity(session.username || 'admin');
       if (site.member) {
@@ -1049,6 +1086,10 @@
     if (site.admin && !document.hidden) loadAccounts();
   }, 15000);
   setInterval(async () => {
+    if (site.admin && Date.now() - adminLastInteraction >= ADMIN_IDLE_MS) {
+      adminExpired();
+      return;
+    }
     if (document.hidden || (!site.admin && !site.member)) return;
     try {
       const session = await request('/api/session');
