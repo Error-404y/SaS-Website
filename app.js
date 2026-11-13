@@ -341,7 +341,11 @@
   }
 
   async function deleteSpending(id) {
-    if (!site.admin || !confirm('Remove this spending record? The resource balance will be recalculated.')) return;
+    if (!site.admin || !await confirmAction({
+      title: 'Remove spending record?',
+      message: 'The resource balance will be recalculated after this record is removed.',
+      buttonLabel: 'Remove record'
+    })) return;
     try {
       await request('/api/rss/spending/' + id, { method: 'DELETE' });
       await reload();
@@ -418,6 +422,36 @@
 
   function openDialog(id) {
     one('#' + id).showModal();
+  }
+
+  function confirmAction({ title, message, buttonLabel = 'Delete permanently' }) {
+    const dialog = one('#confirm-action-dialog');
+    // Avoid opening two destructive confirmations simultaneously.
+    if (dialog.open) return Promise.resolve(false);
+    one('#confirm-action-title').textContent = title;
+    one('#confirm-action-message').textContent = message;
+    one('#confirm-action-error').textContent = '';
+    one('[data-confirm-choice="accept"]').textContent = buttonLabel;
+    return new Promise(resolve => {
+      let selected = false;
+      const cleanup = () => {
+        dialog.removeEventListener('click', choose);
+        dialog.removeEventListener('close', finish);
+      };
+      const finish = () => {
+        cleanup();
+        resolve(selected);
+      };
+      const choose = event => {
+        const button = event.target.closest('[data-confirm-choice]');
+        if (!button || !dialog.contains(button)) return;
+        selected = button.dataset.confirmChoice === 'accept';
+        dialog.close();
+      };
+      dialog.addEventListener('click', choose);
+      dialog.addEventListener('close', finish, { once: true });
+      dialog.showModal();
+    });
   }
 
   function inspect(id) {
@@ -521,7 +555,11 @@
 
   async function deleteEntry() {
     const id = one('#entry-id').value;
-    if (!id || !confirm('Delete this entry permanently?')) return;
+    if (!id || !await confirmAction({
+      title: 'Delete this entry?',
+      message: 'This entry will be permanently removed. This action cannot be undone.',
+      buttonLabel: 'Delete entry'
+    })) return;
     try {
       await request('/api/entries/' + id, { method: 'DELETE' });
       one('#entry-dialog').close();
@@ -920,7 +958,11 @@
   async function deleteAccount(id) {
     if (!site.admin) return;
     const member = (site.accounts || []).find(item => item.id === id);
-    if (!member || !confirm('Permanently delete @' + member.username + '? This also revokes their login and removes their reset requests. This cannot be undone.')) return;
+    if (!member || !await confirmAction({
+      title: 'Delete player account?',
+      message: 'Permanently delete @' + member.username + '? Their active sessions and password reset requests will also be removed. This cannot be undone.',
+      buttonLabel: 'Delete account'
+    })) return;
     try {
       await request('/api/accounts/' + id, { method: 'DELETE' });
       await loadAccounts();
