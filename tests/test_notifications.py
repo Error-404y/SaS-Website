@@ -62,7 +62,7 @@ class DiscordAccountNotificationTests(unittest.TestCase):
         self.assertNotIn("Email", [item["name"] for item in admin["embeds"][0]["fields"]])
         for payload in (admin, member):
             fields = {item["name"]: item["value"] for item in payload["embeds"][0]["fields"]}
-            self.assertRegex(fields["Login (UTC)"], r"^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} UTC$")
+            self.assertRegex(fields["Login (UTC)"], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC$")
 
     def test_invalid_webhook_is_never_called(self):
         with patch.object(server, "LOGIN_WEBHOOK", "http://example.org/evil"), \
