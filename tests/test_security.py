@@ -224,6 +224,16 @@ class SecurityBoundaryTests(unittest.TestCase):
         finally:
             server.MAINTENANCE_MODE = previous
 
+    def test_maintenance_design_is_noninteractive(self):
+        # The construction screen must not accidentally expose links, forms or site navigation.
+        content = (server.ROOT / "maintenance.html").read_text(encoding="utf-8")
+        self.assertIn("Under Construction", content)
+        self.assertIn("Thank you for your patience.", content)
+        self.assertIn("SAINTS AND SINNERS", content)
+        for forbidden in ('<nav', '<form', '<button', '<a href=', 'id="website"',
+                          'id="auth-gate"', '/app.js', '/auth.js', '/api/'):
+            self.assertNotIn(forbidden, content)
+
     def test_maintenance_mode_off_restores_normal_authentication(self):
         previous = server.MAINTENANCE_MODE
         try:
