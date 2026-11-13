@@ -253,6 +253,39 @@ class SecurityBoundaryTests(unittest.TestCase):
         finally:
             server.MAINTENANCE_MODE = previous
 
+    def test_member_unread_counts_are_private_persistent_and_csrf_protected(self):
+        self.register("FirstReader", "approved")
+        self.register("SecondReader", "approved")
+        admin_cookie, admin_csrf = self.login_admin()
+        event = {
+            "kind": "announcements", "title": "New HR Announcement",
+            "details": "Members need to see this", "category": "", "author": "R4",
+        }
+        status, raw, _ = self.call("/api/entries", "POST", event, admin_cookie, admin_csrf)
+        self.assertEqual(status, 201, raw)
+        one_cookie, one_csrf = self.login_member("FirstReader")
+        two_cookie, two_csrf = self.login_member("SecondReader")
+        self.assertEqual(self.call("/api/reads")[0], 401)
+        status, raw, _ = self.call("/api/reads", cookie=one_cookie)
+        self.assertEqual(status, 200, raw)
+        self.assertEqual(json.loads(raw)["seen"]["announcements"], {})
+        self.assertEqual(self.call("/api/reads", "POST", {"kind": "announcements"}, one_cookie)[0], 403)
+        self.assertEqual(self.call("/api/reads", "POST", {"kind": "not_a_page"}, one_cookie, one_csrf)[0], 400)
+        status, raw, _ = self.call("/api/reads", "POST",
+                                   {"kind": "announcements"}, one_cookie, one_csrf)
+        self.assertEqual(status, 200, raw)
+        self.assertEqual(len(json.loads(raw)["seen"]["announcements"]), 1)
+        status, raw, _ = self.call("/api/reads", cookie=two_cookie)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(raw)["seen"]["announcements"], {})
+        status, raw, _ = self.call("/api/reads", cookie=one_cookie)
+        self.assertEqual(len(json.loads(raw)["seen"]["announcements"]), 1)
+        self.assertEqual(self.call("/api/reads", "POST",
+                                   {"kind": "announcements"}, two_cookie, one_csrf)[0], 403)
+        with server.connect() as db:
+            row = db.execute("SELECT COUNT(*) FROM member_reads").fetchone()[0]
+        self.assertEqual(row, 1)
+
     def test_admin_login_rate_limit(self):
         for _ in range(10):
             status, _, _ = self.call("/api/login", "POST", {

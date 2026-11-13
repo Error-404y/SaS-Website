@@ -24,6 +24,25 @@ Const-Web=false
 
 **Restart the Python application after changing this value.** Changing the `.env` file alone does not update a running server. The switch changes access control, not the database: accounts, events and RSS information remain saved. Keep `SAS_DB_PATH` persistent. The maintenance document is `maintenance.html` and is intentionally separate from the login and application pages. It contains the approved purple SaS Under Construction artwork embedded as a self-contained WebP image (no separate image upload is required), with **no navigation or sign-in controls**. During maintenance **every other path**, including images, scripts, private pages and API routes, returns HTTP 503.
 
+## Calculators and game reference data
+
+The **Calculators** item opens a separate tool workspace with its own **left navigation** on desktop and horizontally scrollable tabs on mobile. Existing Events, Alliance Events, Alliance RSS, Website Updates, HR Announcements and SaS – Accounts remain separate pages.
+
+- **Event Points**: rules from the provided in-game event screenshots for Phase 1 (PD Construction), Phase 3 (Officer Training Levels 4–10), Phase 4 (Resource Confiscation), and Phase 5 (Power Sprint). Alliance Faceoff gathering uses its **separate** point table. Specify an event target and entered quantities to calculate the score. Custom point values are stored *in the current browser for the signed-in username*, not published globally. Phase 2 is not inferred.
+- **Troop Training**: screenshot-backed rounded RSS costs and original training time for **722 troops**, for Honored Guard IX, Royal Guard X, Honored Biker IX, Honored Marksman IX and Royal Marksman X. Other quantities use proportional estimates, which may differ from actual in-game calculations and player-specific bonuses. The **Training Capacity UP (2h)** button models +200% to capacity *and* training duration; 3K Diamonds is the screenshot purchase price.
+- **Building Costs**: verified **Chief's Office** single-upgrade costs to Levels 10, 11, 15 and 20. The table does not incorrectly treat these as a cumulative range or estimate unknown levels.
+- **Speedups**: exactly the game's 1-minute, 5-minute, 1-hour, 3-hour and 8-hour items; time input produces the amount required of each individual speedup. An optional available-inventory calculation gives a **longest-first suggestion**, not a guaranteed optimal combination.
+- **RSS Gathering**: node gathering rate and bonus calculator. Ammo/Cash values are recorded for Levels 1–8, Electricity/Gas for Levels 5–8. Unconfirmed levels display **not recorded** instead of invented values.
+- All resource quantities use **K / M / B** abbreviations (e.g. 3.22B = 3,220,000,000). The event examples do not represent alliance treasury balances or live game synchronisation.
+
+### Unread tabs per approved account
+
+Each approved player's viewed-section revisions are stored in a new SQLite `member_reads` table, created automatically on application restart. `GET /api/reads` returns only the logged-in player's read state; `POST /api/reads` with their session CSRF token records a **server-derived** snapshot for the opened section. Unauthenticated, pending and revoked users cannot use either endpoint. Existing admin sessions retain browser-local read state.
+
+Unread counts show **1**, **2**, etc. by number of changed/new posts, and relevant navigation tabs temporarily move to the front. Opening a section acknowledges its messages and restores its default navigation order. The mobile navbar has swipe guidance and horizontal scrolling so players can discover other sections.
+
+**Data limitation:** Screenshot prices and the public game guide are references, not a universal/official formula. Different servers, buffs, updates or troop types may have different costs. Please provide screenshots to expand missing price levels rather than assuming a complete catalog.
+
 ## Sections
 
 **Events** lists current and upcoming game events, their categories, exact UTC start/end times and statuses. Click an event to see its rewards and notes. Each upcoming event has a live `Starts in` countdown, and each ongoing event has a live `Ends in` countdown.

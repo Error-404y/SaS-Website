@@ -11,6 +11,8 @@
   <script src="/calendar.js" defer></script>
   <script src="/rss.js" defer></script>
   <script src="/unread.js" defer></script>
+  <script src="/planner.js" defer></script>
+  <script src="/planner-ui.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -99,7 +101,18 @@
       </div>
     </header>
 
-    <div class="layout">
+    <div class="layout" id="site-layout">
+      <aside id="tools-sidebar" class="tools-sidebar hidden" aria-label="Calculator sections">
+        <p class="sidebar-heading">CALCULATORS</p>
+        <nav class="tools-nav" aria-label="Calculator navigation">
+          <button type="button" data-view="tool-overview">Overview</button>
+          <button type="button" data-view="tool-events">Event Points</button>
+          <button type="button" data-view="tool-training">Troop Training</button>
+          <button type="button" data-view="tool-buildings">Building Costs</button>
+          <button type="button" data-view="tool-speedups">Speedups</button>
+          <button type="button" data-view="tool-gathering">RSS Gathering</button>
+        </nav>
+      </aside>
       <main class="content" id="main-content">
         <section class="page" id="page-events" data-section="events">
           <div class="page-title"><h1>Events</h1><button type="button" class="primary-button admin-only" data-create="events" hidden>Add event</button></div>
@@ -210,6 +223,146 @@
           <div class="page-title"><h1>HR Announcements</h1><button type="button" class="primary-button admin-only" data-create="announcements" hidden>Post announcement</button></div>
           <div class="post-list" id="announcements-list"></div>
         </section>
+        <section class="page hidden" id="page-tool-overview" data-section="tool-overview">
+          <div class="page-title"><div><p class="section-kicker">SaS TOOLS</p><h1>Calculators</h1></div></div>
+          <div class="tool-feature-grid">
+            <button type="button" data-view="tool-events" class="tool-feature"><span>Event Points</span><strong>Calculate points by phase</strong><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-training" class="tool-feature"><span>Troop Training</span><strong>RSS costs &amp; training time</strong><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-buildings" class="tool-feature"><span>Building Costs</span><strong>Verified upgrade milestones</strong><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-speedups" class="tool-feature"><span>Speedups</span><strong>1m / 5m / 1h / 3h / 8h</strong><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="tool-gathering" class="tool-feature"><span>RSS Gathering</span><strong>Levels &amp; gathering bonuses</strong><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="rss" class="tool-feature"><span>Alliance Treasury</span><strong>RSS production, balances &amp; spending</strong><span class="tool-feature-arrow">Open →</span></button>
+          </div>
+        </section>
+
+        <section class="page hidden" id="page-tool-training" data-section="tool-training">
+          <div class="page-title"><h1>Troop Training</h1></div>
+          <div class="tool-panel">
+            <div class="tool-form-grid">
+              <label>Troop
+                <select id="planner-troop">
+                  <option value="guard-9">Guard IX — Honored</option>
+                  <option value="guard-10">Guard X — Royal</option>
+                  <option value="biker-9">Biker IX — Honored</option>
+                  <option value="marksman-9">Marksman IX — Honored</option>
+                  <option value="marksman-10">Marksman X — Royal</option>
+                </select>
+              </label>
+              <label>Troop count<input id="planner-count" type="number" min="0" step="1" value="722"></label>
+              <label>Time reduction (%)<input id="planner-training-reduction" type="number" min="0" max="99.99" step="0.1" value="0"></label>
+            </div>
+            <button id="planner-capacity" class="capacity-toggle" type="button" aria-pressed="false"><span>Training Capacity UP (2h)</span><strong id="planner-capacity-state">OFF</strong></button>
+            <div class="tool-stats" id="planner-training-results" aria-live="polite"></div>
+            <div class="tool-metadata" id="planner-training-notes"></div>
+            <div class="tool-actions">
+              <button type="button" id="planner-send-speedups" class="small-button">Calculate speedups →</button>
+              <button type="button" id="planner-send-event" class="small-button">Officer event points →</button>
+            </div>
+            <p class="tool-footnote">Measured game screenshots show the cost for 722 troops. Other quantities are proportional estimates from rounded values. Training Capacity UP adds 200% to capacity <em>and</em> training time while active (3× each). It costs 3K Diamonds to buy in the screenshot.</p>
+          </div>
+        </section>
+
+        <section class="page hidden" id="page-tool-buildings" data-section="tool-buildings">
+          <div class="page-title"><h1>Building Costs</h1></div>
+          <div class="tool-panel">
+            <div class="tool-form-grid">
+              <label>Building<select disabled><option>Chief's Office</option></select></label>
+              <label>Upgrade to level<select id="planner-building-level">
+                <option value="10">Level 10</option><option value="11">Level 11</option>
+                <option value="15">Level 15</option><option value="20">Level 20</option>
+              </select></label>
+            </div>
+            <div id="planner-building-results" class="tool-stats" aria-live="polite"></div>
+            <div class="table-container"><table class="tool-table"><thead><tr><th>To level</th><th>Cash</th><th>Ammo</th><th>Electricity</th><th>Gas</th></tr></thead><tbody id="planner-building-table"></tbody></table></div>
+            <p class="tool-footnote">These are individual upgrade costs to the displayed level, not totals from level 1 or for a level range. Missing levels are deliberately not estimated as exact game costs.</p>
+            <details class="tool-settings"><summary>Chief's Office: full-build reference</summary>
+              <div class="tool-stats">
+                <div class="tool-stat"><span>Cash</span><strong>3.22B</strong></div>
+                <div class="tool-stat"><span>Ammo</span><strong>3.21B</strong></div>
+                <div class="tool-stat"><span>Electricity</span><strong>633.1M</strong></div>
+                <div class="tool-stat"><span>Gas</span><strong>161.1M</strong></div>
+                <div class="tool-stat"><span>Electro Cores</span><strong>5,715</strong></div>
+                <div class="tool-stat"><span>Base building time</span><strong>~480 days</strong></div>
+              </div>
+              <p class="tool-footnote">Approximate reference for full progression to Electro 5 from the public guide; it is not the price of the selected single upgrade.</p>
+            </details>
+            <details class="tool-settings"><summary>Joint Confiscation Point reference</summary>
+              <div class="tool-stats">
+                <div class="tool-stat"><span>Ammo</span><strong>200K</strong></div>
+                <div class="tool-stat"><span>Cash</span><strong>200K</strong></div>
+                <div class="tool-stat"><span>Electricity</span><strong>200K</strong></div>
+                <div class="tool-stat"><span>Gas</span><strong>200K</strong></div>
+              </div>
+              <p class="tool-footnote">Total 800K alliance RSS for a Joint Confiscation Point. These are treasury costs, not the individual player's gathering expenses.</p>
+            </details>
+          </div>
+        </section>
+
+        <section class="page hidden" id="page-tool-events" data-section="tool-events">
+          <div class="page-title"><h1>Event Points</h1></div>
+          <div class="tool-panel">
+            <div class="tool-form-grid">
+              <label>Event / Phase<select id="planner-phase">
+                <option value="1">Phase 1 — PD Construction</option>
+                <option value="3">Phase 3 — Officer Training</option>
+                <option value="4">Phase 4 — Resource Confiscation</option>
+                <option value="5">Phase 5 — Power Sprint</option>
+                <option value="faceoff">Alliance Faceoff — Gathering (Day 1/3)</option>
+              </select></label>
+              <label>Point target<input id="planner-target" type="number" min="0" step="1" value="1000000"></label>
+            </div>
+            <div id="planner-event-fields" class="tool-inputs"></div>
+            <div class="tool-total" aria-live="polite">
+              <span>Estimated event points</span><strong id="planner-event-total">0</strong>
+              <small id="planner-event-remaining"></small>
+            </div>
+            <details class="tool-settings"><summary>Custom point values</summary>
+              <div id="planner-custom-points" class="tool-form-grid"></div>
+              <div class="tool-actions"><button type="button" class="small-button" id="planner-reset-rates">Reset to screenshot values</button></div>
+              <p class="tool-footnote">Custom scoring values are saved on this device, for your account only. Event phases are separate from Alliance Faceoff.</p>
+            </details>
+            <p class="tool-footnote" id="planner-event-source"></p>
+          </div>
+        </section>
+
+        <section class="page hidden" id="page-tool-speedups" data-section="tool-speedups">
+          <div class="page-title"><h1>Speedups</h1></div>
+          <div class="tool-panel">
+            <div class="tool-form-grid">
+              <label>Days<input type="number" min="0" max="365" step="1" value="1" id="planner-speed-days"></label>
+              <label>Hours<input type="number" min="0" max="23" step="1" value="0" id="planner-speed-hours"></label>
+              <label>Minutes<input type="number" min="0" max="59" step="1" value="0" id="planner-speed-minutes"></label>
+            </div>
+            <div class="tool-total"><span>Time to skip</span><strong id="planner-speed-total">24h</strong></div>
+            <h2 class="tool-subtitle">If using only one speedup type</h2>
+            <div class="tool-stats" id="planner-speed-singles" aria-live="polite"></div>
+            <h2 class="tool-subtitle">My available speedups</h2>
+            <div class="tool-form-grid" id="planner-speed-inventory">
+              <label>1 minute<input type="number" min="0" step="1" data-speed-owned="1m" value="0"></label>
+              <label>5 minutes<input type="number" min="0" step="1" data-speed-owned="5m" value="0"></label>
+              <label>1 hour<input type="number" min="0" step="1" data-speed-owned="1h" value="0"></label>
+              <label>3 hours<input type="number" min="0" step="1" data-speed-owned="3h" value="0"></label>
+              <label>8 hours<input type="number" min="0" step="1" data-speed-owned="8h" value="0"></label>
+            </div>
+            <div id="planner-speed-mix" class="tool-total" aria-live="polite"></div>
+            <p class="tool-footnote">The combined suggestion uses the longest available speedups first and may not always be the mathematically optimal mix. The single-type counts round up when necessary.</p>
+          </div>
+        </section>
+
+        <section class="page hidden" id="page-tool-gathering" data-section="tool-gathering">
+          <div class="page-title"><h1>RSS Gathering</h1></div>
+          <div class="tool-panel">
+            <div class="tool-form-grid">
+              <label>Resource<select id="planner-gather-type"><option value="ammo">Ammo</option><option value="cash">Cash</option><option value="electricity">Electricity</option><option value="gas">Gas</option></select></label>
+              <label>Node level<select id="planner-gather-level"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option selected>8</option></select></label>
+              <label>Total gathering bonus (%)<input id="planner-gather-bonus" type="number" min="0" step="0.1" value="0"></label>
+            </div>
+            <div id="planner-gather-results" class="tool-total" aria-live="polite"></div>
+            <div class="table-container"><table class="tool-table"><thead><tr><th>Node level</th><th>Ammo/h</th><th>Cash/h</th><th>Electricity/h</th><th>Gas/h</th></tr></thead><tbody id="planner-gather-table"></tbody></table></div>
+            <p class="tool-footnote">Estimated gathering rates excluding officer carrying capacity, remaining node resources and any bonuses not entered above.</p>
+          </div>
+        </section>
+
         <section class="page hidden" id="page-accounts" data-section="accounts">
           <div class="page-title"><div><p class="section-kicker">ADMINISTRATION</p><h1>SaS – Accounts</h1></div></div>
           <div class="stats-grid accounts-stats">
@@ -227,13 +380,15 @@
 
       <aside class="right-sidebar" aria-label="Website navigation">
         <div class="sidebar-identity"><picture class="sidebar-picture"><source srcset="/assets/crest.avif" type="image/avif"><img src="/assets/logo.webp" alt="Saints and Sinners logo" width="88" height="88"></picture><strong>Saints and Sinners</strong><span>Alliance Website</span></div>
-        <p class="sidebar-heading">EXPLORE</p>
+        <p class="sidebar-heading">EXPLORE <span class="mobile-nav-hint">← Swipe to see more →</span></p>
         <nav class="sidebar-nav">
           <button type="button" data-view="events" class="selected"><span>Events</span><span class="nav-unread" data-unread="events" hidden aria-label="No new updates">0</span></button>
           <button type="button" data-view="alliance"><span>Alliance Events</span><span class="nav-unread" data-unread="alliance" hidden aria-label="No new updates">0</span></button>
           <button type="button" data-view="rss"><span>Alliance RSS</span><span class="nav-unread" data-unread="rss" hidden aria-label="No new updates">0</span></button>
           <button type="button" data-view="updates"><span>Website Updates</span><span class="nav-unread" data-unread="updates" hidden aria-label="No new updates">0</span></button>
           <button type="button" data-view="announcements"><span>HR Announcements</span><span class="nav-unread" data-unread="announcements" hidden aria-label="No new updates">0</span></button>
+          <span class="nav-group-label">TOOLS</span>
+          <button type="button" data-view="tool-overview"><span>Calculators</span><span class="nav-hint">6 sections</span></button>
           <button type="button" class="admin-only" data-view="accounts" hidden><span>SaS – Accounts</span><span id="accounts-badge" class="nav-unread" hidden>0</span></button>
         </nav>
         <div class="sidebar-footer"><span>SaS Alliance</span><span>All event times are UTC.</span></div>

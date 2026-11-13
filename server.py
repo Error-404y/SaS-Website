@@ -376,6 +376,30 @@ def clear_login_failures(category, source):
     with LOCK, connect() as db:
         db.execute("DELETE FROM auth_failures WHERE category=? AND source=?", (category, source))
 
+READ_KINDS = ("events", "alliance", "rss", "updates", "announcements")
+
+def member_read_snapshot(db):
+    snapshot = {kind: {} for kind in READ_KINDS if kind != "rss"}
+    snapshot["rss"] = ""
+    for row in db.execute("""SELECT id,kind,modified_at,created_at FROM entries
+        WHERE kind IN ('events','alliance','updates','announcements')"""):
+        snapshot[row["kind"]][str(row["id"])] = row["modified_at"] or row["created_at"] or str(row["id"])
+    rss_row = db.execute("SELECT value FROM settings WHERE key='rss_updated_at'").fetchone()
+    snapshot["rss"] = rss_row["value"] if rss_row else ""
+    return snapshot
+
+def member_read_state(db, member_id):
+    row = db.execute("SELECT seen_json FROM member_reads WHERE member_id=?", (member_id,)).fetchone()
+    if not row:
+        return {kind: {} if kind != "rss" else "" for kind in READ_KINDS}
+    try:
+        seen = json.loads(row["seen_json"])
+        if isinstance(seen, dict):
+            return {kind: seen.get(kind, {} if kind != "rss" else "") for kind in READ_KINDS}
+    except (ValueError, TypeError):
+        pass
+    return {kind: {} if kind != "rss" else "" for kind in READ_KINDS}
+
 def get_state():
     with LOCK, connect() as db:
         rows = db.execute("""SELECT id,kind,title,category,start_utc,end_utc,rewards,details,author,created_at,modified_at
@@ -509,6 +533,13 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if MAINTENANCE_MODE:
             return self.maintenance_response(path)
+        if path == "/api/reads":
+            player = members.member_session(self, connect, LOCK)
+            if not player or player["status"] != "approved":
+                return self.respond(401, {"error": "An approved player account is required."})
+            with LOCK, connect() as db:
+                seen = member_read_state(db, player["id"])
+            return self.respond(200, {"seen": seen})
         if path == "/api/state":
             player = members.member_session(self, connect, LOCK)
             if not current_session(self) and not (player and player["status"] == "approved"):
@@ -544,6 +575,8 @@ class Handler(BaseHTTPRequestHandler):
                   "/calendar.js": ("calendar.js", "text/javascript; charset=utf-8"),
                   "/rss.js": ("rss.js", "text/javascript; charset=utf-8"),
                   "/unread.js": ("unread.js", "text/javascript; charset=utf-8"),
+                  "/planner.js": ("planner.js", "text/javascript; charset=utf-8"),
+                  "/planner-ui.js": ("planner-ui.js", "text/javascript; charset=utf-8"),
                   "/styles.css": ("styles.css", "text/css; charset=utf-8"),
                   "/assets/logo.webp": ("assets/logo.webp", "image/webp"),
                   "/assets/crest.avif": ("assets/crest.avif", "image/avif")}
@@ -593,6 +626,26 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self.valid_request_origin():
                 return self.respond(403, {"error": "Cross-origin request rejected."})
+            if path == "/api/reads" and method == "POST":
+                player = members.member_session(self, connect, LOCK)
+                if not player or player["status"] != "approved":
+                    return self.respond(401, {"error": "An approved player account is required."})
+                if not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), player["csrf"]):
+                    return self.respond(403, {"error": "Invalid CSRF token."})
+                data = self.read_json()
+                kind = data.get("kind")
+                if kind not in READ_KINDS:
+                    return self.respond(400, {"error": "Unknown section."})
+                with LOCK, connect() as db:
+                    seen = member_read_state(db, player["id"])
+                    current = member_read_snapshot(db)
+                    seen[kind] = current[kind]
+                    db.execute("""INSERT INTO member_reads(member_id,seen_json,updated_at)
+                        VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE
+                        SET seen_json=excluded.seen_json,updated_at=excluded.updated_at""",
+                        (player["id"], json.dumps(seen, separators=(",", ":")),
+                         datetime.now(timezone.utc).isoformat()))
+                return self.respond(200, {"seen": seen})
             if path == "/api/password/request" and method == "POST":
                 source = self.client_address[0]
                 if login_throttled("password-request", source, limit=25):

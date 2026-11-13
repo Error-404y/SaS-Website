@@ -22,3 +22,6 @@ jobs:
       - run: node --test tests/rss.test.cjs
       - run: node --check unread.js
       - run: node --test tests/unread.test.cjs
+      - run: node --check planner.js
+      - run: node --check planner-ui.js
+      - run: node --test tests/planner.test.cjs

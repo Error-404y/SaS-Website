@@ -27,6 +27,11 @@ def setup(db):
         expires_at INTEGER NOT NULL
     )""")
     db.execute("CREATE INDEX IF NOT EXISTS member_sessions_owner ON member_sessions(member_id)")
+    db.execute("""CREATE TABLE IF NOT EXISTS member_reads (
+        member_id INTEGER PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,
+        seen_json TEXT NOT NULL DEFAULT '{}',
+        updated_at TEXT NOT NULL DEFAULT ''
+    )""")
     db.execute("""CREATE TABLE IF NOT EXISTS password_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         member_id INTEGER NOT NULL REFERENCES members(id),
