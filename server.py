@@ -495,6 +495,8 @@ def discord_account_notice(category, role, username, email="", player_name=""):
         fields.append({"name": "Email", "value": str(email)[:254], "inline": False})
     if player_name and category == "registration":
         fields.append({"name": "In-game name", "value": str(player_name)[:70], "inline": False})
+    if category == "login":
+        fields.append({"name": "Login (UTC)", "value": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"), "inline": False})
     payload = {"username": "SaS Account Notifications", "allowed_mentions": {"parse": []},
                "embeds": [{"title": title, "color": 5916792, "fields": fields}]}
     threading.Thread(target=discord_send, args=(category, url, payload),
