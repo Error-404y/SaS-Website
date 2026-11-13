@@ -233,16 +233,27 @@ def summaries(db, actor):
     return group + rest
 
 
-def history(db, actor, target):
+def history_page(db, actor, target, before=None):
     if not valid_actor(db, actor):
         raise PermissionError("Approved account required.")
     thread = thread_for(db, actor, target)
-    # Return recent messages in chronological order.
-    rows = db.execute("""SELECT id,sender_key,body,created_at FROM chat_messages
-        WHERE thread_key=? ORDER BY id DESC LIMIT ?""",
-        (thread, MAX_HISTORY)).fetchall()
-    messages = [dict(row) for row in reversed(rows)]
-    return messages
+    if before is not None:
+        if not isinstance(before,int) or before<=0:
+            raise ValueError("Invalid message cursor.")
+        rows = db.execute("""SELECT id,sender_key,body,created_at FROM chat_messages
+            WHERE thread_key=? AND id<? ORDER BY id DESC LIMIT ?""",
+            (thread, before, MAX_HISTORY+1)).fetchall()
+    else:
+        rows = db.execute("""SELECT id,sender_key,body,created_at FROM chat_messages
+            WHERE thread_key=? ORDER BY id DESC LIMIT ?""",
+            (thread, MAX_HISTORY+1)).fetchall()
+    has_more=len(rows)>MAX_HISTORY
+    messages=[dict(row) for row in reversed(rows[:MAX_HISTORY])]
+    return messages, has_more
+
+
+def history(db, actor, target):
+    return history_page(db,actor,target)[0]
 
 
 def send(db, actor, target, body):
