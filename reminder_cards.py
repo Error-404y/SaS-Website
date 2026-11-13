@@ -85,7 +85,7 @@ def send_card(webhook, title, start_utc, stage):
         "username": "SaS Website",
         "content": "@everyone" if stage == "red" else "",
         "allowed_mentions": {"parse": ["everyone"] if stage == "red" else []},
-        "embeds": [{"color": 15810350 if stage == "yellow" else 15810897,
+        "embeds": [{"color": 0xF5BA2E if stage == "yellow" else 0xF14151,
                     "image": {"url": "attachment://reminder.png"}}],
         "attachments": [{"id": 0, "filename": "reminder.png",
                          "description": "Event reminder showing name, time remaining and UTC start"}]
