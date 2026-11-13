@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fb">
+  <meta name="description" content="Saints and Sinners account sign in">
+  <title>SaS | Sign in</title>
+  <link rel="icon" href="/assets/logo.webp" type="image/webp">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/auth.js" defer></script>
+</head>
+<body>
+  <section id="auth-gate" class="auth-gate" aria-label="SaS account access">
+    <div class="auth-brand"><img src="/assets/logo.webp" alt="" width="65" height="65"><div><strong>SaS</strong><span>SAINTS AND SINNERS</span></div></div>
+    <div class="auth-card">
+      <div class="auth-emblem"><img src="/assets/logo.webp" alt="Saints and Sinners crest" width="96" height="96"></div>
+      <p class="auth-eyebrow">ALLIANCE ACCESS</p>
+      <h1 id="auth-heading">Welcome back</h1>
+      <p id="auth-subheading">Sign in to continue to Saints and Sinners.</p>
+      <div class="auth-tabs"><button type="button" class="auth-tab active" data-auth-tab="signin">Sign in</button><button type="button" class="auth-tab" data-auth-tab="register">Create account</button></div>
+      <form id="member-login-form" class="auth-form">
+        <label for="member-login-name">Username or email</label><input id="member-login-name" autocomplete="username" required placeholder="Your username or email">
+        <label for="member-login-password">Password</label><input id="member-login-password" type="password" autocomplete="current-password" required placeholder="Enter your password">
+        <button type="submit" class="auth-primary">Sign in</button>
+        <button type="button" class="auth-admin-link" id="forgot-password">Forgot your password?</button>
+      </form>
+      <form id="member-register-form" class="auth-form hidden">
+        <label for="member-username">Username</label><input id="member-username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_.-]+" autocomplete="username" required placeholder="Choose a username">
+        <label for="member-player">In-game player name</label><input id="member-player" minlength="2" maxlength="60" required placeholder="Your Police Chief name">
+        <label for="member-email">Email address</label><input id="member-email" type="email" maxlength="254" autocomplete="email" required placeholder="you@example.com">
+        <label for="member-password">Password</label><input id="member-password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required placeholder="At least 12 characters">
+        <button type="submit" class="auth-primary">Submit registration</button>
+      </form>
+      <form id="password-request-form" class="auth-form hidden">
+        <label for="reset-identifier">Username or email</label>
+        <input id="reset-identifier" required maxlength="254" autocomplete="username" placeholder="Enter your account username or email">
+        <button type="submit" class="auth-primary">Request password change</button>
+        <button type="button" class="auth-admin-link" id="have-reset-code">I have a reset code</button>
+        <button type="button" class="auth-admin-link" data-auth-back>Back to sign in</button>
+      </form>
+      <form id="password-complete-form" class="auth-form hidden">
+        <label for="reset-username">Username</label>
+        <input id="reset-username" required autocomplete="username">
+        <label for="reset-code">Reset code provided by an administrator</label>
+        <input id="reset-code" required autocomplete="off">
+        <label for="reset-new-password">New password</label>
+        <input id="reset-new-password" required type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="At least 12 characters">
+        <button type="submit" class="auth-primary">Change password</button>
+        <button type="button" class="auth-admin-link" data-auth-back>Back to sign in</button>
+      </form>
+      <p id="auth-feedback" class="auth-feedback" role="status" aria-live="polite"></p>
+      <button id="auth-admin" type="button" class="auth-admin-link">Administrator sign in</button>
+    </div>
+    <span class="auth-bottom">© SAINTS AND SINNERS · ALL TIMES UTC</span>
+  </section>
+
+
+  <dialog id="login-dialog" class="dialog auth-dialog">
+    <form id="login-form" autocomplete="on"><div class="dialog-top"><div><span class="section-kicker">EDITOR ACCESS</span><h2>Admin login</h2></div><button type="button" data-close="login-dialog" class="close-button" aria-label="Close">×</button></div>
+      <p class="form-intro">Administrator credentials are required to access and manage the alliance website.</p>
+      <label for="login-username">Username</label><input id="login-username" autocomplete="username" required>
+      <label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required>
+      <p class="form-error" id="login-error" aria-live="polite"></p>
+      <div class="dialog-actions"><button class="primary-button wide-button" type="submit">Sign in</button></div>
+    </form>
+  </dialog>
+</body>
+</html>
