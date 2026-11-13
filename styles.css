@@ -1004,3 +1004,24 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .private-email-eye[aria-pressed="true"] .private-eye-closed{display:none}
 .messenger-loading{font-size:12px}
 .messenger-shell.chat-open .messenger-chat{min-height:0}
+
+
+/* SaS Messenger onboarding: never expose group history until server-side join. */
+.messenger-chat{position:relative}
+.messenger-alliance-lock[hidden]{display:none!important}
+.messenger-alliance-lock{position:absolute;inset:75px 0 68px;z-index:4;display:grid;place-items:center;overflow:hidden;background:rgba(245,239,253,.76);backdrop-filter:blur(10px)}
+.messenger-alliance-blur{position:absolute;inset:0;display:flex;flex-direction:column;gap:22px;justify-content:center;padding:25px;filter:blur(15px);opacity:.7;pointer-events:none}
+.messenger-blur-bubble{height:51px;width:72%;border-radius:17px;background:#b6a5d0}
+.messenger-blur-bubble.short{align-self:flex-end;width:43%;background:#e0c9f0}
+.messenger-join-content{position:relative;display:grid;justify-items:center;gap:13px;text-align:center;padding:29px 24px;max-width:340px;border:1px solid #d6c2e7;border-radius:18px;background:rgba(255,255,255,.97);box-shadow:0 16px 36px rgba(63,37,87,.15)}
+.messenger-join-content strong{color:#4d306b;font-size:19px}
+.messenger-join-content p{margin:0;color:#69758a;font-size:13px;line-height:1.6}
+.messenger-join-content button{background:#704995;color:#fff;border:0;border-radius:12px;font-size:13px;font-weight:800;padding:13px 21px;cursor:pointer}
+.messenger-join-content button:hover{background:#583579}
+.messenger-join-content button:disabled{opacity:.55;cursor:wait}
+.messenger-contact.is-new-group{border-color:#bf9cdd;background:linear-gradient(135deg,#f1e8fa,#faf5fd)}
+.messenger-group-pin.is-new{background:#bb4762}
+.messenger-system-message{align-self:center;max-width:90%;font-size:11px;text-align:center;color:#674c85;background:#f0e7f8;border:1px solid #ddcdef;border-radius:99px;padding:9px 15px;overflow-wrap:anywhere}
+.messenger-own-profile{opacity:1;cursor:pointer!important;border-style:solid!important;background:#f9f5ff!important}
+.messenger-own-profile:hover{background:#eee5f7!important}
+@media(max-width:620px){.messenger-alliance-lock{inset:66px 0 66px}.messenger-join-content{margin:12px}}
