@@ -441,6 +441,111 @@ class SecurityBoundaryTests(unittest.TestCase):
         self.assertIn("channels", json.loads(raw))
         self.assertNotIn("api/webhooks", raw.decode())
 
+    def test_delayed_bans_are_admin_only_and_enforced_after_activation(self):
+        self.register("BanTarget", "approved")
+        player_cookie, player_csrf = self.login_member("BanTarget")
+        admin_cookie, admin_csrf = self.login_admin()
+        with server.connect() as db:
+            member_id = db.execute("SELECT id FROM members WHERE username='BanTarget'").fetchone()[0]
+        body = {"member_id": member_id, "kind": "email", "reason": "Moderation test"}
+        self.assertEqual(self.call("/api/bans", "POST", body)[0], 403)
+        self.assertEqual(self.call("/api/bans", "POST", body, player_cookie, player_csrf)[0], 403)
+        self.assertEqual(self.call("/api/bans", "POST", body, admin_cookie)[0], 403)
+        status, raw, _ = self.call("/api/bans", "POST", body, admin_cookie, admin_csrf)
+        self.assertEqual(status, 201, raw)
+        ban_id = json.loads(raw)["id"]
+        self.assertEqual(json.loads(raw)["delay_seconds"], 7200)
+        self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 200)
+        self.assertEqual(self.call("/api/bans", cookie=player_cookie)[0], 403)
+        status, raw, _ = self.call("/api/bans", cookie=admin_cookie)
+        self.assertEqual(status, 200, raw)
+        self.assertEqual(json.loads(raw)["bans"][0]["status"], "pending")
+        self.assertNotIn("selectors_json", raw.decode())
+
+        with server.connect() as db:
+            db.execute("UPDATE moderation_bans SET effective_at=? WHERE id=?",
+                       (int(time.time()) - 1, ban_id))
+        self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 403)
+        self.assertEqual(self.call("/api/messenger", cookie=player_cookie)[0], 403)
+        self.assertEqual(self.call("/index.html", cookie=player_cookie)[0], 403)
+        self.assertEqual(self.call("/api/session", cookie=player_cookie)[1],
+                         b'{"admin": false, "approved": false, "csrf": null, "username": null, "status": "restricted", "review_message": "", "admin_idle_timeout_seconds": null}')
+        self.assertEqual(self.call("/api/accounts", cookie=admin_cookie)[0], 200)
+        self.assertEqual(self.call("/api/bans/" + str(ban_id), "DELETE", cookie=player_cookie,
+                                   csrf=player_csrf)[0], 403)
+        status, raw, _ = self.call("/api/bans/" + str(ban_id), "DELETE",
+                                   cookie=admin_cookie, csrf=admin_csrf)
+        self.assertEqual(status, 200, raw)
+        self.assertFalse(json.loads(raw)["undone"])
+        self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 200)
+
+    def test_admin_can_cancel_all_pending_bans_without_touching_active(self):
+        self.register("FirstBan", "approved")
+        self.register("SecondBan", "approved")
+        admin_cookie, csrf = self.login_admin()
+        with server.connect() as db:
+            one = db.execute("SELECT id FROM members WHERE username='FirstBan'").fetchone()[0]
+            two = db.execute("SELECT id FROM members WHERE username='SecondBan'").fetchone()[0]
+        for member_id in (one, two):
+            status, raw, _ = self.call("/api/bans", "POST",
+                {"member_id": member_id, "kind": "email"}, admin_cookie, csrf)
+            self.assertEqual(status, 201, raw)
+        with server.connect() as db:
+            db.execute("UPDATE moderation_bans SET effective_at=? WHERE member_id=?",
+                       (int(time.time())-5, one))
+        self.assertEqual(self.call("/api/bans/cancel-pending", "POST", {})[0], 403)
+        self.assertEqual(self.call("/api/bans/cancel-pending", "POST",
+                                   {}, admin_cookie)[0], 403)
+        status, raw, _ = self.call("/api/bans/cancel-pending", "POST",
+                                   {}, admin_cookie, csrf)
+        self.assertEqual(status, 200, raw)
+        self.assertEqual(json.loads(raw)["cancelled"], 1)
+        with server.connect() as db:
+            active = db.execute("SELECT cancelled_at FROM moderation_bans WHERE member_id=?",
+                                (one,)).fetchone()
+            pending = db.execute("SELECT cancelled_at FROM moderation_bans WHERE member_id=?",
+                                 (two,)).fetchone()
+        self.assertIsNone(active["cancelled_at"])
+        self.assertIsNotNone(pending["cancelled_at"])
+
+    def test_banned_ip_blocks_member_but_does_not_lock_out_admin(self):
+        self.register("NetworkBan", "approved")
+        player_cookie, player_csrf = self.login_member("NetworkBan")
+        admin_cookie, admin_csrf = self.login_admin()
+        with server.connect() as db:
+            member_id = db.execute("SELECT id FROM members WHERE username='NetworkBan'").fetchone()[0]
+        status, raw, _ = self.call("/api/bans", "POST",
+            {"member_id": member_id, "kind": "ip"}, admin_cookie, admin_csrf)
+        self.assertEqual(status, 201, raw)
+        ban_id = json.loads(raw)["id"]
+        with server.connect() as db:
+            db.execute("UPDATE moderation_bans SET effective_at=? WHERE id=?",
+                       (int(time.time()) - 1, ban_id))
+        self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 403)
+        self.assertEqual(self.call("/api/member/login", "POST",
+            {"username": "NetworkBan", "password": "member-password-long"})[0], 403)
+        self.assertEqual(self.call("/api/accounts", cookie=admin_cookie)[0], 200)
+        self.assertEqual(self.call("/api/bans/" + str(ban_id), "DELETE",
+            cookie=admin_cookie, csrf=admin_csrf)[0], 200)
+        self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 200)
+
+    def test_event_point_and_scoring_fields_are_saved_and_returned(self):
+        admin_cookie, csrf = self.login_admin()
+        event = {"kind":"events","title":"SvS Test","category":"Events",
+                 "start_utc":"2030-02-01 10:00:00","end_utc":"2030-02-01 12:00:00",
+                 "rewards":"Three chests","points":"30K, 100K, 200K",
+                 "scoring":"Use construction speedups"}
+        status, raw, _ = self.call("/api/entries", "POST", event, admin_cookie, csrf)
+        self.assertEqual(status, 201, raw)
+        event_id = json.loads(raw)["id"]
+        self.register("EventViewer", "approved")
+        member_cookie, _ = self.login_member("EventViewer")
+        status, raw, _ = self.call("/api/state", cookie=member_cookie)
+        self.assertEqual(status, 200, raw)
+        item = next(r for r in json.loads(raw)["entries"] if r["id"] == event_id)
+        self.assertEqual(item["points"], event["points"])
+        self.assertEqual(item["scoring"], event["scoring"])
+
     def test_admin_login_rate_limit(self):
         for _ in range(10):
             status, _, _ = self.call("/api/login", "POST", {

@@ -77,3 +77,18 @@ test('all destructive actions use the SaS confirmation dialog, not browser-nativ
   assert.match(app,/title: 'Delete this entry\?'/);
   assert.match(app,/title: 'Remove spending record\?'/);
 });
+
+test('Event UI shows Reset Values, click hints, detailed scoring and ban modal',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
+  assert.match(html,/id="planner-reset-rates">Reset Values/);
+  assert.doesNotMatch(html,/Reset to screenshot values/i);
+  assert.match(app,/Click me · View details/);
+  assert.match(html,/id="entry-points"/);
+  assert.match(html,/id="entry-scoring"/);
+  assert.match(app,/How to Earn Points/);
+  assert.match(html,/id="ban-dialog"/);
+  assert.match(html,/id="ban-queue-cancel-all"/);
+  assert.match(app,/Cancel scheduled ban/);
+});

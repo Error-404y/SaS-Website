@@ -396,7 +396,7 @@
             </div>
             <details class="tool-settings"><summary>Custom point values</summary>
               <div id="planner-custom-points" class="tool-form-grid"></div>
-              <div class="tool-actions"><button type="button" class="small-button" id="planner-reset-rates">Reset to screenshot values</button></div>
+              <div class="tool-actions"><button type="button" class="small-button" id="planner-reset-rates">Reset Values</button></div>
               <p class="tool-footnote">Custom scoring values are saved on this device, for your account only. Event phases are separate from Alliance Faceoff.</p>
             </details>
             <p class="tool-footnote" id="planner-event-source"></p>
@@ -499,6 +499,9 @@
           <div class="page-title" style="margin-top:32px"><h2>Password change requests <span id="password-requests-badge" class="nav-unread" hidden>0</span></h2><button type="button" class="small-button" id="password-requests-refresh">Refresh requests</button></div>
           <p class="accounts-muted">New requests appear here. Approve to generate a one-time code and share it privately. Reviewed requests disappear from this list after 48 hours; unused codes expire after 1 hour.</p>
           <div id="password-requests-list" class="accounts-list"></div>
+          <div class="page-title" style="margin-top:32px"><h2>Moderation &amp; Ban Queue</h2><div class="ban-queue-controls"><button type="button" class="small-button" id="ban-queue-refresh">Refresh bans</button><button type="button" class="account-delete" id="ban-queue-cancel-all" hidden>Cancel All Pending Bans</button></div></div>
+          <p class="accounts-muted">Bans activate 2 hours after submission. Cancel a pending ban before activation, or lift it afterward.</p>
+          <div class="ban-queue-list" id="ban-queue-list" aria-live="polite"></div>
           <div class="page-title" style="margin-top:32px"><h2>Discord notifications</h2><button type="button" class="small-button" id="discord-status-refresh">Refresh status</button></div>
           <p class="accounts-muted">Check each webhook configuration and send a test message directly from the admin panel.</p>
           <div class="discord-status-grid" id="discord-status-grid" aria-live="polite">
@@ -541,6 +544,32 @@
     </div>
   </dialog>
 
+  <dialog id="ban-dialog" class="dialog">
+    <form id="ban-form">
+      <div class="dialog-top">
+        <div><span class="section-kicker">ADMIN MODERATION</span><h2>Schedule account ban</h2></div>
+        <button type="button" class="close-button" data-close="ban-dialog" aria-label="Close">×</button>
+      </div>
+      <input id="ban-member-id" type="hidden">
+      <p id="ban-member-name" class="form-intro"></p>
+      <label for="ban-kind">Ban type</label>
+      <select id="ban-kind" required>
+        <option value="ip">IP Ban</option>
+        <option value="email">Email Ban</option>
+        <option value="name">Name Ban (Username &amp; In-game Name)</option>
+        <option value="everything">Everything Ban</option>
+      </select>
+      <p class="accounts-muted" id="ban-ip-warning">IP bans use the verified network address recorded at sign-in. Shared networks may affect other players.</p>
+      <label for="ban-reason">Reason (optional)</label>
+      <textarea id="ban-reason" maxlength="500" rows="3" placeholder="Reason for moderation"></textarea>
+      <div class="ban-delay-info"><strong>2-hour waiting period</strong><span>This ban will not take effect immediately. It can be cancelled from the queue.</span></div>
+      <p id="ban-error" class="form-error" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" class="small-button" data-close="ban-dialog">Cancel</button>
+        <button type="submit" class="danger-button">Add to ban queue</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="account-edit-dialog" class="dialog">
     <form id="account-edit-form">
       <div class="dialog-top"><div><span class="section-kicker">SaS – ACCOUNTS</span><h2>Edit player account</h2></div><button type="button" class="close-button" data-close="account-edit-dialog" aria-label="Close">×</button></div>
@@ -642,7 +671,9 @@
       <div id="event-fields">
         <label for="entry-category">Category</label><select id="entry-category"><option>Events</option><option>Deals</option><option>Alliance</option><option>Port Inspection</option><option>Other</option></select>
         <div class="form-columns"><div><label for="entry-start">Start (UTC)</label><input id="entry-start" placeholder="YYYY-MM-DD HH:MM:SS" maxlength="19"></div><div><label for="entry-end">End (UTC)</label><input id="entry-end" placeholder="YYYY-MM-DD HH:MM:SS" maxlength="19"></div></div>
-        <label for="entry-rewards">Rewards</label><textarea id="entry-rewards" maxlength="1600" rows="2" placeholder="Optional rewards"></textarea>
+        <label for="entry-rewards">Rewards</label><textarea id="entry-rewards" maxlength="1600" rows="2" placeholder="What rewards can players receive?"></textarea>
+        <label for="entry-points">Points / Milestones</label><textarea id="entry-points" maxlength="1400" rows="2" placeholder="Example: Chest 1 — 30K points, Chest 2 — 100K points"></textarea>
+        <label for="entry-scoring">How to Earn Points</label><textarea id="entry-scoring" maxlength="3500" rows="3" placeholder="Explain which upgrades, actions or items award event points."></textarea>
       </div>
       <div id="author-field" class="hidden"><label for="entry-author">Announcement from</label><select id="entry-author"><option>R4</option><option>R5</option></select></div>
       <label for="entry-details" id="details-label">Details</label><textarea id="entry-details" maxlength="5000" rows="4" placeholder="Add more information"></textarea>
