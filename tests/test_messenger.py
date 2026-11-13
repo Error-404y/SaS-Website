@@ -149,6 +149,16 @@ class MessengerTests(unittest.TestCase):
         self.assertEqual(sender,aid)
         self.assertEqual(self.call("/api/messenger",cookie=b)[0],401)
 
+    def test_chat_rate_limit_blocks_bulk_spam(self):
+        a,ac,aid=self.login("Alpha")
+        for i in range(30):
+            self.assertEqual(self.call("/api/messenger/messages","POST",
+                {"peer":"alliance","body":"Message "+str(i)},a,ac)[0],201)
+        status,data=self.call("/api/messenger/messages","POST",
+            {"peer":"alliance","body":"Excess"},a,ac)
+        self.assertEqual(status,400)
+        self.assertIn("Too many messages",data["error"])
+
     def test_maintenance_switch_blocks_all_chat_apis(self):
         old=server.MAINTENANCE_MODE
         server.MAINTENANCE_MODE=True
