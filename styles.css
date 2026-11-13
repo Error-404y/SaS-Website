@@ -844,3 +844,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
  .ref-day-header{flex-direction:column}.ref-goal-label{text-align:left}
 }
 @media(max-width:425px){.ref-controls{grid-template-columns:1fr}.ref-result{align-items:flex-start;flex-direction:column}}
+
+
+.ref-speed-chart{border:1px solid #e3dcef;border-radius:12px;padding:14px;background:#fcfbfe}
+.ref-speed-chart summary{cursor:pointer;color:#574080;font-weight:800;font-size:13px}
+.ref-speed-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:15px 0}
+.ref-speed-tile{display:grid;gap:5px;padding:12px;background:white;border:1px solid #e7e2ef;border-radius:9px}
+.ref-speed-tile span{font-size:11px;color:#765b98;font-weight:700}
+.ref-speed-tile strong{font-size:16px;color:#28364f}
+.ref-speed-tile small{font-size:10px;color:#73849b}
+@media(max-width:750px){.ref-speed-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:430px){.ref-speed-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
