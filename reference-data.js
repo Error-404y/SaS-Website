@@ -82,12 +82,9 @@ const svs = {
       action('Hardened Steel',1,4000),action('Hero Exclusive Equipment material',1,8000),
       action('Electro Core',1,2000),...speedups(30),action('Valor Crystal',1,144000)]},
     {name:'Final Showdown',chests:[48000,120000,250000],actions:[
-      action('Defeat Lv 1–10 Criminal',1,9000),
-      action('Defeat Lv 11–15 Criminal',1,9750),
-      action('Defeat Lv 16–20 Criminal',1,10500),
-      action('Defeat Lv 21–25 Criminal',1,11250),
-      action('Defeat Lv 26–30 Criminal',1,12000),
-      action('Defeat Crime Boss rally',1,30000)]}
+      action('Occupy State Capitol/Cannon (60s per 1K power)',1,1),
+      ...[1,1,2,3,4,5,7,9,11,13].map((points,i)=>action('Defeat opposing Lv '+(i+1)+' Officer',1,points)),
+      ...[1,1,2,3,4,5,7,9,11,13].map((points,i)=>action('Lose or injure own Lv '+(i+1)+' Officer',1,points))]}
   ]
 };
 const chief = {
