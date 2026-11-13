@@ -662,13 +662,12 @@
     const visible = accounts.filter(item => (!filter || item.status === filter) &&
       [item.username, item.player_name, item.email].some(v => v.toLowerCase().includes(query)));
     one('#accounts-list').innerHTML = visible.map(item => {
-      const actions = item.status === 'pending' ?
-        '<button type="button" class="account-approve" data-account-approve="' + item.id + '">Approve</button>' +
-        '<button type="button" class="account-reject" data-account-reject="' + item.id + '">Reject</button>' :
-        item.status === 'approved' ?
-        '<button type="button" class="account-reject" data-account-reject="' + item.id + '">Revoke access</button>' :
-        '<button type="button" class="account-approve" data-account-approve="' + item.id + '">Approve</button>';
-      return '<article class="account-row"><div class="account-row-info"><button class="account-detail-open" type="button" data-account-detail="' + item.id + '">' + escapeHtml(item.player_name) + '</button>' +
+      const actions =
+        (item.status !== 'approved' ? '<button type="button" class="account-approve" data-account-approve="' + item.id + '">Accept</button>' : '') +
+        (item.status !== 'rejected' ? '<button type="button" class="account-reject" data-account-reject="' + item.id + '">Reject</button>' : '') +
+        '<button type="button" class="account-edit" data-account-edit="' + item.id + '">Edit</button>' +
+        '<button type="button" class="account-delete" data-account-delete="' + item.id + '">Delete</button>';
+      return '<article class="account-row status-' + item.status + '"><div class="account-row-info"><button class="account-detail-open" type="button" data-account-detail="' + item.id + '">' + escapeHtml(item.player_name) + '</button>' +
         '<span>@' + escapeHtml(item.username) + ' · ' + escapeHtml(item.email) +
         '</span><span>Registered ' + escapeHtml(item.created_at.slice(0, 10)) + '</span>' +
         (item.review_message ? '<p>Review note: ' + escapeHtml(item.review_message) + '</p>' : '') +
@@ -693,6 +692,9 @@
 
   function renderPasswordRequests() {
     const requests = site.passwordRequests || [];
+    const pending = requests.filter(item => item.status === 'pending').length;
+    one('#password-requests-badge').hidden = pending === 0;
+    one('#password-requests-badge').textContent = pending > 99 ? '99+' : String(pending);
     one('#password-requests-list').innerHTML = requests.map(item => {
       const actions = item.status === 'pending' ?
         '<button class="account-approve" type="button" data-reset-approve="' + item.id + '">Approve change</button>' +
@@ -782,6 +784,45 @@
     } catch (error) { authMessage(error.message); }
   }
 
+  function editAccount(id) {
+    if (!site.admin) return;
+    const member = (site.accounts || []).find(item => item.id === id);
+    if (!member) return;
+    one('#account-edit-id').value = String(member.id);
+    one('#account-edit-username').value = member.username;
+    one('#account-edit-player').value = member.player_name;
+    one('#account-edit-email').value = member.email;
+    one('#account-edit-error').textContent = '';
+    openDialog('account-edit-dialog');
+  }
+
+  async function saveAccountEdits(event) {
+    event.preventDefault();
+    if (!site.admin) return;
+    const id = Number(one('#account-edit-id').value);
+    try {
+      await request('/api/accounts/' + id, { method: 'PUT', body: JSON.stringify({
+        username: one('#account-edit-username').value.trim(),
+        player_name: one('#account-edit-player').value.trim(),
+        email: one('#account-edit-email').value.trim()
+      }) });
+      one('#account-edit-dialog').close();
+      await loadAccounts();
+      notify('Player account updated.');
+    } catch (error) { one('#account-edit-error').textContent = error.message; }
+  }
+
+  async function deleteAccount(id) {
+    if (!site.admin) return;
+    const member = (site.accounts || []).find(item => item.id === id);
+    if (!member || !confirm('Permanently delete @' + member.username + '? This also revokes their login and removes their reset requests. This cannot be undone.')) return;
+    try {
+      await request('/api/accounts/' + id, { method: 'DELETE' });
+      await loadAccounts();
+      notify('Account deleted permanently.');
+    } catch (error) { notify(error.message); }
+  }
+
   async function approveAccount(id) {
     try {
       await request('/api/accounts/' + id, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) });
@@ -818,6 +859,8 @@
   one('#auth-admin').addEventListener('click', () => openDialog('login-dialog'));
   one('#accounts-search').addEventListener('input', renderAccounts);
   one('#accounts-filter').addEventListener('change', renderAccounts);
+  one('#account-edit-form').addEventListener('submit', saveAccountEdits);
+  one('#password-requests-refresh').addEventListener('click', loadAccounts);
   one('#review-form').addEventListener('submit', submitReview);
   one('#forgot-password').addEventListener('click', () => recoveryView('request'));
   one('#have-reset-code').addEventListener('click', () => recoveryView('complete'));
@@ -839,6 +882,10 @@
     if (resetApprove && site.admin) approvePasswordChange(Number(resetApprove.dataset.resetApprove));
     const resetReject = event.target.closest('[data-reset-reject]');
     if (resetReject && site.admin) rejectPasswordChange(Number(resetReject.dataset.resetReject));
+    const editAccountButton = event.target.closest('[data-account-edit]');
+    if (editAccountButton && site.admin) editAccount(Number(editAccountButton.dataset.accountEdit));
+    const deleteAccountButton = event.target.closest('[data-account-delete]');
+    if (deleteAccountButton && site.admin) deleteAccount(Number(deleteAccountButton.dataset.accountDelete));
     const approve = event.target.closest('[data-account-approve]');
     if (approve && site.admin) approveAccount(Number(approve.dataset.accountApprove));
     const reject = event.target.closest('[data-account-reject]');
