@@ -534,13 +534,15 @@
     try {
       await request(site.admin ? '/api/logout' : '/api/member/logout', { method: 'POST', body: '{}' });
       site.member = false;
+      site.entries = [];
+      site.settings = {};
+      site.rss = null;
+      site.accounts = [];
+      site.passwordRequests = [];
+      site.loaded = false;
       setAdmin(false);
-      render();
       sessionStorage.removeItem('sas-entered');
-      one('#website').classList.add('hidden');
-      one('#entrance').classList.add('hidden');
-      one('#auth-gate').classList.remove('hidden');
-      notify('Signed out.');
+      window.location.replace('/');
     } catch (error) {
       notify(error.message);
     }
@@ -921,20 +923,17 @@
       await reload();
       if (site.admin) loadAccounts();
     } else {
-      one('#auth-gate').classList.remove('hidden');
-      if (session.status === 'pending') authMessage('Your account is awaiting administrator approval.');
-      if (session.status === 'rejected') authMessage('Your application was declined: ' + (session.review_message || 'Contact an administrator.'));
+      window.location.replace('/');
     }
-  }).catch(() => authMessage('Could not verify your session. Please refresh.'));
+  }).catch(() => window.location.replace('/'));
   setInterval(async () => {
     if (document.hidden || (!site.admin && !site.member)) return;
     try {
       const session = await request('/api/session');
       if (!session.admin && !session.approved) {
+        site.entries = []; site.accounts = []; site.rss = null;
         site.member = false; setAdmin(false);
-        one('#website').classList.add('hidden');
-        one('#auth-gate').classList.remove('hidden');
-        authMessage('Your account no longer has access.');
+        window.location.replace('/');
         return;
       }
       await reload();
