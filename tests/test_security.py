@@ -259,7 +259,7 @@ class SecurityBoundaryTests(unittest.TestCase):
         admin_cookie, admin_csrf = self.login_admin()
         event = {
             "kind": "announcements", "title": "New HR Announcement",
-            "details": "Members need to see this", "category": "",
+            "details": "Members need to see this", "category": "", "author": "R4",
         }
         status, raw, _ = self.call("/api/entries", "POST", event, admin_cookie, admin_csrf)
         self.assertEqual(status, 201, raw)
