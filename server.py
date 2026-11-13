@@ -2,6 +2,7 @@ import hmac
 import hashlib
 import members
 import messenger
+import ban_system
 import reminder_cards
 import json
 import logging
@@ -94,6 +95,9 @@ def init():
         )""")
         if "modified_at" not in {row["name"] for row in db.execute("PRAGMA table_info(entries)")}:
             db.execute("ALTER TABLE entries ADD COLUMN modified_at TEXT NOT NULL DEFAULT ''")
+        for field in ("points", "scoring"):
+            if field not in {row["name"] for row in db.execute("PRAGMA table_info(entries)")}:
+                db.execute("ALTER TABLE entries ADD COLUMN "+field+" TEXT NOT NULL DEFAULT ''")
         db.execute("""CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -132,6 +136,7 @@ def init():
         db.execute("DELETE FROM sessions WHERE last_activity_at=0")
         members.setup(db)
         messenger.setup(db)
+        ban_system.setup(db)
         db.execute("""CREATE TABLE IF NOT EXISTS auth_failures (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             category TEXT NOT NULL,
@@ -184,6 +189,8 @@ def validate_entry(data):
     title = clean(data.get("title", ""), 120, True)
     details = clean(data.get("details", ""), 5000)
     rewards = clean(data.get("rewards", ""), 1600)
+    points = clean(data.get("points", ""), 1400)
+    scoring = clean(data.get("scoring", ""), 3500)
     category = clean(data.get("category", ""), 60)
     author = clean(data.get("author", ""), 80)
     start = clean(data.get("start_utc", ""), 19)
@@ -200,11 +207,13 @@ def validate_entry(data):
         end = ""
         category = ""
         rewards = ""
+        points = ""
+        scoring = ""
         if kind == "announcements" and author not in ("R4", "R5"):
             raise ValueError("Choose R4 or R5.")
         if kind == "updates":
             author = ""
-    return kind, title, category, start, end, rewards, details, author
+    return kind, title, category, start, end, rewards, details, author, points, scoring
 
 def optional_rss_number(value, field, maximum=1000000000000000):
     if value is None or value == "":
@@ -433,7 +442,7 @@ def member_read_state(db, member_id):
 
 def get_state():
     with LOCK, connect() as db:
-        rows = db.execute("""SELECT id,kind,title,category,start_utc,end_utc,rewards,details,author,created_at,modified_at
+        rows = db.execute("""SELECT id,kind,title,category,start_utc,end_utc,rewards,details,author,points,scoring,created_at,modified_at
             FROM entries ORDER BY CASE WHEN kind IN ('events','alliance') THEN start_utc ELSE created_at END DESC, id DESC""").fetchall()
         settings = {r["key"]: r["value"] for r in db.execute("SELECT key,value FROM settings").fetchall()}
         spent = [dict(row) for row in db.execute("SELECT * FROM rss_spending ORDER BY spent_at,id").fetchall()]
@@ -717,10 +726,27 @@ class Handler(BaseHTTPRequestHandler):
             return messenger.member_key(player["id"]), player["csrf"]
         return None, None
 
+    def banned_client(self):
+        # The HTTP peer address is used, never an untrusted X-Forwarded-For.
+        if current_session(self):
+            return False  # Admins must retain an emergency unban path.
+        player = members.member_session(self, connect, LOCK)
+        with LOCK, connect() as db:
+            kwargs = {"ip": self.client_address[0]}
+            if player:
+                row = db.execute("SELECT username,player_name,email FROM members WHERE id=?",
+                                 (player["id"],)).fetchone()
+                if row:
+                    kwargs.update({key: row[key] for key in ("username","player_name","email")})
+            return ban_system.is_banned(db, **kwargs)
+
     def do_GET(self):
         path = urlsplit(self.path).path
         if MAINTENANCE_MODE:
             return self.maintenance_response(path)
+        if self.banned_client() and path not in ("/", "/auth.js", "/styles.css",
+            "/assets/logo.webp", "/assets/crest.avif", "/api/session"):
+            return self.respond(403, {"error": "Access restricted."})
         if path in ("/api/messenger", "/api/messenger/messages"):
             actor, csrf = self.messenger_actor()
             if actor is None:
@@ -756,6 +782,12 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 status = {key: dict(value) for key, value in NOTICE_STATUS.items()}
             return self.respond(200, {"channels": status})
+        if path == "/api/bans":
+            if not current_session(self):
+                return self.respond(403, {"error": "Administrator access required."})
+            with LOCK, connect() as db:
+                bans = ban_system.list_bans(db)
+            return self.respond(200, {"bans": bans, "delay_seconds": ban_system.WAIT_SECONDS})
         if path == "/api/accounts":
             if not current_session(self):
                 return self.respond(403, {"error": "Administrator access required."})
@@ -764,6 +796,9 @@ class Handler(BaseHTTPRequestHandler):
                     "SELECT * FROM members ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, created_at DESC")]
             with LOCK, connect() as db:
                 resets = members.list_password_requests(db)
+            with LOCK, connect() as db:
+                for account in accounts:
+                    account["last_ip"] = ban_system.member_ip(db, account["id"])
             return self.respond(200, {"accounts": accounts, "password_requests": resets})
         if path == "/api/session":
             session = current_session(self)
@@ -841,6 +876,31 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self.valid_request_origin():
                 return self.respond(403, {"error": "Cross-origin request rejected."})
+            if path != "/api/login" and self.banned_client():
+                return self.respond(403, {"error": "Access restricted."})
+            if path == "/api/bans" and method == "POST":
+                if not self.authorized():
+                    return
+                data = self.read_json()
+                member_id = data.get("member_id")
+                if isinstance(member_id, bool) or not isinstance(member_id, int) or member_id<1:
+                    raise ValueError("Select an account.")
+                with LOCK, connect() as db:
+                    try:
+                        ban_id = ban_system.queue(db, member_id, data.get("kind"), data.get("reason", ""))
+                    except LookupError:
+                        return self.respond(404, {"error": "Account not found."})
+                return self.respond(201, {"id": ban_id, "delay_seconds": ban_system.WAIT_SECONDS})
+            ban_match = re.fullmatch(r"/api/bans/(\\d+)", path)
+            if ban_match and method == "DELETE":
+                if not self.authorized():
+                    return
+                with LOCK, connect() as db:
+                    try:
+                        cancelled = ban_system.stop(db, int(ban_match.group(1)))
+                    except LookupError:
+                        return self.respond(404, {"error": "Ban not found."})
+                return self.respond(200, {"ok": True, "undone": cancelled})
             if path in ("/api/messenger/messages", "/api/messenger/read") and method == "POST":
                 actor, csrf = self.messenger_actor()
                 if actor is None:
@@ -940,7 +1000,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(429, {"error": "Too many registrations. Try later."})
                 values = self.read_json()
                 with LOCK, connect() as db:
+                    if ban_system.is_banned(db, ip=source, email=values.get("email", ""),
+                            username=values.get("username", ""), player_name=values.get("player_name", "")):
+                        return self.respond(403, {"error": "Registration restricted."})
                     members.register(db, values)
+                    row = db.execute("SELECT id FROM members WHERE username=?", (values["username"],)).fetchone()
+                    if row: ban_system.record_ip(db, row["id"], self.client_address[0])
                 note_login_failure("registration", source)
                 discord_account_notice("registration", "MEMBER", values.get("username", ""),
                     values.get("email", ""), values.get("player_name", ""))
@@ -960,10 +1025,14 @@ class Handler(BaseHTTPRequestHandler):
                         note_login_failure("member", source)
                         time.sleep(0.5)
                         return self.respond(401, {"error": "Invalid username or password."})
+                    if ban_system.is_banned(db, ip=self.client_address[0], email=row["email"],
+                            username=row["username"], player_name=row["player_name"]):
+                        return self.respond(403, {"error": "Access restricted."})
                     if row["status"] != "approved":
                         return self.respond(403, {"error": "Your account is awaiting approval." if row["status"] == "pending" else
                             "Your application was declined: " + (row["review_message"] or "Contact an administrator.")})
                     token, csrf = members.new_session(db, row["id"])
+                    ban_system.record_ip(db, row["id"], self.client_address[0])
                 clear_login_failures("member", source)
                 self.session_cookie("sas_member", token, {"approved": True, "admin": False, "csrf": csrf, "username": row["username"]})
                 discord_account_notice("login", "MEMBER", row["username"], row["email"])
@@ -1000,6 +1069,7 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute("DELETE FROM member_reads WHERE member_id=?", (member_id,))
                     db.execute("DELETE FROM member_sessions WHERE member_id=?", (member_id,))
                     messenger.purge_member(db, member_id)
+                    db.execute("DELETE FROM member_ips WHERE member_id=?", (member_id,))
                     db.execute("DELETE FROM members WHERE id=?", (member_id,))
                 return self.respond(200, {"ok": True})
             if account_match and method == "PUT":
@@ -1084,8 +1154,8 @@ class Handler(BaseHTTPRequestHandler):
                 values = validate_entry(self.read_json())
                 with LOCK, connect() as db:
                     stamp = datetime.now(timezone.utc).isoformat(timespec="microseconds")
-                    cursor = db.execute("""INSERT INTO entries(kind,title,category,start_utc,end_utc,rewards,details,author,created_at,modified_at)
-                        VALUES(?,?,?,?,?,?,?,?,?,?)""", (*values, stamp, stamp))
+                    cursor = db.execute("""INSERT INTO entries(kind,title,category,start_utc,end_utc,rewards,details,author,points,scoring,created_at,modified_at)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""", (*values, stamp, stamp))
                     created_id = cursor.lastrowid
                 return self.respond(201, {"id": created_id})
             match = re.fullmatch(r"/api/entries/(\d+)", path)
@@ -1098,7 +1168,7 @@ class Handler(BaseHTTPRequestHandler):
                         values = validate_entry(self.read_json())
                         stamp = datetime.now(timezone.utc).isoformat(timespec="microseconds")
                         cursor = db.execute("""UPDATE entries SET kind=?,title=?,category=?,start_utc=?,end_utc=?,
-                            rewards=?,details=?,author=?,modified_at=?,reminded_at=NULL,reminder_claimed_at=NULL WHERE id=?""",
+                            rewards=?,details=?,author=?,points=?,scoring=?,modified_at=?,reminded_at=NULL,reminder_claimed_at=NULL WHERE id=?""",
                             (*values, stamp, entry_id))
                     if cursor.rowcount == 0:
                         return self.respond(404, {"error": "Entry not found."})
