@@ -693,6 +693,10 @@
   function renderPasswordRequests() {
     const requests = site.passwordRequests || [];
     const pending = requests.filter(item => item.status === 'pending').length;
+    const accountPending = (site.accounts || []).filter(item => item.status === 'pending').length;
+    const totalPending = pending + accountPending;
+    one('#accounts-badge').hidden = totalPending === 0;
+    one('#accounts-badge').textContent = totalPending > 99 ? '99+' : String(totalPending);
     one('#password-requests-badge').hidden = pending === 0;
     one('#password-requests-badge').textContent = pending > 99 ? '99+' : String(pending);
     one('#password-requests-list').innerHTML = requests.map(item => {
@@ -1011,6 +1015,10 @@
       window.location.replace('/');
     }
   }).catch(() => window.location.replace('/'));
+  // Keep account approvals and password requests visible without manually refreshing.
+  setInterval(() => {
+    if (site.admin && !document.hidden) loadAccounts();
+  }, 15000);
   setInterval(async () => {
     if (document.hidden || (!site.admin && !site.member)) return;
     try {
