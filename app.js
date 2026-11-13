@@ -2,10 +2,13 @@
   const one = selector => document.querySelector(selector);
   const rssTools = window.SasRss;
   const unreadTools = window.SasUnread;
-  const readKey = 'sas-read-state-v1';
+  const readKey = 'sas-read-state-v1-admin';
   const all = selector => [...document.querySelectorAll(selector)];
   const site = { entries: [], settings: {}, rss: null, admin: false, member: false, csrf: null, page: 'events', selected: null, loaded: false, clockOffset: 0, rssFormRevision: '', rssFormInitialBalances: {}, rssFormInitialRemaining: '' };
-  const labels = { events: 'Events', alliance: 'Alliance Events', rss: 'Alliance RSS', updates: 'Website Updates', announcements: 'HR Announcements', accounts: 'SaS – Accounts' };
+  const labels = { events: 'Events', alliance: 'Alliance Events', rss: 'Alliance RSS',
+    updates: 'Website Updates', announcements: 'HR Announcements', accounts: 'SaS – Accounts',
+    'tool-overview': 'Calculators', 'tool-events': 'Event Points', 'tool-training': 'Troop Training',
+    'tool-buildings': 'Building Costs', 'tool-speedups': 'Speedups', 'tool-gathering': 'RSS Gathering' };
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const calendar = window.SasCalendar;
   const toTime = value => calendar.utcTime(value);
@@ -60,6 +63,7 @@
   }
 
   function storeReadState() {
+    if (site.member) return; // Approved players sync read state to SQLite instead.
     try {
       localStorage.setItem(readKey, JSON.stringify(readState));
     } catch (_) {
@@ -83,15 +87,39 @@
       const count = counts[node.dataset.unread] || 0;
       node.hidden = count === 0;
       node.textContent = count > 99 ? '99+' : String(count);
-      node.setAttribute('aria-label', count + ' new updates');
+      node.setAttribute('aria-label', count + ' unread items');
+      node.parentElement.toggleAttribute('data-unread-priority', count > 0);
     });
+    // Unread tabs move to the beginning; reading them restores the default order.
+    const kinds = unreadTools.sections;
+    const ranked = [...kinds].sort((a, b) =>
+      (counts[b] || 0) - (counts[a] || 0) || kinds.indexOf(a) - kinds.indexOf(b));
+    for (const kind of kinds) {
+      const button = one('.sidebar-nav [data-view="' + kind + '"]');
+      if (button) button.style.order = counts[kind] ? ranked.indexOf(kind) - 10 : kinds.indexOf(kind);
+    }
   }
 
   function acknowledgePage(kind) {
     if (!site.loaded) return;
     if (!readState) readState = unreadSnapshot();
-    readState = unreadTools.acknowledge(readState, unreadSnapshot(), kind);
-    storeReadState();
+    const current = unreadSnapshot();
+    const pending = unreadTools.count(current, readState)[kind] || 0;
+    if (!pending) return;
+    readState = unreadTools.acknowledge(readState, current, kind);
+    if (site.member) {
+      request('/api/reads', { method: 'POST', body: JSON.stringify({ kind }) })
+        .then(data => {
+          if (data && data.seen) {
+            // Merge the acknowledged section without erasing other local updates.
+            readState = { ...readState, [kind]: data.seen[kind] };
+            showUnread();
+          }
+        })
+        .catch(() => { /* Server read state is restored on next login. */ });
+    } else {
+      storeReadState();
+    }
     showUnread();
   }
 
@@ -127,8 +155,12 @@
         node.classList.add('page-animate');
       }
     });
+    const toolPage = name.startsWith('tool-');
+    one('#site-layout').classList.toggle('tools-open', toolPage);
+    one('#tools-sidebar').classList.toggle('hidden', !toolPage);
     all('[data-view]').forEach(node => {
-      const selected = node.dataset.view === name;
+      const selected = node.dataset.view === name ||
+        (toolPage && node.closest('.sidebar-nav') && node.dataset.view === 'tool-overview');
       node.classList.toggle('selected', selected);
       if (selected) node.setAttribute('aria-current', 'page');
       else node.removeAttribute('aria-current');
@@ -913,12 +945,18 @@
     }
   }, 1000);
   one('#entrance').classList.add('hidden');
+  window.SasPlannerUI?.init();
   const page = location.hash.slice(1);
   switchPage(labels[page] ? page : 'events');
   request('/api/session').then(async session => {
     site.member = !!session.approved && !session.admin;
     setAdmin(!!session.admin, session.csrf);
     if (session.admin || session.approved) {
+      window.SasPlannerUI?.setIdentity(session.username || 'admin');
+      if (site.member) {
+        const result = await request('/api/reads');
+        readState = result.seen || { events: {}, alliance: {}, rss: '', updates: {}, announcements: {} };
+      }
       unlockSite();
       await reload();
       if (site.admin) loadAccounts();
