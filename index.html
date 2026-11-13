@@ -324,18 +324,22 @@
               </label>
               <label>How many Event Points do you want?<input id="planner-target-points" type="number" min="0" step="1" value="1072170"></label>
               <input id="planner-count" type="hidden" value="722">
-              <label>Training time reduction (%)<input id="planner-training-reduction" type="number" min="0" max="99.99" step="0.1" value="0"></label>
+              <label>Actual time in-game for 722 troops
+                <input id="planner-actual-sample" type="text" inputmode="text" autocomplete="off" spellcheck="false"
+                  placeholder="e.g. 08:15:30 or 1d 02:15:30" aria-describedby="planner-actual-help">
+                <small id="planner-actual-help" class="tool-footnote">Enter the training time your game shows for 722 of the selected troops. Saved separately for each troop type.</small>
+              </label>
             </div>
             <button id="planner-capacity" class="capacity-toggle" type="button" aria-pressed="false"><span><strong class="capacity-title">Training Capacity UP (2h)</strong><small>Optional · +200% capacity means 3× troops, RSS and time</small></span><strong id="planner-capacity-state">OFF</strong></button>
             <h2 class="tool-subtitle">Troops needed for your point target</h2>
-            <p class="tool-footnote">Uses Phase 3 Officer Training points: Level IX = 1,485 points per troop; Level X = 1,960 points per troop. The +200% Training Capacity boost changes batch size, not points earned per troop.</p>
+            <p class="tool-footnote">Origin Time comes from the troop screenshots. Actual Time uses the training time you see in-game, which may be shorter. Phase 3 scoring: Level IX = 1,485 points and Level X = 1,960 points per troop.</p>
             <div class="tool-stats" id="planner-training-results" aria-live="polite"></div>
             <div class="tool-metadata" id="planner-training-notes"></div>
             <div class="tool-actions">
               <button type="button" id="planner-send-speedups" class="small-button">Calculate speedups →</button>
               <button type="button" id="planner-send-event" class="small-button">Officer event points →</button>
             </div>
-            <details class="tool-settings"><summary>How are these numbers calculated?</summary><p class="tool-footnote">The screenshots show rounded costs and training time for 722 troops. Other quantities are proportional estimates, not guaranteed in-game totals. With the +200% boost ON, 722 base troops become 2,166 and RSS/time increase 3×, as shown in the game screenshots. The pictured boost costs 3K Diamonds.</p></details>
+            <details class="tool-settings"><summary>How is training time calculated?</summary><p class="tool-footnote">The screenshot Origin Time is for 722 troops. Actual Time is calculated from the actual 722-troop duration you enter for the selected troop type. Both times scale with the number of troops. Because the available screenshots do not establish every actual time, no reduction is assumed. With Training Capacity UP enabled, the number of troops may be rounded up to a complete threefold batch.</p></details>
           </div>
         </section>
 
