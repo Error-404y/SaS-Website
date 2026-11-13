@@ -26,6 +26,7 @@
         <label for="member-login-name">Username or email</label><input id="member-login-name" autocomplete="username" required placeholder="Your username or email">
         <label for="member-login-password">Password</label><input id="member-login-password" type="password" autocomplete="current-password" required placeholder="Enter your password">
         <button type="submit" class="auth-primary">Sign in</button>
+        <button type="button" class="auth-admin-link" id="forgot-password">Forgot your password?</button>
       </form>
       <form id="member-register-form" class="auth-form hidden">
         <label for="member-username">Username</label><input id="member-username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_.-]+" autocomplete="username" required placeholder="Choose a username">
@@ -33,6 +34,23 @@
         <label for="member-email">Email address</label><input id="member-email" type="email" maxlength="254" autocomplete="email" required placeholder="you@example.com">
         <label for="member-password">Password</label><input id="member-password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required placeholder="At least 12 characters">
         <button type="submit" class="auth-primary">Submit registration</button>
+      </form>
+      <form id="password-request-form" class="auth-form hidden">
+        <label for="reset-identifier">Username or email</label>
+        <input id="reset-identifier" required maxlength="254" autocomplete="username" placeholder="Enter your account username or email">
+        <button type="submit" class="auth-primary">Request password change</button>
+        <button type="button" class="auth-admin-link" id="have-reset-code">I have a reset code</button>
+        <button type="button" class="auth-admin-link" data-auth-back>Back to sign in</button>
+      </form>
+      <form id="password-complete-form" class="auth-form hidden">
+        <label for="reset-username">Username</label>
+        <input id="reset-username" required autocomplete="username">
+        <label for="reset-code">Reset code provided by an administrator</label>
+        <input id="reset-code" required autocomplete="off">
+        <label for="reset-new-password">New password</label>
+        <input id="reset-new-password" required type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="At least 12 characters">
+        <button type="submit" class="auth-primary">Change password</button>
+        <button type="button" class="auth-admin-link" data-auth-back>Back to sign in</button>
       </form>
       <p id="auth-feedback" class="auth-feedback" role="status" aria-live="polite"></p>
       <button id="auth-admin" type="button" class="auth-admin-link">Administrator sign in</button>
@@ -201,6 +219,9 @@
           </div>
           <div class="filter-bar"><input id="accounts-search" type="search" placeholder="Search players or email..." aria-label="Search accounts"><select id="accounts-filter" aria-label="Filter accounts"><option value="">All accounts</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
           <div id="accounts-list" class="accounts-list"></div>
+          <div class="page-title" style="margin-top:32px"><h2>Password change requests</h2></div>
+          <p class="accounts-muted">Review requests and provide players with time-limited reset codes. Original passwords are never visible.</p>
+          <div id="password-requests-list" class="accounts-list"></div>
         </section>
       </main>
 
@@ -221,6 +242,41 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </div>
+
+  <dialog id="account-detail-dialog" class="dialog">
+    <div class="dialog-top"><div><span class="section-kicker">SaS – ACCOUNTS</span><h2>Player account details</h2></div>
+      <button type="button" class="close-button" data-close="account-detail-dialog" aria-label="Close">×</button></div>
+    <div class="account-detail-grid">
+      <div><span>In-game name</span><strong id="account-detail-player"></strong></div>
+      <div><span>Username</span><strong id="account-detail-username"></strong></div>
+      <div><span>Email</span><strong id="account-detail-email"></strong></div>
+      <div><span>Password</span><strong>Protected · Cannot be viewed</strong></div>
+      <div><span>Account status</span><strong id="account-detail-status"></strong></div>
+      <div><span>Created (UTC)</span><strong id="account-detail-created"></strong></div>
+      <div><span>Review message</span><strong id="account-detail-review"></strong></div>
+    </div>
+    <div class="dialog-actions"><button type="button" class="small-button" data-close="account-detail-dialog">Close</button></div>
+  </dialog>
+
+  <dialog id="reset-code-dialog" class="dialog">
+    <div class="dialog-top"><div><span class="section-kicker">PASSWORD RECOVERY</span><h2>One-time reset code</h2></div>
+      <button type="button" class="close-button" data-close="reset-code-dialog" aria-label="Close">×</button></div>
+    <p>Share this code privately with the player. It can only be used once, expires in one hour, and will not be shown again.</p>
+    <textarea id="admin-reset-code" readonly rows="2" aria-label="One-time password reset code"></textarea>
+    <div class="dialog-actions"><button type="button" class="small-button" data-close="reset-code-dialog">Close</button><button type="button" class="primary-button" id="copy-reset-code">Copy reset code</button></div>
+  </dialog>
+
+  <dialog id="reset-review-dialog" class="dialog">
+    <form id="reset-review-form">
+      <div class="dialog-top"><div><span class="section-kicker">PASSWORD RECOVERY</span><h2>Reject password change</h2></div>
+        <button type="button" class="close-button" data-close="reset-review-dialog" aria-label="Close">×</button></div>
+      <input type="hidden" id="reset-review-id">
+      <label for="reset-review-message">Reason for rejection</label>
+      <textarea id="reset-review-message" minlength="3" maxlength="500" rows="3" required placeholder="Why is this request being declined?"></textarea>
+      <p class="form-error" id="reset-review-error" aria-live="polite"></p>
+      <div class="dialog-actions"><button type="button" class="small-button" data-close="reset-review-dialog">Cancel</button><button type="submit" class="danger-button">Reject request</button></div>
+    </form>
+  </dialog>
 
   <dialog id="review-dialog" class="dialog">
     <form id="review-form">
