@@ -24,12 +24,21 @@ function renderEvent(kind){
   if(!nav||!target)return;
   nav.innerHTML=data.days.map((d,i)=>'<button type="button" data-reference-day="'+i+'" aria-pressed="'+(i===day)+'" class="'+(i===day?'active':'')+'">Day '+(i+1)+'<small>'+text(d.name)+'</small></button>').join('');
   const goal=current.chests.at(-1);
+  const speedRates=[...new Set(current.actions.filter(a=>a.name.toLowerCase().includes('speedup')).map(a=>a.points))];
+  const speedupChart=speedRates.length?
+    '<details class="ref-speed-chart" open><summary>Speedup point values (per item)</summary>'+
+    '<div class="ref-speed-grid">'+[{label:'1m',minutes:1},{label:'5m',minutes:5},{label:'1h',minutes:60},{label:'3h',minutes:180},{label:'8h',minutes:480}]
+      .map(item=>'<div class="ref-speed-tile"><span>'+item.label+'</span><strong>'+
+      fmt(item.minutes*speedRates[0])+' pts</strong><small id="ref-'+kind+'-speed-'+item.minutes+
+      '">'+fmt(Math.ceil(goal/(item.minutes*speedRates[0])))+' needed</small></div>').join('')+
+    '</div><p class="tool-footnote">Speedups for construction, research and training share this point rate on the selected day. This counts real speedup items used, not Diamond completions.</p></details>' : '';
   target.innerHTML=
     '<div class="ref-day-header"><div><p class="section-kicker">DAY '+(day+1)+'</p><h2>'+text(current.name)+'</h2></div><div class="ref-goal-label"><span>All chest rewards</span><strong>'+short(goal)+' pts</strong></div></div>'+
     '<div class="ref-chests">'+current.chests.map(pill).join('')+'</div>'+
     '<div class="ref-controls"><label>Points already earned<input id="ref-'+kind+'-earned" type="number" min="0" step="1" value="0"></label>'+
     '<label>Calculate for chest<select id="ref-'+kind+'-chest">'+current.chests.map((n,i)=>'<option value="'+n+'" '+(i===current.chests.length-1?'selected':'')+'>Chest '+(i+1)+' · '+short(n)+'</option>').join('')+'</select></label></div>'+
     '<div class="ref-result"><span>Points still needed</span><strong id="ref-'+kind+'-remaining">'+fmt(goal)+'</strong></div>'+
+    speedupChart+
     '<h3 class="tool-subtitle">How many items or speedups do I need?</h3>'+
     '<p class="tool-footnote">Each row shows how much of ONE action would reach the selected chest. Enter what you have to calculate combined points. Speedup rows count actual minutes used, not number of speedup items.</p>'+
     '<div class="table-container"><table class="tool-table ref-table"><thead><tr><th>Action</th><th>Points per unit</th><th>Needed alone</th><th>Planned amount</th></tr></thead><tbody id="ref-'+kind+'-actions">'+current.actions.map((a,i)=>actionRow(a,i,goal)).join('')+'</tbody></table></div>'+
@@ -60,6 +69,13 @@ function updateEvent(kind){
   el('ref-'+kind+'-remaining').textContent=fmt(needed);
   el('ref-'+kind+'-planned').textContent=fmt(total);
   el('ref-'+kind+'-after').textContent=fmt(Math.max(0,needed-total));
+  const speedRate=current.actions.find(a=>a.name.toLowerCase().includes('speedup'))?.points;
+  if(speedRate){
+    for(const minutes of [1,5,60,180,480]){
+      const node=el('ref-'+kind+'-speed-'+minutes);
+      if(node)node.textContent=fmt(Math.ceil(needed/(minutes*speedRate)))+' needed';
+    }
+  }
   const tbody=el('ref-'+kind+'-actions');
   tbody.querySelectorAll('tr').forEach((row,i)=>{
     const a=current.actions[i],quantity=R.requirements(needed,a.unit,a.points);
