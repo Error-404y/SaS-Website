@@ -195,6 +195,26 @@
       el('planner-capacity-state').textContent = active ? 'ON' : 'OFF';
       renderTraining();
     });
+    el('planner-send-speedups').addEventListener('click', () => {
+      const result = P.troops(el('planner-troop').value, el('planner-count').value,
+        el('planner-capacity').getAttribute('aria-pressed') === 'true',
+        el('planner-training-reduction').value);
+      if (!result) return;
+      const minutes = Math.ceil(result.seconds / 60);
+      el('planner-speed-days').value = Math.floor(minutes / 1440);
+      el('planner-speed-hours').value = Math.floor(minutes % 1440 / 60);
+      el('planner-speed-minutes').value = minutes % 60;
+      renderSpeedups();
+      document.querySelector('[data-view="tool-speedups"]').click();
+    });
+    el('planner-send-event').addEventListener('click', () => {
+      const troop = P.TROOPS[el('planner-troop').value];
+      if (!troop) return;
+      el('planner-phase').value = '3';
+      phaseInputs['3'] = { ...(phaseInputs['3'] || {}), ['officer' + troop.tier]: P.whole(el('planner-count').value) };
+      renderEvents(true);
+      document.querySelector('[data-view="tool-events"]').click();
+    });
     el('planner-building-level').addEventListener('change', renderBuildings);
     for (const id of ['planner-gather-type', 'planner-gather-level', 'planner-gather-bonus'])
       el(id).addEventListener('input', renderGathering);
