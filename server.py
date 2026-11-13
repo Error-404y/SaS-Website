@@ -1,6 +1,7 @@
 import hmac
 import hashlib
 import members
+import messenger
 import reminder_cards
 import json
 import logging
@@ -130,6 +131,7 @@ def init():
         # Re-authentication is required to establish a new 30-minute idle window.
         db.execute("DELETE FROM sessions WHERE last_activity_at=0")
         members.setup(db)
+        messenger.setup(db)
         db.execute("""CREATE TABLE IF NOT EXISTS auth_failures (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             category TEXT NOT NULL,
@@ -706,10 +708,36 @@ class Handler(BaseHTTPRequestHandler):
             return
         return self.respond(503, {"error": "Website is under maintenance."})
 
+    def messenger_actor(self):
+        admin = current_session(self)
+        if admin:
+            return messenger.ADMIN, admin["csrf"]
+        player = members.member_session(self, connect, LOCK)
+        if player and player["status"] == "approved":
+            return messenger.member_key(player["id"]), player["csrf"]
+        return None, None
+
     def do_GET(self):
         path = urlsplit(self.path).path
         if MAINTENANCE_MODE:
             return self.maintenance_response(path)
+        if path in ("/api/messenger", "/api/messenger/messages"):
+            actor, csrf = self.messenger_actor()
+            if actor is None:
+                return self.respond(401, {"error": "An approved account is required."})
+            if path == "/api/messenger":
+                with LOCK, connect() as db:
+                    contacts = messenger.summaries(db, actor)
+                return self.respond(200, {"me": actor, "contacts": contacts,
+                    "unread": sum(contact["unread"] for contact in contacts)})
+            from urllib.parse import parse_qs
+            peer = parse_qs(urlsplit(self.path).query).get("peer", [""])[0]
+            with LOCK, connect() as db:
+                try:
+                    messages = messenger.history(db, actor, peer)
+                except ValueError as exc:
+                    return self.respond(404, {"error": str(exc)})
+            return self.respond(200, {"me": actor, "peer": peer, "messages": messages})
         if path == "/api/reads":
             player = members.member_session(self, connect, LOCK)
             if not player or player["status"] != "approved":
@@ -761,6 +789,7 @@ class Handler(BaseHTTPRequestHandler):
                   "/unread.js": ("unread.js", "text/javascript; charset=utf-8"),
                   "/planner.js": ("planner.js", "text/javascript; charset=utf-8"),
                   "/planner-ui.js": ("planner-ui.js", "text/javascript; charset=utf-8"),
+                  "/messenger-ui.js": ("messenger-ui.js", "text/javascript; charset=utf-8"),
                   "/reference-data.js": ("reference-data.js", "text/javascript; charset=utf-8"),
                   "/reference-ui.js": ("reference-ui.js", "text/javascript; charset=utf-8"),
                   "/styles.css": ("styles.css", "text/css; charset=utf-8"),
@@ -812,6 +841,20 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self.valid_request_origin():
                 return self.respond(403, {"error": "Cross-origin request rejected."})
+            if path in ("/api/messenger/messages", "/api/messenger/read") and method == "POST":
+                actor, csrf = self.messenger_actor()
+                if actor is None:
+                    return self.respond(401, {"error": "An approved account is required."})
+                if not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), csrf):
+                    return self.respond(403, {"error": "Invalid CSRF token."})
+                values = self.read_json()
+                peer = values.get("peer", "")
+                with LOCK, connect() as db:
+                    if path == "/api/messenger/messages":
+                        message = messenger.send(db, actor, peer, values.get("body"))
+                        return self.respond(201, {"message": message})
+                    last_read_id = messenger.mark_read(db, actor, peer)
+                return self.respond(200, {"ok": True, "last_read_id": last_read_id})
             if path == "/api/notifications/test" and method == "POST":
                 if not self.authorized():
                     return
@@ -956,6 +999,7 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute("DELETE FROM password_requests WHERE member_id=?", (member_id,))
                     db.execute("DELETE FROM member_reads WHERE member_id=?", (member_id,))
                     db.execute("DELETE FROM member_sessions WHERE member_id=?", (member_id,))
+                    messenger.purge_member(db, member_id)
                     db.execute("DELETE FROM members WHERE id=?", (member_id,))
                 return self.respond(200, {"ok": True})
             if account_match and method == "PUT":
