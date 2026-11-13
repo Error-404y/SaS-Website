@@ -75,6 +75,30 @@ class MessengerTests(unittest.TestCase):
                 (hashlib.sha256(token.encode()).hexdigest(),csrf,now+43200,now))
         return "sas_session="+token,csrf
 
+    def test_existing_approved_accounts_keep_access_on_first_migration(self):
+        import sqlite3
+        import pathlib
+        with tempfile.TemporaryDirectory() as temp:
+            db=sqlite3.connect(pathlib.Path(temp)/"migration.sqlite")
+            db.row_factory=sqlite3.Row
+            try:
+                members.setup(db)
+                members.register(db, {"username":"Existing","player_name":"Veteran",
+                    "email":"existing@example.com","password":"long-password-123"})
+                db.execute("UPDATE members SET status='approved' WHERE username='Existing'")
+                existing=db.execute("SELECT id FROM members WHERE username='Existing'").fetchone()[0]
+                messenger.setup(db)
+                self.assertTrue(messenger.alliance_joined(db,messenger.member_key(existing)))
+                members.register(db, {"username":"Fresh","player_name":"New Player",
+                    "email":"fresh@example.com","password":"long-password-123"})
+                db.execute("UPDATE members SET status='approved' WHERE username='Fresh'")
+                fresh=db.execute("SELECT id FROM members WHERE username='Fresh'").fetchone()[0]
+                self.assertFalse(messenger.alliance_joined(db,messenger.member_key(fresh)))
+                messenger.setup(db)
+                self.assertFalse(messenger.alliance_joined(db,messenger.member_key(fresh)))
+            finally:
+                db.close()
+
     def test_guest_pending_rejected_cannot_read_or_send(self):
         for path in ("/api/messenger","/api/messenger/messages?peer=alliance"):
             self.assertEqual(self.call(path)[0],401)
