@@ -92,3 +92,27 @@ test('Event UI shows Reset Values, click hints, detailed scoring and ban modal',
   assert.match(html,/id="ban-queue-cancel-all"/);
   assert.match(app,/Cancel scheduled ban/);
 });
+
+test('Messenger exposes player list, pinned alliance and private group creation',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+  const ui=fs.readFileSync(path.join(__dirname,'../messenger-ui.js'),'utf8');
+  assert.match(html,/id="messenger-create-group"/);
+  assert.match(html,/id="messenger-group-dialog"/);
+  assert.match(html,/id="messenger-group-players"/);
+  assert.match(ui,/GROUP CHATS/);
+  assert.match(ui,/PLAYERS/);
+  assert.match(ui,/messenger-alliance-pinned/);
+  assert.match(ui,/Your profile/);
+  assert.match(ui,/api\\/messenger\\/groups/);
+});
+test('Troop Training now takes desired Phase 3 points, not an editable troop count',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+  const ui=fs.readFileSync(path.join(__dirname,'../planner-ui.js'),'utf8');
+  assert.match(html,/How many Event Points do you want\\?/);
+  assert.match(html,/id="planner-target-points"/);
+  assert.match(html,/id="planner-count" type="hidden"/);
+  assert.match(ui,/troopsForTargetPoints/);
+  assert.match(ui,/Minimum troops needed/);
+});
