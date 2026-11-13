@@ -153,6 +153,16 @@ The .env file and local SQLite databases are ignored by Git. Never commit admini
 
 All destructive administrator actions—permanent account deletion, deleting an event/announcement entry, and removing an RSS spending record—now use a consistent **SaS-styled confirmation popup** rather than a browser's built-in confirm/alert. Each popup has an explicit **Cancel** and action-specific delete button, supports keyboard Escape and focus management, and keeps text safely in `textContent`.
 
+### Delayed admin bans and detailed event cards
+
+**SaS – Accounts** now includes a **Ban** action next to each player plus a Moderation & Ban Queue. Admins can select **IP**, **Email**, **Name** (both account username and in-game name), or **Everything** (all of these) from an in-site popup, optionally add a reason, and submit a ban for review. Every ban has a **two-hour delay** stored on the server. Until its deadline, the queue shows it as *Pending* with an **Undo [type] Ban** button; after the deadline the restriction activates automatically and the same row offers **Unban**. No background scheduler is required; the SQLite record is evaluated against current UTC time for every affected account request. A cancelled or revoked ban stops restricting access immediately.
+
+This protection is **not a device ban**: the site cannot reliably identify a particular phone. It tracks the last actual HTTP peer IP for a registered member and checks that source on future requests. It intentionally **does not trust client-supplied X-Forwarded-For** values. Behind a reverse proxy, the peer address can represent the proxy instead of the visitor; IP bans can also affect unrelated people sharing the same network. Only use IP/Everything when the administrator sees a verified last IP, and verify hosting proxy configuration before relying on it. An approved admin session is exempt from moderation bans so admins can lift a bad ban even from a shared network. Bans on names/emails apply to those values; someone who changes both their details and their IP may evade them.
+
+Ban queue and removal endpoints require authenticated admin sessions **and CSRF tokens**. Members, guests, pending and rejected accounts cannot view the queue or schedule/cancel bans. Existing account deletion is separate and remains immediate.
+
+**Events and Alliance Events** show a clear *Click me · View details* hint on every row. Their detail popups include event title, UTC start/end, category/status, rewards, **Points / Milestones**, **How to Earn Points**, and optional notes. Admins can edit the two new event fields. Older events show *Not specified* until an admin fills them in; no event-point rules are invented. The **Reset Values** button in Event Points replaces the older screenshot-specific label.
+
 ### Account moderation and password recovery
 
 In **SaS – Accounts**, administrators can **Accept**, **Reject** (with a reason), **Edit** player name/username/email, and **Delete** accounts permanently after confirmation. Approved accounts appear in green and rejected ones in red. Deleting an account revokes its sessions and removes its pending password reset requests and unread state; make a database backup before bulk moderation.
