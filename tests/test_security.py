@@ -479,6 +479,35 @@ class SecurityBoundaryTests(unittest.TestCase):
         self.assertFalse(json.loads(raw)["undone"])
         self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 200)
 
+    def test_admin_can_cancel_all_pending_bans_without_touching_active(self):
+        self.register("FirstBan", "approved")
+        self.register("SecondBan", "approved")
+        admin_cookie, csrf = self.login_admin()
+        with server.connect() as db:
+            one = db.execute("SELECT id FROM members WHERE username='FirstBan'").fetchone()[0]
+            two = db.execute("SELECT id FROM members WHERE username='SecondBan'").fetchone()[0]
+        for member_id in (one, two):
+            status, raw, _ = self.call("/api/bans", "POST",
+                {"member_id": member_id, "kind": "email"}, admin_cookie, csrf)
+            self.assertEqual(status, 201, raw)
+        with server.connect() as db:
+            db.execute("UPDATE moderation_bans SET effective_at=? WHERE member_id=?",
+                       (int(time.time())-5, one))
+        self.assertEqual(self.call("/api/bans/cancel-pending", "POST", {})[0], 403)
+        self.assertEqual(self.call("/api/bans/cancel-pending", "POST",
+                                   {}, admin_cookie)[0], 403)
+        status, raw, _ = self.call("/api/bans/cancel-pending", "POST",
+                                   {}, admin_cookie, csrf)
+        self.assertEqual(status, 200, raw)
+        self.assertEqual(json.loads(raw)["cancelled"], 1)
+        with server.connect() as db:
+            active = db.execute("SELECT cancelled_at FROM moderation_bans WHERE member_id=?",
+                                (one,)).fetchone()
+            pending = db.execute("SELECT cancelled_at FROM moderation_bans WHERE member_id=?",
+                                 (two,)).fetchone()
+        self.assertIsNone(active["cancelled_at"])
+        self.assertIsNotNone(pending["cancelled_at"])
+
     def test_banned_ip_blocks_member_but_does_not_lock_out_admin(self):
         self.register("NetworkBan", "approved")
         player_cookie, player_csrf = self.login_member("NetworkBan")
