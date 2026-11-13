@@ -384,6 +384,61 @@ class SecurityBoundaryTests(unittest.TestCase):
         self.assertTrue(any(item["username"] == "LostPass" and item["status"] == "pending"
                             for item in listing))
 
+    def test_admin_auto_expires_after_30_minutes_without_human_activity(self):
+        cookie, csrf = self.login_admin()
+        status, data, _ = self.call("/api/session", cookie=cookie)
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(data)["admin"])
+        self.assertEqual(json.loads(data)["admin_idle_timeout_seconds"], 1800)
+        # Ordinary background API polling cannot refresh the admin idle window.
+        with server.connect() as db:
+            db.execute("UPDATE sessions SET last_activity_at=?",
+                       (int(time.time()) - 1799,))
+        self.assertEqual(self.call("/api/state", cookie=cookie)[0], 200)
+        self.assertEqual(self.call("/api/admin/activity", "POST", {}, cookie, csrf)[0], 200)
+        with server.connect() as db:
+            row = db.execute("SELECT last_activity_at FROM sessions").fetchone()
+            self.assertGreaterEqual(row["last_activity_at"], int(time.time())-2)
+            db.execute("UPDATE sessions SET last_activity_at=?",
+                       (int(time.time())-1801,))
+        self.assertEqual(self.call("/api/state", cookie=cookie)[0], 401)
+        self.assertEqual(self.call("/api/accounts", cookie=cookie)[0], 403)
+        self.assertEqual(self.call("/api/admin/activity", "POST", {}, cookie, csrf)[0], 403)
+        self.assertEqual(self.call("/api/entries", "POST", {
+            "kind": "updates", "title": "Expired admin", "details": "No write",
+        }, cookie, csrf)[0], 403)
+        self.assertFalse(json.loads(self.call("/api/session", cookie=cookie)[1])["admin"])
+
+    def test_admin_activity_requires_valid_csrf_and_session(self):
+        cookie, csrf = self.login_admin()
+        self.assertEqual(self.call("/api/admin/activity", "POST", {}, cookie)[0], 403)
+        self.assertEqual(self.call("/api/admin/activity", "POST", {}, cookie, "wrong")[0], 403)
+        self.assertEqual(self.call("/api/admin/activity", "POST", {}, cookie, csrf)[0], 200)
+        self.assertEqual(self.call("/api/admin/activity", "POST", {})[0], 403)
+
+    def test_discord_delivery_status_and_tests_are_admin_only(self):
+        from unittest.mock import patch
+        cookie, csrf = self.login_admin()
+        self.assertEqual(self.call("/api/notifications/status")[0], 403)
+        self.assertEqual(self.call("/api/notifications/test", "POST",
+                                   {"channel": "login"})[0], 403)
+        self.assertEqual(self.call("/api/notifications/test", "POST",
+                                   {"channel": "login"}, cookie)[0], 403)
+        self.assertEqual(self.call("/api/notifications/test", "POST",
+                                   {"channel": "invalid"}, cookie, csrf)[0], 400)
+        with patch.object(server, "LOGIN_WEBHOOK",
+                          "https://discord.com/api/webhooks/123456789/FakeTestToken"), \\
+             patch.object(server, "discord_send", return_value=True) as delivery:
+            status, raw, _ = self.call("/api/notifications/test", "POST",
+                                       {"channel": "login"}, cookie, csrf)
+            self.assertEqual(status, 200, raw)
+            delivery.assert_called_once()
+            self.assertEqual(delivery.call_args.args[0], "login")
+        status, raw, _ = self.call("/api/notifications/status", cookie=cookie)
+        self.assertEqual(status, 200, raw)
+        self.assertIn("channels", json.loads(raw))
+        self.assertNotIn("api/webhooks", raw.decode())
+
     def test_admin_login_rate_limit(self):
         for _ in range(10):
             status, _, _ = self.call("/api/login", "POST", {
