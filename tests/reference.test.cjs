@@ -50,3 +50,13 @@ test('Upcoming event urgency updates precisely at 4h and 1h',()=>{
  assert.equal(ref.upcomingUrgency(iso(0),now),'normal');
  assert.equal(ref.upcomingUrgency(iso(-20),now),'normal');
 });
+
+test('Guard X and Marksman X available; only Biker X is locked',()=>{
+  const html=require('node:fs').readFileSync(require('node:path').join(__dirname,'../index.html'),'utf8');
+  assert.match(html,/<option value="guard-10">/);
+  assert.match(html,/<option value="marksman-10">/);
+  assert.doesNotMatch(html,/<option value="biker-10">/);
+  assert.match(html,/data-locked-troop="Royal Biker — T10"/);
+  assert.doesNotMatch(html,/data-locked-troop="Royal Guard/);
+  assert.doesNotMatch(html,/data-locked-troop="Royal Marksman/);
+});
