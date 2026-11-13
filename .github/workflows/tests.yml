@@ -14,9 +14,10 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
-      - run: python -m py_compile server.py members.py reminder_cards.py main.py
+      - run: python -m py_compile server.py members.py messenger.py reminder_cards.py main.py
       - run: node --check auth.js
       - run: node --check app.js
+      - run: node --check messenger-ui.js
       - run: node --check calendar.js
       - run: node --test tests/calendar.test.cjs
       - run: node --check rss.js
