@@ -49,6 +49,17 @@ def setup(db):
     )""")
     db.execute("""CREATE INDEX IF NOT EXISTS chat_groups_by_member
         ON chat_group_members(member_key,group_id)""")
+    # Existing approved accounts retain their previous shared-chat access.
+    existing = db.execute("""SELECT 1 FROM sqlite_master WHERE type='table'
+        AND name='chat_alliance_members'""").fetchone()
+    db.execute("""CREATE TABLE IF NOT EXISTS chat_alliance_members (
+        member_key TEXT PRIMARY KEY,
+        joined_at TEXT NOT NULL
+    )""")
+    if not existing:
+        db.execute("""INSERT OR IGNORE INTO chat_alliance_members(member_key, joined_at)
+            SELECT 'member:' || id, ? FROM members WHERE status='approved'""",
+            (now_utc(),))
     # No email or password data is duplicated in the messenger.
 
 
@@ -69,6 +80,37 @@ def approved_member(db, key):
         return None
     return db.execute("""SELECT id,username,player_name FROM members
         WHERE id=? AND status='approved'""", (int(suffix),)).fetchone()
+
+
+def alliance_joined(db, actor):
+    if actor == ADMIN:
+        return True
+    return db.execute("SELECT 1 FROM chat_alliance_members WHERE member_key=?",
+                      (actor,)).fetchone() is not None
+
+
+def join_alliance(db, actor):
+    if not valid_actor(db, actor):
+        raise PermissionError("Approved account required.")
+    if actor == ADMIN:
+        return False
+    if alliance_joined(db, actor):
+        return False
+    member = approved_member(db, actor)
+    if member is None:
+        raise PermissionError("Approved account required.")
+    stamp = now_utc()
+    db.execute("""INSERT INTO chat_alliance_members(member_key,joined_at)
+                  VALUES(?,?)""", (actor,stamp))
+    # Created only once, on the first successful join. Subsequent POSTs are idempotent.
+    body = str(member["player_name"]) + " just Joined the Group-Chat !"
+    cur = db.execute("""INSERT INTO chat_messages(thread_key,sender_key,body,created_at)
+        VALUES('alliance','system',?,?)""", (body,stamp))
+    db.execute("""INSERT INTO chat_reads(member_key,thread_key,last_read_id)
+        VALUES(?,'alliance',?) ON CONFLICT(member_key,thread_key)
+        DO UPDATE SET last_read_id=MAX(last_read_id,excluded.last_read_id)""",
+        (actor,cur.lastrowid))
+    return True
 
 
 def group_details(db, actor, target):
@@ -112,12 +154,14 @@ def create_group(db, actor, name, participants):
 def thread_for(db, actor, target):
     """Validate each private target and derive a canonical two-person thread key."""
     if target == ALLIANCE:
+        if not alliance_joined(db, actor):
+            raise ValueError("Join SaS Group first.")
         return "alliance"
     if isinstance(target,str) and target.startswith("group:"):
         group_details(db,actor,target)
         return target
     if target == actor:
-        raise ValueError("Choose another member to message.")
+        return "notes:" + actor
     if target != ADMIN and approved_member(db, target) is None:
         raise ValueError("This player is not available.")
     pair = sorted((actor, target))
@@ -131,8 +175,10 @@ def valid_actor(db, actor):
 def contact_list(db, actor):
     rows = db.execute("""SELECT id,username,player_name FROM members
         WHERE status='approved' ORDER BY username COLLATE NOCASE,id LIMIT 1000""").fetchall()
+    joined = alliance_joined(db, actor)
     contacts = [{"id": ALLIANCE, "username": "SaS - Group Chat",
-                 "player_name": "Everyone in the alliance", "group": True, "pinned": True}]
+                 "player_name": "Everyone in the alliance", "group": True,
+                 "pinned": True, "joined": joined}]
     for group in db.execute("""SELECT g.id,g.name,COUNT(gm.member_key) AS participants
         FROM chat_groups g
         JOIN chat_group_members gm ON gm.group_id=g.id
@@ -161,7 +207,7 @@ def summaries(db, actor):
     summaries_out = []
     for contact in contacts:
         target = contact["id"]
-        if contact.get("self"):
+        if target == ALLIANCE and not contact["joined"]:
             summaries_out.append({**contact,"last_message":"","last_at":None,
                 "last_id":0,"last_sender":None,"unread":0})
             continue
@@ -266,4 +312,7 @@ def purge_member(db, member_id):
             db.execute("DELETE FROM chat_groups WHERE id=?",(group_id,))
     db.execute("UPDATE chat_groups SET creator_key='deleted' WHERE creator_key=?",(key,))
     db.execute("UPDATE chat_messages SET sender_key='deleted' WHERE sender_key=? AND thread_key LIKE 'group:%'",(key,))
+    db.execute("DELETE FROM chat_messages WHERE thread_key=?", ("notes:"+key,))
+    db.execute("DELETE FROM chat_reads WHERE thread_key=?", ("notes:"+key,))
+    db.execute("DELETE FROM chat_alliance_members WHERE member_key=?", (key,))
     db.execute("DELETE FROM chat_reads WHERE member_key=?", (key,))
