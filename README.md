@@ -29,7 +29,7 @@ Const-Web=false
 The **Calculators** item opens a separate tool workspace with its own **left navigation** on desktop and horizontally scrollable tabs on mobile. Existing Events, Alliance Events, Alliance RSS, Website Updates, HR Announcements and SaS – Accounts remain separate pages.
 
 - **Event Points**: rules from the provided in-game event screenshots for Phase 1 (PD Construction), Phase 3 (Officer Training Levels 4–10), Phase 4 (Resource Confiscation), and Phase 5 (Power Sprint). Alliance Faceoff gathering uses its **separate** point table. Specify an event target and entered quantities to calculate the score. Custom point values are stored *in the current browser for the signed-in username*, not published globally. Phase 2 is not inferred.
-- **Troop Training**: screenshot-backed rounded RSS costs and original training time for **722 troops**, for Honored Guard IX, Royal Guard X, Honored Biker IX, Honored Marksman IX and Royal Marksman X. Other quantities use proportional estimates, which may differ from actual in-game calculations and player-specific bonuses. The **Training Capacity UP (2h)** button models +200% to capacity *and* training duration; 3K Diamonds is the screenshot purchase price.
+- **Troop Training**: screenshot-backed rounded RSS costs and original training time for **722 troops**, for Honored Guard IX, Royal Guard X, Honored Biker IX, Honored Marksman IX and Royal Marksman X. Other quantities use proportional estimates, which may differ from actual in-game calculations and player-specific bonuses. The **Training Capacity UP (2h)** button now applies the requested **2× RSS cost and 2× training time**. The screenshot lists 3K Diamonds as the purchase price; the doubling is a user-selected planning rule rather than a verified universal game formula.
 - **Building Costs**: verified **Chief's Office** single-upgrade costs to Levels 10, 11, 15 and 20. The table does not incorrectly treat these as a cumulative range or estimate unknown levels.
 - **Speedups**: exactly the game's 1-minute, 5-minute, 1-hour, 3-hour and 8-hour items; time input produces the amount required of each individual speedup. An optional available-inventory calculation gives a **longest-first suggestion**, not a guaranteed optimal combination.
 - **RSS Gathering**: node gathering rate and bonus calculator. Ammo/Cash values are recorded for Levels 1–8, Electricity/Gas for Levels 5–8. Unconfirmed levels display **not recorded** instead of invented values.
@@ -107,6 +107,8 @@ Configure these environment variables privately through the hosting panel or a .
     SAS_DB_PATH=/home/container/data/website.sqlite3
     SAS_COOKIE_SECURE=1
     SAS_DISCORD_WEBHOOK_URL=
+    SAS_DISCORD_REGISTRATION_WEBHOOK_URL=
+    SAS_DISCORD_LOGIN_WEBHOOK_URL=
 
 The application uses SERVER_PORT provided by Bot-Hosting, then PORT, and finally 8080.
 
@@ -115,6 +117,17 @@ Keep SAS_COOKIE_SECURE=1 when accessing the website over HTTPS. For local HTTP d
 The .env file and local SQLite databases are ignored by Git. Never commit administrator credentials or webhook tokens.
 
 **Persistence matters:** The SQLite database path must remain on persistent storage when your service restarts or redeploys. Back up the database before changing your hosting runtime.
+
+### Discord registration and login notifications
+
+Create two Discord webhooks in your chosen channels and store them privately in `.env` or the host's environment settings:
+
+- `SAS_DISCORD_REGISTRATION_WEBHOOK_URL`: posts **New member registration** when registration succeeds (username, in-game name, email, role MEMBER). Useful as an admin approval reminder; no public link or account approval is included.
+- `SAS_DISCORD_LOGIN_WEBHOOK_URL`: posts **Website login** when a verified approved member or administrator successfully signs in, labeled MEMBER or ADMIN. Member email is included; the administrator login has no associated email stored, so only the admin username is shown.
+
+**Failed sign-in attempts, pending/rejected sign-ins, passwords, session tokens, and CSRF tokens are never sent to Discord.** Messages use `allowed_mentions: {parse: []}` so untrusted usernames cannot ping anyone. Webhook delivery is best-effort in a background thread; a Discord outage does not block login. Both URLs are optional; set only the notifications you want. Restart the Python service after updating `.env`.
+
+**Security:** Treat Discord webhook URLs like passwords. If a webhook URL has been pasted into a chat, log or public channel, revoke/regenerate it through Discord's webhook settings before use. Never commit a live webhook token to GitHub.
 
 ### Optional one-hour Discord reminder
 
