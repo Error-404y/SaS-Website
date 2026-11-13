@@ -42,6 +42,14 @@ The `/api/state` endpoint requires an approved member or administrator session. 
 
 The existing SQLite database configured by `SAS_DB_PATH` also contains `members` and `member_sessions` tables, created automatically on the next start. Keep this database file on persistent storage and back it up before deployment. Never commit the SQLite database, passwords or session tokens. HTTPS with `SAS_COOKIE_SECURE=1` is required in production.
 
+### Account details and password recovery
+
+In **SaS – Accounts**, click any player's in-game name to open the account details popup. It displays the in-game name, username, email, account status, registration date and review note. **Passwords cannot be viewed**: only password hashes are stored.
+
+If a player forgets their password, they select **Forgot your password?** on the login page and submit their username or email. The request is saved in the existing SQLite database, subject to a per-account 15-minute request interval. The response is intentionally identical for known and unknown accounts.
+
+Administrators can approve or reject the request under **SaS – Accounts → Password change requests**. A rejection requires an explanation. Approval generates a cryptographically random, single-use reset code displayed once to the administrator; it expires after one hour. The administrator must verify the player's identity and share the code via a trusted private channel. The player selects **I have a reset code**, enters the code, username and a new password (minimum 12 characters). Existing player sessions are revoked when the password changes. The website does not automatically email reset codes, and administrators cannot retrieve a code after dismissing it; the player may request another after the request interval.
+
 ## Editor access
 
 Only authorized site editors can change information. Choose **Admin login** and sign in using the credentials configured privately on the host. Editors can add, edit and delete events, announcements and updates, and change the RSS figures. Each edit is saved to a SQLite file shared by all website visitors.
