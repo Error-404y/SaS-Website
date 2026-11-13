@@ -74,6 +74,28 @@ class MemberAccountTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 members.complete_password_reset(db, "RecoverMe", code, "newer-password-123")
 
+    def test_reviewed_reset_request_visible_for_48_hours_only(self):
+        import time
+        with server.connect() as db:
+            members.register(db, {"username": "TimeKeeper", "player_name": "Time Player",
+                                  "email": "time@example.com", "password": "longer-password-123"})
+            members.request_password_reset(db, "TimeKeeper")
+            req_id = db.execute("SELECT id FROM password_requests").fetchone()[0]
+            self.assertEqual(len(members.list_password_requests(db)), 1)
+            code = members.review_password_request(db, req_id, "approved")
+            self.assertTrue(code)
+            self.assertEqual(len(members.list_password_requests(db)), 1)
+            db.execute("UPDATE password_requests SET reviewed_at=? WHERE id=?",
+                       (int(time.time()) - 47 * 3600, req_id))
+            self.assertEqual(len(members.list_password_requests(db)), 1)
+            db.execute("UPDATE password_requests SET reviewed_at=? WHERE id=?",
+                       (int(time.time()) - 49 * 3600, req_id))
+            self.assertEqual(members.list_password_requests(db), [])
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM password_requests").fetchone()[0], 1)
+            # The code security expiry is independent of admin list visibility.
+            with self.assertRaises(ValueError):
+                members.complete_password_reset(db, "TimeKeeper", "not-the-code", "new-secret-password-123")
+
     def test_reset_requests_are_limited_and_rejection_requires_reason(self):
         with server.connect() as db:
             members.register(db, {"username": "RejectMe", "player_name": "Test Player",
