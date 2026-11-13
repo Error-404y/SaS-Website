@@ -965,3 +965,25 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .ban-queue-controls{display:flex;flex-wrap:wrap;gap:9px;align-items:center;justify-content:flex-end}
 .ban-queue-controls .account-delete{white-space:normal}
 @media(max-width:750px){.ban-queue-controls{justify-content:flex-start}}
+
+
+/* Messenger player directory and private group creation */
+.messenger-create-group{margin:0 14px 10px;padding:11px 15px;border-radius:11px;border:1px solid #ad8bc9;background:#f2e9fa;color:#62417e;text-align:center;font-size:13px;font-weight:800;cursor:pointer}
+.messenger-create-group:hover{background:#e7d7f3}
+.messenger-list-help{font-size:11px;line-height:1.5;color:#79849a;margin:0 16px 12px}
+.messenger-section-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:16px 10px 7px;color:#7f6b96;letter-spacing:.11em;font-size:10px;font-weight:850}
+.messenger-section-heading span{letter-spacing:0;font-size:11px;font-weight:700;color:#9988a7}
+.messenger-alliance-pinned{background:linear-gradient(120deg,#eee0fa,#faf4fe);border-color:#d5b7ed!important;box-shadow:inset 3px 0 #9164bb}
+.messenger-alliance-pinned:hover{background:#e8d5f5}
+.messenger-alliance-pinned .messenger-contact-details strong{color:#593378}
+.messenger-group-pin{font-size:9px;border-radius:20px;padding:3px 7px;background:#a579c4;color:white;font-weight:800;vertical-align:middle}
+.messenger-group-dialog{width:min(92vw,480px)}
+#messenger-group-name,#messenger-group-player-search{display:block;width:100%;box-sizing:border-box;border-radius:10px;border:1px solid #d9d0e7;padding:12px;font-size:13px;margin:8px 0 15px;background:white;color:#2d3650}
+.messenger-player-picker{max-height:270px;overflow:auto;border:1px solid #e4dcec;border-radius:12px;background:#fcfaff;padding:7px;display:grid;gap:4px}
+.messenger-player-option{display:flex;align-items:center;gap:11px;border-radius:10px;padding:9px;cursor:pointer}
+.messenger-player-option:hover{background:#eee4f7}
+.messenger-player-option input{accent-color:#8354aa;width:17px;height:17px;flex:none}
+.messenger-player-option .messenger-avatar{width:34px;height:34px}
+.messenger-player-option>span:last-child{display:grid;gap:3px;min-width:0}
+.messenger-player-option strong{font-size:12px;color:#343550}
+.messenger-player-option small{font-size:11px;color:#788096}
