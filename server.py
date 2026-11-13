@@ -785,7 +785,7 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Username must be 3–32 characters.")
                 if not 2 <= len(player_name) <= 60:
                     raise ValueError("In-game name must be 2–60 characters.")
-                if not re.fullmatch(r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+", email) or len(email) > 254:
+                if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email) or len(email) > 254:
                     raise ValueError("Enter a valid email.")
                 with LOCK, connect() as db:
                     try:
