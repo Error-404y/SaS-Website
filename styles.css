@@ -867,3 +867,15 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .discord-status-indicator.is-unset{background:#fce9eb;color:#b3394e}
 .discord-status-card .small-button{align-self:flex-start}
 @media(max-width:760px){.discord-status-grid{grid-template-columns:1fr}}
+
+
+/* Consistent, keyboard-friendly in-app confirmation overlays. */
+.confirm-action-dialog{width:min(94vw,460px);padding:27px}
+.confirm-action-dialog::backdrop{background:rgba(24,17,44,.58);backdrop-filter:blur(7px)}
+.confirm-action-message{font-size:14px;color:#58667d;line-height:1.7;overflow-wrap:anywhere;margin:0}
+.confirm-action-dialog .dialog-top{border-color:#eae2f0}
+.confirm-action-dialog .dialog-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px}
+.confirm-action-dialog .confirm-action-submit{margin-right:0;background:#ba3e52;color:#fff;border:1px solid #ba3e52;font-weight:700}
+.confirm-action-dialog .confirm-action-submit:hover{background:#9f2e42;border-color:#9f2e42}
+.confirm-action-dialog .small-button{min-width:90px}
+@media(max-width:430px){.confirm-action-dialog{padding:19px}.confirm-action-dialog .dialog-actions{display:grid;grid-template-columns:1fr 1fr}.confirm-action-dialog .dialog-actions button{width:100%;margin:0}}
