@@ -391,14 +391,14 @@ def member_read_snapshot(db):
 def member_read_state(db, member_id):
     row = db.execute("SELECT seen_json FROM member_reads WHERE member_id=?", (member_id,)).fetchone()
     if not row:
-        return {kind: {} if kind != "rss" else "" for kind in READ_KIN}
+        return {kind: {} if kind != "rss" else "" for kind in READ_KINDS}
     try:
         seen = json.loads(row["seen_json"])
         if isinstance(seen, dict):
-            return {kind: seen.get(kind, {} if kind != "rss" else "") for kind in READ_KIN}
+            return {kind: seen.get(kind, {} if kind != "rss" else "") for kind in READ_KINDS}
     except (ValueError, TypeError):
         pass
-    return {kind: {} if kind != "rss" else "" for kind in READ_KIN}
+    return {kind: {} if kind != "rss" else "" for kind in READ_KINDS}
 
 def get_state():
     with LOCK, connect() as db:
