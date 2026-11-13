@@ -52,5 +52,44 @@ class MemberAccountTests(unittest.TestCase):
         self.assertIsNone(members.member_session(handler, server.connect, threading.RLock()))
 
 
+    def test_password_reset_approved_single_use_and_revokes_sessions(self):
+        with server.connect() as db:
+            members.register(db, {"username": "RecoverMe", "player_name": "Recover Player",
+                                  "email": "recover@example.com", "password": "previous-password-123"})
+            row = db.execute("SELECT * FROM members WHERE username='RecoverMe'").fetchone()
+            db.execute("UPDATE members SET status='approved' WHERE id=?", (row["id"],))
+            members.new_session(db, row["id"])
+            members.request_password_reset(db, "recover@example.com")
+            request = db.execute("SELECT * FROM password_requests").fetchone()
+            self.assertEqual(request["status"], "pending")
+            code = members.review_password_request(db, request["id"], "approved")
+            self.assertNotEqual(code, db.execute("SELECT code_hash FROM password_requests").fetchone()[0])
+            with self.assertRaises(ValueError):
+                members.complete_password_reset(db, "RecoverMe", "wrong-code", "next-password-123")
+            members.complete_password_reset(db, "RecoverMe", code, "next-password-123")
+            changed = db.execute("SELECT password_hash FROM members WHERE id=?", (row["id"],)).fetchone()[0]
+            self.assertTrue(members.check_password("next-password-123", changed))
+            self.assertFalse(members.check_password("previous-password-123", changed))
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM member_sessions").fetchone()[0], 0)
+            with self.assertRaises(ValueError):
+                members.complete_password_reset(db, "RecoverMe", code, "newer-password-123")
+
+    def test_reset_requests_are_limited_and_rejection_requires_reason(self):
+        with server.connect() as db:
+            members.register(db, {"username": "RejectMe", "player_name": "Test Player",
+                                  "email": "reject@example.com", "password": "previous-password-123"})
+            generic = members.request_password_reset(db, "unknown@example.com")
+            self.assertIn("submitted", generic["message"])
+            members.request_password_reset(db, "RejectMe")
+            members.request_password_reset(db, "RejectMe")
+            requests = db.execute("SELECT * FROM password_requests").fetchall()
+            self.assertEqual(len(requests), 1)
+            with self.assertRaises(ValueError):
+                members.review_password_request(db, requests[0]["id"], "rejected", "")
+            self.assertIsNone(members.review_password_request(db, requests[0]["id"], "rejected", "Could not verify identity"))
+            with self.assertRaises(ValueError):
+                members.review_password_request(db, requests[0]["id"], "approved")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -565,6 +565,9 @@
     all('[data-auth-tab]').forEach(node => node.classList.toggle('active', node.dataset.authTab === tab));
     one('#member-login-form').classList.toggle('hidden', tab !== 'signin');
     one('#member-register-form').classList.toggle('hidden', tab !== 'register');
+    one('#password-request-form').classList.add('hidden');
+    one('#password-complete-form').classList.add('hidden');
+    one('.auth-tabs').classList.remove('hidden');
     one('#auth-heading').textContent = tab === 'signin' ? 'Welcome back' : 'Join Saints and Sinners';
     one('#auth-subheading').textContent = tab === 'signin' ?
       'Sign in to continue to Saints and Sinners.' : 'Submit your account for alliance review.';
@@ -607,6 +610,7 @@
     try {
       const data = await request('/api/accounts');
       site.accounts = data.accounts || [];
+      site.passwordRequests = data.password_requests || [];
       renderAccounts();
     } catch (error) { notify(error.message); }
   }
@@ -630,13 +634,118 @@
         item.status === 'approved' ?
         '<button type="button" class="account-reject" data-account-reject="' + item.id + '">Revoke access</button>' :
         '<button type="button" class="account-approve" data-account-approve="' + item.id + '">Approve</button>';
-      return '<article class="account-row"><div class="account-row-info"><strong>' + escapeHtml(item.player_name) +
-        '</strong><span>@' + escapeHtml(item.username) + ' · ' + escapeHtml(item.email) +
+      return '<article class="account-row"><div class="account-row-info"><button class="account-detail-open" type="button" data-account-detail="' + item.id + '">' + escapeHtml(item.player_name) + '</button>' +
+        '<span>@' + escapeHtml(item.username) + ' · ' + escapeHtml(item.email) +
         '</span><span>Registered ' + escapeHtml(item.created_at.slice(0, 10)) + '</span>' +
         (item.review_message ? '<p>Review note: ' + escapeHtml(item.review_message) + '</p>' : '') +
         '</div><div class="account-actions"><span class="account-pill ' + item.status + '">' + item.status +
         '</span>' + actions + '</div></article>';
     }).join('') || '<p class="rss-empty-spending">No matching accounts.</p>';
+    renderPasswordRequests();
+  }
+
+  function accountDetails(id) {
+    if (!site.admin) return;
+    const member = (site.accounts || []).find(item => item.id === id);
+    if (!member) return;
+    one('#account-detail-player').textContent = member.player_name;
+    one('#account-detail-username').textContent = member.username;
+    one('#account-detail-email').textContent = member.email;
+    one('#account-detail-status').textContent = member.status;
+    one('#account-detail-created').textContent = member.created_at;
+    one('#account-detail-review').textContent = member.review_message || '—';
+    openDialog('account-detail-dialog');
+  }
+
+  function renderPasswordRequests() {
+    const requests = site.passwordRequests || [];
+    one('#password-requests-list').innerHTML = requests.map(item => {
+      const actions = item.status === 'pending' ?
+        '<button class="account-approve" type="button" data-reset-approve="' + item.id + '">Approve change</button>' +
+        '<button class="account-reject" type="button" data-reset-reject="' + item.id + '">Reject</button>' : '';
+      const date = new Date(item.created_at * 1000).toISOString().slice(0, 16).replace('T', ' ');
+      return '<article class="account-row"><div class="account-row-info"><strong>' +
+        escapeHtml(item.player_name) + '</strong><span>@' + escapeHtml(item.username) +
+        ' · ' + escapeHtml(item.email) + '</span><span>Requested: ' + date + ' UTC</span>' +
+        (item.review_message ? '<p>Reason: ' + escapeHtml(item.review_message) + '</p>' : '') +
+        '</div><div class="account-actions"><span class="account-pill ' + item.status + '">' +
+        escapeHtml(item.status) + '</span>' + actions + '</div></article>';
+    }).join('') || '<p class="rss-empty-spending">No password change requests.</p>';
+  }
+
+  async function approvePasswordChange(id) {
+    if (!site.admin || !confirm('Approve this password change request? You will receive a one-time code to share privately with the player.')) return;
+    try {
+      const result = await request('/api/password/requests/' + id, {
+        method: 'PATCH', body: JSON.stringify({ decision: 'approved' })
+      });
+      one('#admin-reset-code').value = result.reset_code;
+      openDialog('reset-code-dialog');
+      await loadAccounts();
+    } catch (error) { notify(error.message); }
+  }
+
+  function rejectPasswordChange(id) {
+    if (!site.admin) return;
+    one('#reset-review-id').value = String(id);
+    one('#reset-review-message').value = '';
+    one('#reset-review-error').textContent = '';
+    openDialog('reset-review-dialog');
+  }
+
+  async function submitPasswordReview(event) {
+    event.preventDefault();
+    try {
+      await request('/api/password/requests/' + one('#reset-review-id').value, {
+        method: 'PATCH', body: JSON.stringify({
+          decision: 'rejected', message: one('#reset-review-message').value.trim()
+        })
+      });
+      one('#reset-review-dialog').close();
+      await loadAccounts();
+      notify('Password change request rejected.');
+    } catch (error) { one('#reset-review-error').textContent = error.message; }
+  }
+
+  function recoveryView(view) {
+    one('#member-login-form').classList.toggle('hidden', view !== 'login');
+    one('#member-register-form').classList.add('hidden');
+    one('#password-request-form').classList.toggle('hidden', view !== 'request');
+    one('#password-complete-form').classList.toggle('hidden', view !== 'complete');
+    one('.auth-tabs').classList.toggle('hidden', view !== 'login');
+    one('#auth-heading').textContent = view === 'request' ? 'Forgot your password?' :
+      view === 'complete' ? 'Set a new password' : 'Welcome back';
+    one('#auth-subheading').textContent = view === 'request' ?
+      'Submit a password change request to your alliance administrator.' :
+      view === 'complete' ? 'Enter the one-time reset code provided by your administrator.' :
+      'Sign in to continue to Saints and Sinners.';
+    authMessage('');
+  }
+
+  async function requestPasswordChange(event) {
+    event.preventDefault();
+    try {
+      const result = await request('/api/password/request', {
+        method: 'POST', body: JSON.stringify({ identifier: one('#reset-identifier').value })
+      });
+      authMessage(result.message + ' Once approved, request your one-time code from an administrator.', true);
+    } catch (error) { authMessage(error.message); }
+  }
+
+  async function completePasswordChange(event) {
+    event.preventDefault();
+    try {
+      const result = await request('/api/password/complete', {
+        method: 'POST', body: JSON.stringify({
+          username: one('#reset-username').value,
+          code: one('#reset-code').value.trim(),
+          new_password: one('#reset-new-password').value
+        })
+      });
+      one('#password-complete-form').reset();
+      recoveryView('login');
+      authMessage(result.message, true);
+    } catch (error) { authMessage(error.message); }
   }
 
   async function approveAccount(id) {
@@ -676,8 +785,26 @@
   one('#accounts-search').addEventListener('input', renderAccounts);
   one('#accounts-filter').addEventListener('change', renderAccounts);
   one('#review-form').addEventListener('submit', submitReview);
+  one('#forgot-password').addEventListener('click', () => recoveryView('request'));
+  one('#have-reset-code').addEventListener('click', () => recoveryView('complete'));
+  all('[data-auth-back]').forEach(node => node.addEventListener('click', () => recoveryView('login')));
+  one('#password-request-form').addEventListener('submit', requestPasswordChange);
+  one('#password-complete-form').addEventListener('submit', completePasswordChange);
+  one('#reset-review-form').addEventListener('submit', submitPasswordReview);
+  one('#copy-reset-code').addEventListener('click', () => {
+    const value = one('#admin-reset-code').value;
+    if (value) navigator.clipboard.writeText(value).then(() => notify('Reset code copied. Share privately.'))
+      .catch(() => { one('#admin-reset-code').select(); notify('Select the code and copy it manually.'); });
+  });
+  one('#reset-code-dialog').addEventListener('close', () => { one('#admin-reset-code').value = ''; });
 
   document.addEventListener('click', event => {
+    const accountDetail = event.target.closest('[data-account-detail]');
+    if (accountDetail && site.admin) accountDetails(Number(accountDetail.dataset.accountDetail));
+    const resetApprove = event.target.closest('[data-reset-approve]');
+    if (resetApprove && site.admin) approvePasswordChange(Number(resetApprove.dataset.resetApprove));
+    const resetReject = event.target.closest('[data-reset-reject]');
+    if (resetReject && site.admin) rejectPasswordChange(Number(resetReject.dataset.resetReject));
     const approve = event.target.closest('[data-account-approve]');
     if (approve && site.admin) approveAccount(Number(approve.dataset.accountApprove));
     const reject = event.target.closest('[data-account-reject]');

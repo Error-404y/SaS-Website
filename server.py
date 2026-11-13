@@ -463,7 +463,9 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK, connect() as db:
                 accounts = [members.public_member(row) for row in db.execute(
                     "SELECT * FROM members ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, created_at DESC")]
-            return self.respond(200, {"accounts": accounts})
+            with LOCK, connect() as db:
+                resets = members.list_password_requests(db)
+            return self.respond(200, {"accounts": accounts, "password_requests": resets})
         if path == "/api/session":
             session = current_session(self)
             player = members.member_session(self, connect, LOCK)
@@ -510,6 +512,30 @@ class Handler(BaseHTTPRequestHandler):
     def write(self, method):
         path = urlsplit(self.path).path
         try:
+            if path == "/api/password/request" and method == "POST":
+                data = self.read_json()
+                with LOCK, connect() as db:
+                    result = members.request_password_reset(db, data.get("identifier"))
+                return self.respond(200, result)
+            if path == "/api/password/complete" and method == "POST":
+                data = self.read_json()
+                with LOCK, connect() as db:
+                    result = members.complete_password_reset(db, data.get("username"),
+                        data.get("code"), data.get("new_password"))
+                return self.respond(200, result)
+            reset_review_match = re.fullmatch(r"/api/password/requests/(\d+)", path)
+            if reset_review_match and method == "PATCH":
+                if not self.authorized():
+                    return
+                data = self.read_json()
+                with LOCK, connect() as db:
+                    try:
+                        code = members.review_password_request(db, int(reset_review_match.group(1)),
+                            data.get("decision"), data.get("message", ""))
+                    except LookupError:
+                        return self.respond(404, {"error": "Password request not found."})
+                return self.respond(200, {"ok": True, "reset_code": code,
+                    "message": "Share the reset code privately with the player. It expires in one hour and is shown only once." if code else "Request rejected."})
             if path == "/api/register" and method == "POST":
                 values = self.read_json()
                 with LOCK, connect() as db:

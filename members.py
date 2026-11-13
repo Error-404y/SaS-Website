@@ -27,6 +27,18 @@ def setup(db):
         expires_at INTEGER NOT NULL
     )""")
     db.execute("CREATE INDEX IF NOT EXISTS member_sessions_owner ON member_sessions(member_id)")
+    db.execute("""CREATE TABLE IF NOT EXISTS password_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id INTEGER NOT NULL REFERENCES members(id),
+        status TEXT NOT NULL DEFAULT 'pending'
+            CHECK(status IN ('pending','approved','rejected','completed')),
+        created_at INTEGER NOT NULL,
+        reviewed_at INTEGER,
+        review_message TEXT NOT NULL DEFAULT '',
+        code_hash TEXT,
+        code_expires_at INTEGER
+    )""")
+    db.execute("CREATE INDEX IF NOT EXISTS password_requests_member ON password_requests(member_id, created_at)")
 
 def password_hash(password):
     salt = secrets.token_bytes(16)
@@ -88,3 +100,69 @@ def new_session(db, member_id):
 def public_member(row):
     return {key: row[key] for key in ('id', 'username', 'player_name', 'email', 'status',
                                       'review_message', 'created_at', 'reviewed_at')}
+
+def request_password_reset(db, identifier):
+    """Issue a generic response for known/unknown users. Limit one request per 15 min."""
+    if not isinstance(identifier, str) or not 1 <= len(identifier.strip()) <= 254:
+        raise ValueError("Enter your account username or email.")
+    identifier = identifier.strip()
+    row = db.execute("SELECT id FROM members WHERE username=? OR email=?",
+                     (identifier, identifier)).fetchone()
+    if row:
+        now = int(time.time())
+        recent = db.execute("""SELECT id FROM password_requests
+            WHERE member_id=? AND created_at>? ORDER BY id DESC LIMIT 1""",
+            (row["id"], now - 900)).fetchone()
+        if not recent:
+            db.execute("""UPDATE password_requests SET status='rejected',
+                review_message='Superseded by a new request',reviewed_at=?,code_hash=NULL,code_expires_at=NULL
+                WHERE member_id=? AND status IN ('pending','approved')""",
+                (now, row["id"]))
+            db.execute("INSERT INTO password_requests(member_id,status,created_at) VALUES(?,'pending',?)",
+                       (row["id"], now))
+    return {"message": "If the account exists, a password change request has been submitted for administrator review."}
+
+def list_password_requests(db):
+    return [dict(row) for row in db.execute("""SELECT p.id,p.member_id,p.status,p.created_at,
+        p.reviewed_at,p.review_message,p.code_expires_at,m.username,m.player_name,m.email
+        FROM password_requests p JOIN members m ON m.id=p.member_id
+        ORDER BY CASE p.status WHEN 'pending' THEN 0 ELSE 1 END,p.created_at DESC LIMIT 300""")]
+
+def review_password_request(db, request_id, decision, message=""):
+    if decision not in ("approved", "rejected"):
+        raise ValueError("Invalid review decision.")
+    if decision == "rejected" and (not isinstance(message, str) or not 3 <= len(message.strip()) <= 500):
+        raise ValueError("A rejection reason (3–500 characters) is required.")
+    row = db.execute("SELECT * FROM password_requests WHERE id=?", (request_id,)).fetchone()
+    if not row:
+        raise LookupError("Password request not found.")
+    if row["status"] != "pending":
+        raise ValueError("This request has already been reviewed.")
+    now = int(time.time())
+    code = secrets.token_urlsafe(32) if decision == "approved" else None
+    db.execute("""UPDATE password_requests SET status=?,reviewed_at=?,review_message=?,
+        code_hash=?,code_expires_at=? WHERE id=? AND status='pending'""",
+        (decision, now, message.strip() if decision == "rejected" else "",
+         hashlib.sha256(code.encode()).hexdigest() if code else None,
+         now + 3600 if code else None, request_id))
+    return code
+
+def complete_password_reset(db, username, code, new_password):
+    if not isinstance(username, str) or not isinstance(code, str) or not isinstance(new_password, str):
+        raise ValueError("Invalid password reset.")
+    if not 12 <= len(new_password) <= 128:
+        raise ValueError("Password must be at least 12 characters.")
+    if len(code) > 256:
+        raise ValueError("Invalid or expired reset code.")
+    row = db.execute("""SELECT p.id,p.member_id,p.code_hash,p.code_expires_at
+        FROM password_requests p JOIN members m ON p.member_id=m.id
+        WHERE m.username=? AND p.status='approved' ORDER BY p.id DESC LIMIT 1""",
+        (username.strip(),)).fetchone()
+    if not row or not row["code_hash"] or not row["code_expires_at"] or row["code_expires_at"] < int(time.time()) or not hmac.compare_digest(hashlib.sha256(code.encode()).hexdigest(),row["code_hash"]):
+        raise ValueError("Invalid or expired reset code.")
+    db.execute("UPDATE members SET password_hash=? WHERE id=?",
+               (password_hash(new_password), row["member_id"]))
+    db.execute("""UPDATE password_requests SET status='completed',code_hash=NULL,
+        code_expires_at=NULL WHERE id=?""", (row["id"],))
+    db.execute("DELETE FROM member_sessions WHERE member_id=?", (row["member_id"],))
+    return {"message": "Password changed. You can now sign in."}
