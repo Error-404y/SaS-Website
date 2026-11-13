@@ -891,7 +891,7 @@ class Handler(BaseHTTPRequestHandler):
                     except LookupError:
                         return self.respond(404, {"error": "Account not found."})
                 return self.respond(201, {"id": ban_id, "delay_seconds": ban_system.WAIT_SECONDS})
-            ban_match = re.fullmatch(r"/api/bans/(\\d+)", path)
+            ban_match = re.fullmatch(r"/api/bans/(\d+)", path)
             if ban_match and method == "DELETE":
                 if not self.authorized():
                     return
