@@ -25,3 +25,6 @@ jobs:
       - run: node --check planner.js
       - run: node --check planner-ui.js
       - run: node --test tests/planner.test.cjs
+      - run: node --check reference-data.js
+      - run: node --check reference-ui.js
+      - run: node --test tests/reference.test.cjs
