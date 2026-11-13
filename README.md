@@ -24,13 +24,22 @@ Const-Web=false
 
 **Restart the Python application after changing this value.** Changing the `.env` file alone does not update a running server. The switch changes access control, not the database: accounts, events and RSS information remain saved. Keep `SAS_DB_PATH` persistent. The maintenance document is `maintenance.html` and is intentionally separate from the login and application pages. It contains the approved purple SaS Under Construction artwork embedded as a self-contained WebP image (no separate image upload is required), with **no navigation or sign-in controls**. During maintenance **every other path**, including images, scripts, private pages and API routes, returns HTTP 503.
 
+## Messenger bug fixes and account email privacy
+
+- The signed-in member bootstrap now consistently starts Messenger with the actual CSRF token from `/api/member/login` or `/api/session` after a page refresh. An old undefined `session` reference in the login flow previously interrupted setup.
+- Messenger can recover from a **confirmed Invalid CSRF token** rejection by refreshing the authenticated session and retrying once; it never retries unrelated authorization failures.
+- The Players directory shows the logged-in approved account as **Your profile**. In **Create Group**, this creator is labelled as included automatically; searches look for *other* approved accounts. A group may be created with only the creator if no other players are available. Other players are still excluded until explicitly invited.
+- Mobile conversation loads no longer wait for an unrelated stale chat request; initial history displays before asynchronous read-receipt writes, and loading failures show actionable errors rather than leaving a permanent spinner. Visible chats check for new messages approximately every 2.5 seconds and contacts/unread approximately every 10 seconds.
+- When no conversation is open, the placeholder reads **No Conversation has been Made**.
+- Admin account-detail emails are concealed by default and revealed only with an accessible eye toggle; hiding or closing the dialog conceals them again. Account-list rows no longer display unmasked emails. Passwords remain protected and cannot be viewed.
+
 ## SaS Messenger
 
 The approved-member website includes a dedicated **SaS Messenger** page with the same purple glass-style UI used elsewhere:
 
 - **Direct messages:** click an approved member in the conversation list to write privately. Each private thread can only be read by its two participants. The administrator appears as a direct-message contact for every approved member.
 - **SaS - Group Chat:** a pinned, highlighted alliance chat at the top of the Group Chats section. Its unread messages appear on the chat and Messenger sidebar badge. All currently approved members and the administrator can participate.
-- **Private custom groups:** click **Create Group**, enter a name, search approved players and select participants (1–24). Only the creator and invited members can see the group in their contact list or access its messages/read receipts. A non-member, including an administrator who was not invited, cannot open a private group by guessing its URL or ID. Group membership is stored in SQLite.
+- **Private custom groups:** click **Create Group**, enter a name, search approved players and select up to 24 participants (the creator is always included, even if no other account is approved). Only the creator and invited members can see the group in their contact list or access its messages/read receipts. A non-member, including an administrator who was not invited, cannot open a private group by guessing its URL or ID. Group membership is stored in SQLite.
 - **Player directory:** a visible Players section lists all approved accounts by username and in-game name, with search. The currently signed-in player's account is also shown as **Your profile** (not a self-chat). Pending, rejected or unregistered accounts are deliberately not listed.
 - **Account contacts:** usernames and in-game names of approved players appear in the searchable sidebar. Member emails, passwords and reset requests are **not** exposed.
 - **Unread notifications:** server-persisted unread counts appear beside each chat and on the website's Messenger tab. Opening a conversation marks that conversation as read without affecting other conversations.

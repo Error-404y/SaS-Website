@@ -91,8 +91,8 @@ def create_group(db, actor, name, participants):
     if not isinstance(name, str) or not 3 <= len(name.strip()) <= 60:
         raise ValueError("Group name must be 3–60 characters.")
     name=name.strip()
-    if not isinstance(participants, list) or len(participants)<1 or len(participants)>24:
-        raise ValueError("Select 1–24 other players.")
+    if not isinstance(participants, list) or len(participants)>24:
+        raise ValueError("Select up to 24 other players.")
     if any(not isinstance(p,str) or not p for p in participants):
         raise ValueError("Invalid group player.")
     keys=set(participants)

@@ -116,3 +116,30 @@ test('Troop Training now takes desired Phase 3 points, not an editable troop cou
   assert.match(ui,/troopsForTargetPoints/);
   assert.match(ui,/Minimum troops needed/);
 });
+
+test('member login and reload initialize Messenger without undefined session scope',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const app=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
+  const login=app.split('async function playerLogin(event) {')[1].split('async function registerPlayer')[0];
+  assert.match(login,/SasMessenger\?\.start\(response\.csrf\)/);
+  assert.doesNotMatch(login,/SasMessenger\?\.start\(session\.csrf\)/);
+  assert.match(login,/SasMessenger\?\.onPage\(site\.page\)/);
+  const restore=app.split("request('/api/session').then(async session => {")[1].split("}).catch(")[0];
+  assert.match(restore,/SasMessenger\?\.start\(session\.csrf\)/);
+  assert.match(restore,/SasMessenger\?\.onPage\(site\.page\)/);
+});
+test('emails hidden by default with explicit eye toggle and mobile chat recovery',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
+  const chat=fs.readFileSync(path.join(__dirname,'../messenger-ui.js'),'utf8');
+  assert.match(html,/id="account-detail-email-toggle"/);
+  assert.match(html,/private-email-masked/);
+  assert.match(app,/email\.textContent = '••••••••••••'/);
+  assert.match(app,/toggleAccountEmail/);
+  assert.match(chat,/invalid csrf token/i);
+  assert.match(chat,/\/api\/session/);
+  assert.match(chat,/No Conversation has been Made/);
+  assert.match(chat,/No other approved players found/);
+  assert.match(chat,/loadingPeer/);
+});

@@ -641,6 +641,7 @@
       site.member = false;
       setAdmin(true, data.csrf);
       window.SasMessenger?.start(data.csrf);
+      window.SasMessenger?.onPage(site.page);
       adminLastInteraction = Date.now();
       adminActivityLastSent = adminLastInteraction;
       unlockSite();
@@ -715,7 +716,6 @@
       setAdmin(false, response.csrf);
       window.SasMessenger?.start(response.csrf);
       unlockSite();
-      window.SasMessenger?.start(session.csrf);
       window.SasMessenger?.onPage(site.page);
       await reload();
       one('#member-login-form').reset();
@@ -932,7 +932,7 @@
         '<button type="button" class="account-ban" data-account-ban="' + item.id + '">Ban</button>' +
         '<button type="button" class="account-delete" data-account-delete="' + item.id + '">Delete</button>';
       return '<article class="account-row status-' + item.status + '"><div class="account-row-info"><button class="account-detail-open" type="button" data-account-detail="' + item.id + '">' + escapeHtml(item.player_name) + '</button>' +
-        '<span>@' + escapeHtml(item.username) + ' · ' + escapeHtml(item.email) +
+        '<span>@' + escapeHtml(item.username) + ' · Email protected' +
         '</span><span>Registered ' + escapeHtml(item.created_at.slice(0, 10)) + '</span>' +
         (item.review_message ? '<p>Review note: ' + escapeHtml(item.review_message) + '</p>' : '') +
         '</div><div class="account-actions"><span class="account-pill ' + item.status + '">' + item.status +
@@ -947,11 +947,31 @@
     if (!member) return;
     one('#account-detail-player').textContent = member.player_name;
     one('#account-detail-username').textContent = member.username;
-    one('#account-detail-email').textContent = member.email;
+    // Never display the email by default, including when opening a second profile.
+    const email = one('#account-detail-email');
+    email.dataset.value = member.email;
+    email.textContent = '••••••••••••';
+    email.classList.add('private-email-masked');
+    const eye = one('#account-detail-email-toggle');
+    eye.setAttribute('aria-pressed', 'false');
+    eye.setAttribute('aria-label', 'Show email');
+    eye.title = 'Show email';
     one('#account-detail-status').textContent = member.status;
     one('#account-detail-created').textContent = member.created_at;
     one('#account-detail-review').textContent = member.review_message || '—';
     openDialog('account-detail-dialog');
+  }
+
+  function toggleAccountEmail() {
+    if (!site.admin) return;
+    const email = one('#account-detail-email');
+    const eye = one('#account-detail-email-toggle');
+    const revealing = eye.getAttribute('aria-pressed') !== 'true';
+    email.textContent = revealing ? email.dataset.value || '' : '••••••••••••';
+    email.classList.toggle('private-email-masked', !revealing);
+    eye.setAttribute('aria-pressed', String(revealing));
+    eye.setAttribute('aria-label', revealing ? 'Hide email' : 'Show email');
+    eye.title = revealing ? 'Hide email' : 'Show email';
   }
 
   function renderPasswordRequests() {
@@ -1235,6 +1255,14 @@
       website.addEventListener('animationend', () => website.classList.remove('welcome-arrived'), { once: true });
     }, reducedMotion ? 0 : 540);
   });
+  one('#account-detail-email-toggle').addEventListener('click', toggleAccountEmail);
+  one('#account-detail-dialog').addEventListener('close', () => {
+    const email = one('#account-detail-email');
+    email.textContent = '••••••••••••';
+    email.dataset.value = '';
+    email.classList.add('private-email-masked');
+    one('#account-detail-email-toggle').setAttribute('aria-pressed', 'false');
+  });
   one('#admin-toggle').addEventListener('click', toggleAdmin);
   one('#login-form').addEventListener('submit', login);
   one('#entry-form').addEventListener('submit', saveEntry);
@@ -1313,6 +1341,8 @@
         readState = result.seen || { events: {}, alliance: {}, rss: '', updates: {}, announcements: {} };
       }
       unlockSite();
+      window.SasMessenger?.start(session.csrf);
+      window.SasMessenger?.onPage(site.page);
       await reload();
       if (site.admin) loadAccounts();
     } else {

@@ -164,12 +164,26 @@ class MessengerTests(unittest.TestCase):
             "peer":group_id},bravo,bravo_csrf)[0],200)
         self.assertEqual(self.call("/api/messenger",cookie=bravo)[1]["unread"],0)
 
+    def test_group_with_only_its_creator_is_visible_to_no_other_player(self):
+        alpha, csrf, alpha_id = self.login("Alpha")
+        bravo, _, bravo_id = self.login("Bravo")
+        status, data = self.call("/api/messenger/groups", "POST",
+            {"name": "Personal Team", "members": []}, alpha, csrf)
+        self.assertEqual(status, 201, data)
+        group = data["id"]
+        self.assertTrue(any(item["id"] == group for item in
+            self.call("/api/messenger", cookie=alpha)[1]["contacts"]))
+        self.assertFalse(any(item["id"] == group for item in
+            self.call("/api/messenger", cookie=bravo)[1]["contacts"]))
+        self.assertEqual(self.call("/api/messenger/messages?peer=" + group,
+            cookie=bravo)[0], 404)
+
     def test_group_rejects_pending_and_duplicate_members(self):
         alpha, csrf, alpha_id = self.login("Alpha")
         bravo, _, bravo_id = self.login("Bravo")
         with server.connect() as db:
             pending_id = db.execute("SELECT id FROM members WHERE username='Pending'").fetchone()["id"]
-        for members_list in ([bravo_id,bravo_id], [alpha_id], ["member:"+str(pending_id)], [],
+        for members_list in ([bravo_id,bravo_id], [alpha_id], ["member:"+str(pending_id)],
                              [bravo_id,"member:999999"]):
             status, data = self.call("/api/messenger/groups","POST",
                 {"name":"Private Test","members":members_list},alpha,csrf)

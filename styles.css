@@ -991,3 +991,16 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 
 .messenger-own-profile{opacity:.78;cursor:default!important;background:#f7f6fa!important;border-style:dashed!important}
 .messenger-own-profile .messenger-contact-details strong{color:#716280}
+
+
+/* Member account email: concealed until the administrator explicitly reveals it. */
+.private-email-field{display:flex;align-items:center;gap:9px;min-width:0}
+.private-email-field strong{min-width:0;overflow-wrap:anywhere}
+.private-email-masked{filter:blur(4px);user-select:none;-webkit-user-select:none;pointer-events:none}
+.private-email-eye{display:grid;place-items:center;flex:none;min-width:35px;height:35px;border:1px solid #e2d7ee;border-radius:9px;background:#f7f1fc;color:#77539a;cursor:pointer}
+.private-email-eye:hover{background:#eadef6}
+.private-email-eye .private-eye-open{display:none}
+.private-email-eye[aria-pressed="true"] .private-eye-open{display:block}
+.private-email-eye[aria-pressed="true"] .private-eye-closed{display:none}
+.messenger-loading{font-size:12px}
+.messenger-shell.chat-open .messenger-chat{min-height:0}

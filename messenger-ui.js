@@ -5,8 +5,8 @@
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let csrf = '', identity = '', contacts = [], activePeer = '', shownIds = '',
-    currentPage = false, running = false, busy = false, inFlight = false, listFlight = false,
-    lastNotify = 0, selectedGroupPlayers = new Set();
+    currentPage = false, running = false, busy = false, loadingPeer = '', listFlight = false,
+    lastNotify = 0, selectedGroupPlayers = new Set(), sessionGeneration = 0;
   const avatar = item => item.group ? (item.id==='alliance'?'SaS':'GR') :
     String(item.username || '??').slice(0, 2).toUpperCase();
   const showTime = time => {
@@ -17,13 +17,29 @@
   };
   const totalUnread = () => contacts.reduce((sum, c) => sum + (Number(c.unread)||0),0);
   async function api(path, options={}) {
-    const response = await fetch(path, {
-      credentials:'same-origin', ...options,
-      headers:{'Content-Type':'application/json',
-        ...(options.method && options.method!=='GET' ? {'X-CSRF-Token':csrf} : {}),
-        ...(options.headers||{})}
-    });
-    const data = await response.json().catch(() => ({}));
+    const makeRequest = async () => {
+      const response = await fetch(path, {
+        credentials:'same-origin', ...options,
+        headers:{'Content-Type':'application/json',
+          ...(options.method && options.method!=='GET' ? {'X-CSRF-Token':csrf} : {}),
+          ...(options.headers||{})}
+      });
+      const data = await response.json().catch(() => ({}));
+      return {response, data};
+    };
+    let {response, data} = await makeRequest();
+    // A renewed session or restored mobile tab can leave the old CSRF token cached.
+    // Refresh from the server only after it explicitly reports a token mismatch.
+    if (response.status === 403 && /invalid csrf token/i.test(data.error||'')) {
+      const sessionResponse = await fetch('/api/session',{credentials:'same-origin',cache:'no-store'});
+      if (sessionResponse.ok) {
+        const session = await sessionResponse.json();
+        if (session.csrf && (session.admin || session.approved)) {
+          csrf=session.csrf;
+          ({response,data}=await makeRequest());
+        }
+      }
+    }
     if (!response.ok) throw new Error(data.error || 'Messaging is unavailable.');
     return data;
   }
@@ -75,7 +91,7 @@
     badges();
   }
   async function loadList() {
-    if (!running || listFlight || document.hidden) return;
+    if (!running || listFlight) return;
     listFlight=true;
     try {
       const data = await api('/api/messenger');
@@ -88,20 +104,26 @@
       }
       renderContacts();
     } catch (e) {
-      if (currentPage) error(e.message);
+      if (currentPage) {
+        error('Unable to load players: '+e.message);
+        if (!contacts.length)
+          $('messenger-contact-list').innerHTML='<p class="messenger-loading">Could not load players. Please try again.</p>';
+      }
     } finally {listFlight=false;}
   }
   async function openPeer(peer) {
     if (!running || !contacts.some(c=>c.id===peer)) return;
     activePeer=peer;
     shownIds='';
+    // A slow request for another conversation must never block this one.
+    loadingPeer='';
     error();
     const contact=contacts.find(c=>c.id===peer);
     $('messenger-active-name').textContent=contact.username;
     $('messenger-active-detail').textContent=contact.group ? (contact.id==='alliance'?'All approved SaS members':'Private group · '+contact.player_name) :
       (contact.player_name || 'Private conversation');
     $('messenger-active-avatar').textContent=avatar(contact);
-    $('messenger-history').innerHTML='<p class="messenger-loading">Loading messages…</p>';
+    $('messenger-history').innerHTML='<p class="messenger-loading">Loading conversation…</p>';
     $('messenger-message').disabled=false;
     $('messenger-send').disabled=false;
     $('messenger-shell').classList.add('chat-open');
@@ -122,12 +144,15 @@
     }).join('');
   }
   async function loadMessages(force=false) {
-    if (!running || !activePeer || !currentPage || inFlight || document.hidden) return;
+    if (!running || !activePeer || !currentPage) return;
     const targetPeer=activePeer;
-    inFlight=true;
+    if (loadingPeer===targetPeer) return;
+    const generation=sessionGeneration;
+    loadingPeer=targetPeer;
     try {
       const result=await api('/api/messenger/messages?peer='+encodeURIComponent(targetPeer));
-      if (!running || activePeer!==targetPeer || !currentPage) return;
+      if (!running || generation!==sessionGeneration ||
+          activePeer!==targetPeer || !currentPage) return;
       const messages=result.messages||[];
       const key=messages.map(m=>m.id).join(',');
       if (force || key!==shownIds) {
@@ -139,12 +164,21 @@
       }
       const contact=contacts.find(c=>c.id===targetPeer);
       if (contact?.unread>0 || force) {
-        await api('/api/messenger/read',{method:'POST',body:JSON.stringify({peer:targetPeer})});
-        if (contact) contact.unread=0;
-        renderContacts();
+        // Do not block rendering while the read receipt is being written.
+        api('/api/messenger/read',{method:'POST',body:JSON.stringify({peer:targetPeer})})
+          .then(()=>{if (activePeer===targetPeer && generation===sessionGeneration) {
+            if (contact) contact.unread=0;
+            renderContacts();
+          }}).catch(e=>{if (activePeer===targetPeer) error('Read sync: '+e.message);});
       }
-    } catch(e){ if (activePeer===targetPeer) error(e.message); }
-    finally{inFlight=false;}
+    } catch(e){
+      if (activePeer===targetPeer && generation===sessionGeneration) {
+        error('Could not load conversation: '+e.message);
+        $('messenger-history').innerHTML='<div class="messenger-empty">Conversation unavailable. Try opening it again.</div>';
+      }
+    } finally {
+      if (loadingPeer===targetPeer) loadingPeer='';
+    }
   }
   async function send(event){
     event.preventDefault();
@@ -172,12 +206,16 @@
     const search=$('messenger-group-player-search').value.trim().toLowerCase();
     const eligible=approvedPlayers().filter(p=>p.username.toLowerCase().includes(search) ||
       (p.player_name||'').toLowerCase().includes(search));
-    $('messenger-group-players').innerHTML=eligible.length?eligible.map(p=>
+    const own=contacts.find(c=>c.self);
+    const ownLine=own ? '<div class="messenger-player-option messenger-own-profile">'+
+      '<span class="messenger-avatar">'+escape(avatar(own))+'</span>'+
+      '<span><strong>'+escape(own.username)+' (You)</strong><small>Group creator · included automatically</small></span></div>' : '';
+    $('messenger-group-players').innerHTML=ownLine + (eligible.length?eligible.map(p=>
       '<label class="messenger-player-option"><input type="checkbox" data-group-player="'+escape(p.id)+'"'+
       (selectedGroupPlayers.has(p.id)?' checked':'')+'><span class="messenger-avatar">'+escape(avatar(p))+'</span>'+
       '<span><strong>'+escape(p.username)+'</strong><small>'+escape(p.player_name||'')+'</small></span></label>'
-    ).join(''):'<p class="messenger-loading">No matching approved players.</p>';
-    $('messenger-group-selected').textContent=selectedGroupPlayers.size+' player(s) selected';
+    ).join(''):'<p class="messenger-loading">No other approved players found. Your account is already included.</p>');
+    $('messenger-group-selected').textContent=selectedGroupPlayers.size+' other player(s) selected · You are included automatically';
   }
   function openGroupDialog(){
     selectedGroupPlayers=new Set();
@@ -211,11 +249,12 @@
     loadList();
   }
   function stop(){
-    running=false;csrf='';identity='';activePeer='';contacts=[];shownIds='';
+    sessionGeneration++;
+    running=false;csrf='';identity='';activePeer='';contacts=[];shownIds='';loadingPeer='';
     $('messenger-shell').classList.remove('chat-open');
     $('messenger-message').disabled=true;
     $('messenger-send').disabled=true;
-    $('messenger-history').innerHTML='<div class="messenger-empty">Choose a conversation to begin.</div>';
+    $('messenger-history').innerHTML='<div class="messenger-empty">No Conversation has been Made</div>';
     renderContacts();
   }
   function onPage(name){
@@ -238,7 +277,7 @@
       if (!checkbox) return;
       if (checkbox.checked) selectedGroupPlayers.add(checkbox.dataset.groupPlayer);
       else selectedGroupPlayers.delete(checkbox.dataset.groupPlayer);
-      $('messenger-group-selected').textContent=selectedGroupPlayers.size+' player(s) selected';
+      $('messenger-group-selected').textContent=selectedGroupPlayers.size+' other player(s) selected · You are included automatically';
     });
     $('messenger-group-form').addEventListener('submit',createGroup);
     $('messenger-compose').addEventListener('submit',send);
@@ -254,10 +293,10 @@
     setInterval(()=>{
       if (!running || document.hidden) return;
       if (currentPage) loadMessages();
-      if (Date.now()-lastNotify>=15000) {
+      if (Date.now()-lastNotify>=10000) {
         lastNotify=Date.now();loadList();
       }
-    },5000);
+    },2500);
   }
   window.SasMessenger={init,start,stop,onPage};
 })();
