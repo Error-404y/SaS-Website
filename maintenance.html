@@ -3,45 +3,107 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f7f8fb">
+  <meta name="theme-color" content="#f7f3ff">
   <meta name="robots" content="noindex, nofollow">
   <title>SaS | Under Construction</title>
   <style>
-    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#22283c;background:#f8f8fb}
-    *{box-sizing:border-box}html,body{margin:0;min-height:100%;}body{min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden;background:radial-gradient(ellipse at 50% 38%,rgba(218,197,237,.32),transparent 56%),radial-gradient(ellipse at 8% 88%,rgba(186,207,236,.26),transparent 48%),radial-gradient(ellipse at 94% 7%,rgba(243,220,178,.26),transparent 43%),#f8f8fb}
-    header{display:flex;align-items:center;gap:12px;margin:25px clamp(24px,5vw,76px) 0;padding-bottom:16px;border-bottom:1px solid #e9e5ef}
-    header img{width:52px;height:52px;object-fit:contain}
-    .brand{display:flex;flex-direction:column;gap:3px}
-    .brand strong{font-size:28px;letter-spacing:-.055em;color:#342344}
-    .brand span{font-size:10px;letter-spacing:.19em;font-weight:760;color:#898093}
-    main{width:100%;padding:36px 20px 54px;display:grid;place-items:center;flex:1}
-    .panel{position:relative;text-align:center;width:min(100%,780px);padding:54px clamp(20px,5vw,64px) 50px;border:1px solid rgba(144,107,175,.22);border-radius:25px;background:rgba(255,255,255,.77);box-shadow:0 25px 70px rgba(59,39,74,.075);backdrop-filter:blur(12px)}
-    .crest{width:clamp(145px,22vw,205px);height:auto;filter:drop-shadow(0 12px 16px rgba(68,38,84,.1))}
-    .eyebrow{font-size:11px;letter-spacing:.22em;font-weight:750;color:#997c4c;margin:18px 0 13px}
-    h1{font-size:clamp(37px,6.7vw,67px);letter-spacing:-.06em;line-height:1.05;color:#22233d;margin:0}
-    .copy{font-size:clamp(14px,1.8vw,17px);color:#727b90;line-height:1.65;max-width:490px;margin:22px auto 28px}
-    .divider{display:flex;align-items:center;justify-content:center;gap:24px;color:#9f84b6;font-size:25px}
-    .divider:before,.divider:after{content:"";width:min(20vw,125px);height:1px;background:linear-gradient(90deg,transparent,#c9bbd8)}
-    .divider:after{transform:rotate(180deg)}
-    .status{display:flex;justify-content:center;align-items:center;gap:10px;margin:22px auto 0;color:#9e8da9;font-size:12px;letter-spacing:.04em}
-    .dot{width:7px;height:7px;border-radius:50%;background:#ad86c6;box-shadow:0 0 0 5px rgba(175,134,202,.1);animation:breathe 2.8s ease-in-out infinite}
-    @keyframes breathe{50%{opacity:.4;transform:scale(.75)}}footer{margin:0 clamp(24px,5vw,76px) 24px;padding-top:15px;border-top:1px solid #e9e5ef;font-size:10px;font-weight:700;letter-spacing:.17em;color:#9594a3;display:flex;justify-content:space-between;gap:10px}
-    @media(max-width:520px){header{margin-top:16px}.panel{padding:36px 18px}.crest{width:145px}footer{font-size:9px;letter-spacing:.09em}}
-    @media(prefers-reduced-motion:reduce){.dot{animation:none}}
+    :root { color-scheme: light; font-family: Georgia, "Times New Roman", serif; color: #101a4a; background: #f7f3ff; }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+    body { min-height: 100vh; overflow-x: hidden; position: relative;
+      background:
+        linear-gradient(135deg, transparent 10%, rgba(213,190,248,.56) 10%, rgba(213,190,248,.56) 20%, transparent 20%) left top / 36% 40% no-repeat,
+        linear-gradient(135deg, transparent 26%, rgba(210,192,248,.57) 26%, rgba(210,192,248,.57) 34%, transparent 34%) right center / 32% 100% no-repeat,
+        radial-gradient(ellipse at 50% 55%, #fff 1%, rgba(248,244,255,.86) 49%, rgba(216,205,247,.72) 100%);
+    }
+    .scene { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+    .scene svg { position: absolute; bottom: 0; width: 100%; height: min(52vw, 520px); opacity: .8; }
+    .brand { position: relative; z-index: 1; display: flex; align-items: center; gap: 22px;
+      padding: 16px clamp(20px, 3.5vw, 60px); background: rgba(255,255,255,.68);
+      box-shadow: 0 2px 20px rgba(70, 44, 99, .035); }
+    .brand img { width: 75px; height: 75px; object-fit: contain; }
+    .brand-rule { height: 58px; width: 1px; background: #9a84be; }
+    .brand-name { display: flex; flex-direction: column; gap: 1px; }
+    .brand-name strong { font-size: clamp(36px, 4vw, 57px); letter-spacing: -.065em; line-height: 1; }
+    .brand-name span { font: 700 clamp(11px, 1.3vw, 18px) / 1.2 Arial, sans-serif; letter-spacing: .24em; color: #5b427c; }
+    main { position: relative; z-index: 1; min-height: calc(100vh - 110px);
+      display: grid; place-items: center; padding: 35px 18px 58px; }
+    .panel { position: relative; width: min(100%, 1006px); padding: 0 clamp(21px, 5vw, 76px) 33px;
+      border: 2px solid rgba(194, 171, 229, .71); border-radius: 32px;
+      background: linear-gradient(150deg, rgba(255,255,255,.8), rgba(249,246,255,.69));
+      box-shadow: 0 19px 44px rgba(71, 44, 110, .15), inset 0 0 0 2px rgba(255,255,255,.74);
+      text-align: center; backdrop-filter: blur(8px); }
+    .crest { display: block; width: clamp(148px, 20vw, 242px); height: auto; margin: -46px auto 5px;
+      object-fit: contain; filter: drop-shadow(0 7px 10px rgba(44, 22, 81, .14)); }
+    .eyebrow { display: flex; justify-content: center; align-items: center; gap: 28px; margin: 5px 0 20px;
+      font: 700 clamp(11px, 1.7vw, 21px) Arial, sans-serif; letter-spacing: .27em; color: #29204f; }
+    .eyebrow::before, .eyebrow::after { content: ""; height: 1px; width: min(13vw, 114px);
+      background: #c2abdc; }
+    h1 { font-size: clamp(36px, 6.1vw, 79px); line-height: 1.1; letter-spacing: -.035em; margin: 0 0 10px;
+      color: #0e1647; font-weight: 700; white-space: nowrap; }
+    .description { font-size: clamp(17px, 2.2vw, 30px); max-width: 720px; line-height: 1.27;
+      color: #383650; margin: 13px auto 27px; }
+    .tools { display: flex; justify-content: center; align-items: center; gap: clamp(23px, 4vw, 62px);
+      color: #9263c4; font-size: clamp(32px, 5vw, 60px); margin: 15px auto 25px; }
+    .tools .stripe { height: 23px; width: min(24vw, 218px);
+      background: repeating-linear-gradient(135deg, #c3a6e5 0 17px, transparent 17px 29px); opacity: .85; }
+    .track { width: min(83%, 504px); height: 20px; margin: 0 auto 31px; border-radius: 100px;
+      background: #e4dff0; box-shadow: inset 0 2px 5px rgba(85, 67, 117, .07); overflow: hidden; }
+    .track > span { display: block; width: 74%; height: 100%; border-radius: inherit;
+      background: linear-gradient(90deg, #c995ed, #9c76ca); }
+    .thanks { display: flex; justify-content: center; align-items: center; gap: 32px;
+      font-style: italic; font-size: clamp(18px, 2.1vw, 27px); color: #1e2349; }
+    .thanks::before, .thanks::after { content: ""; width: min(13vw, 108px); height: 1px; background: #cbb9e4; }
+    @media (max-width: 700px) {
+      .brand { gap: 13px; padding: 10px 20px; }
+      .brand img { width: 49px; height: 49px; }
+      .brand-rule { height: 42px; }
+      .brand-name strong { font-size: 35px; }
+      .brand-name span { font-size: 9px; }
+      main { min-height: calc(100vh - 70px); padding: 65px 10px 35px; }
+      .panel { border-radius: 20px; padding: 0 16px 28px; }
+      .crest { margin-top: -54px; width: 165px; }
+      .eyebrow { gap: 10px; letter-spacing: .12em; margin: 0 0 16px; }
+      .eyebrow::before, .eyebrow::after { width: 24px; }
+      h1 { font-size: clamp(30px, 7.4vw, 48px); white-space: normal; }
+      .description { font-size: 18px; }
+      .tools { gap: 14px; }
+      .tools .stripe { width: 24vw; height: 14px; background: repeating-linear-gradient(135deg, #c3a6e5 0 11px, transparent 11px 20px); }
+      .track { height: 12px; }
+      .thanks { gap: 11px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { backdrop-filter: none !important; } }
   </style>
 </head>
 <body>
-  <header aria-label="Saints and Sinners"><img src="/assets/logo.webp" alt=""><div class="brand"><strong>SaS</strong><span>SAINTS AND SINNERS</span></div></header>
+  <div class="scene" aria-hidden="true">
+    <svg viewBox="0 0 1680 490" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="hill" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#b9acd8" stop-opacity=".1"/><stop offset="1" stop-color="#8b79b1" stop-opacity=".54"/></linearGradient>
+      <linearGradient id="hill2" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#c5badf" stop-opacity=".2"/><stop offset="1" stop-color="#8c7bb8" stop-opacity=".61"/></linearGradient></defs>
+      <path d="M0 337 100 280 204 358 365 280 505 385 710 285 840 390 1062 288 1185 364 1352 250 1480 310 1680 205V490H0Z" fill="url(#hill)"/>
+      <path d="m0 360 108 73 125-46 143 103H0Zm900 130 190-80 150 80Zm380 0 130-110 120-42 150 64v88Z" fill="url(#hill2)"/>
+      <g opacity=".45" fill="#77669c">
+        <path d="M1445 310v-82h22v-48l10-27 9 27v48h15v82Zm69 0v-105h25v-39l11-30 11 30v39h25v105Zm-45-55h130v65h-130Z"/>
+        <path d="M0 389 50 370 77 375 104 403 123 490H0Z"/>
+        <path d="M36 373V192h4v181Zm3-180 46 17v95l-46-15Zm93 242V282h3v152Zm2-151 36 13v88l-36-14Z"/>
+      </g>
+    </svg>
+  </div>
+  <header class="brand" aria-label="Saints and Sinners">
+    <img src="/assets/logo.webp" alt="" width="75" height="75">
+    <span class="brand-rule" aria-hidden="true"></span>
+    <div class="brand-name"><strong>SaS</strong><span>SAINTS AND SINNERS</span></div>
+  </header>
   <main>
-    <section class="panel" aria-labelledby="heading">
-      <img class="crest" src="/assets/logo.webp" alt="Saints and Sinners crest" width="205" height="205">
-      <p class="eyebrow">THE ALLIANCE WEBSITE</p>
-      <h1 id="heading">Under Construction</h1>
-      <p class="copy">We're currently improving the Saints and Sinners website and preparing new features. Please check back soon.</p>
-      <div class="divider" aria-hidden="true">⚒</div>
-      <p class="status"><span class="dot" aria-hidden="true"></span>WEBSITE MAINTENANCE IN PROGRESS</p>
+    <section class="panel" aria-labelledby="maintenance-title">
+      <img class="crest" src="/assets/logo.webp" alt="Saints and Sinners crest" width="242" height="242">
+      <p class="eyebrow">SAINTS AND SINNERS</p>
+      <h1 id="maintenance-title">Under Construction</h1>
+      <p class="description">We’re currently working on the website and<br>preparing new features. Please check back soon.</p>
+      <div class="tools" aria-hidden="true"><span class="stripe"></span><span>⚒</span><span class="stripe"></span></div>
+      <div class="track" aria-hidden="true"><span></span></div>
+      <div class="thanks">Thank you for your patience.</div>
     </section>
   </main>
-  <footer><span>SAINTS AND SINNERS</span><span>THANK YOU FOR YOUR PATIENCE</span></footer>
 </body>
 </html>
