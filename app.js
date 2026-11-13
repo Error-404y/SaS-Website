@@ -780,6 +780,13 @@
     return new Date(timestamp * 1000).toISOString().replace('T',' ').slice(0,19) + ' UTC';
   }
 
+  function banRemaining(timestamp) {
+    const seconds = Math.max(0, Math.ceil(timestamp - Date.now() / 1000));
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.ceil((seconds % 3600) / 60);
+    return hours + 'h ' + String(minutes).padStart(2,'0') + 'm remaining';
+  }
+
   function openBanDialog(id) {
     if (!site.admin) return;
     const member = (site.accounts || []).find(item => item.id === id);
@@ -846,7 +853,7 @@
       '<article class="ban-queue-row '+escapeHtml(item.status)+'"><div class="account-row-info">'+
       '<strong>@'+escapeHtml(item.username)+' · '+escapeHtml(item.kind.toUpperCase())+' BAN</strong>'+
       '<span>'+ (item.status === 'pending'
-        ? 'Pending · Activates '+escapeHtml(banTime(item.effective_at))
+        ? 'Pending · '+escapeHtml(banRemaining(item.effective_at))+' · Activates '+escapeHtml(banTime(item.effective_at))
         : 'Active · Since '+escapeHtml(banTime(item.effective_at)))+'</span>'+
       (item.reason ? '<p>'+escapeHtml(item.reason)+'</p>' : '')+'</div>'+
       '<div class="account-actions"><span class="account-pill '+(item.status==='pending'?'pending':'rejected')+'">'+
