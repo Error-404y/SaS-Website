@@ -426,9 +426,11 @@ class SecurityBoundaryTests(unittest.TestCase):
                                    {"channel": "login"}, cookie)[0], 403)
         self.assertEqual(self.call("/api/notifications/test", "POST",
                                    {"channel": "invalid"}, cookie, csrf)[0], 400)
-        with patch.object(server, "LOGIN_WEBHOOK",
-                          "https://discord.com/api/webhooks/123456789/FakeTestToken"), \\
-             patch.object(server, "discord_send", return_value=True) as delivery:
+        with (
+            patch.object(server, "LOGIN_WEBHOOK",
+                         "https://discord.com/api/webhooks/123456789/FakeTestToken"),
+            patch.object(server, "discord_send", return_value=True) as delivery,
+        ):
             status, raw, _ = self.call("/api/notifications/test", "POST",
                                        {"channel": "login"}, cookie, csrf)
             self.assertEqual(status, 200, raw)
