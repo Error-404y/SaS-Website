@@ -133,6 +133,10 @@ The .env file and local SQLite databases are ignored by Git. Never commit admini
 
 **Persistence matters:** The SQLite database path must remain on persistent storage when your service restarts or redeploys. Back up the database before changing your hosting runtime.
 
+### In-app confirmation dialogs
+
+All destructive administrator actions—permanent account deletion, deleting an event/announcement entry, and removing an RSS spending record—now use a consistent **SaS-styled confirmation popup** rather than a browser's built-in confirm/alert. Each popup has an explicit **Cancel** and action-specific delete button, supports keyboard Escape and focus management, and keeps text safely in `textContent`.
+
 ### Account moderation and password recovery
 
 In **SaS – Accounts**, administrators can **Accept**, **Reject** (with a reason), **Edit** player name/username/email, and **Delete** accounts permanently after confirmation. Approved accounts appear in green and rejected ones in red. Deleting an account revokes its sessions and removes its pending password reset requests and unread state; make a database backup before bulk moderation.
