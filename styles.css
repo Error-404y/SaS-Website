@@ -659,3 +659,75 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 #reset-code-dialog p{line-height:1.6;color:#69788a}
 .auth-form .auth-admin-link{text-align:center;align-self:center;margin-top:12px}
 .auth-form .auth-admin-link+ .auth-admin-link{margin-top:4px}
+
+
+/* Calculator workspace: compact pages, desktop left navigation, accessible mobile controls */
+.layout.tools-open{grid-template-columns:184px minmax(0,1fr) 252px}
+.tools-sidebar{background:#fcfbff;border-right:1px solid var(--line);padding:31px 13px;min-width:0}
+.tools-sidebar .sidebar-heading{margin:0 8px 15px}
+.tools-nav{display:flex;flex-direction:column;gap:5px}
+.tools-nav button{border:1px solid transparent;border-radius:10px;text-align:left;background:none;color:#4d5870;padding:12px 11px;font-size:13px;font-weight:650}
+.tools-nav button.selected{border-color:#e1d6f0;background:#f1eafa;color:#58317b}
+.tools-nav button:hover{background:#f6f0fb}
+.nav-group-label{display:block;margin:15px 12px 3px;color:#9284a5;letter-spacing:.17em;font-size:10px;font-weight:800}
+.nav-hint{font-size:10px;color:#9574aa}
+.mobile-nav-hint{display:none;color:#8d75a5;font-size:10px;font-weight:650;letter-spacing:normal;margin-left:auto}
+.tool-feature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.tool-feature{min-width:0;border:1px solid #e6e0ef;background:#fff;box-shadow:var(--shadow);border-radius:16px;text-align:left;display:grid;gap:14px;padding:25px;transition:border-color .18s,transform .18s}
+.tool-feature:hover{border-color:#9b77bd;transform:translateY(-2px)}
+.tool-feature span:first-child{color:#a17839;font-size:11px;letter-spacing:.15em;text-transform:uppercase;font-weight:800}
+.tool-feature strong{font-size:clamp(16px,2vw,22px);color:#1c2942}
+.tool-feature-arrow{font-size:12px;color:#694a89;font-weight:700}
+.tool-panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:clamp(16px,2.4vw,29px);display:grid;gap:21px;box-shadow:var(--shadow)}
+.tool-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.tool-form-grid label,.tool-inputs label{min-width:0;display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:750;color:#3b4961}
+.tool-form-grid input,.tool-form-grid select,.tool-inputs input{width:100%;background:#fff;border:1px solid #d9e1ed;border-radius:10px;padding:12px 11px;font-size:14px;color:#1d2a41}
+.tool-inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.tool-inputs small{font-size:11px;color:var(--muted)}
+.tool-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:11px}
+.tool-stat{background:linear-gradient(135deg,#fff,#f7f4fb);border:1px solid #e6e1ef;border-radius:12px;padding:15px;min-width:0;display:flex;flex-direction:column;gap:9px}
+.tool-stat span{color:#69778d;font-weight:660;font-size:12px}
+.tool-stat strong{font-size:clamp(18px,2.1vw,25px);letter-spacing:-.025em;color:#1c2841;overflow-wrap:anywhere}
+.capacity-toggle{border:1px solid #d6dae8;background:#f7f8fc;border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 17px;color:#3b4962;font-weight:720;text-align:left}
+.capacity-toggle strong{background:#dbe2ed;color:#5b6574;padding:7px 13px;border-radius:99px;min-width:60px;text-align:center}
+.capacity-toggle[aria-pressed=true]{border-color:#b69bd4;background:#f2ebfa}
+.capacity-toggle[aria-pressed=true] strong{background:#5c3d7e;color:#fff}
+.tool-footnote{margin:0;font-size:12px;line-height:1.6;color:#677488}
+.tool-metadata{color:#5a6880;font-size:12px}
+.tool-total{background:linear-gradient(110deg,#f4effa,#fff);border:1px solid #e8e0f0;border-radius:13px;padding:19px;display:flex;flex-direction:column;gap:7px}
+.tool-total>span{color:#594976;font-size:12px;font-weight:750}
+.tool-total>strong{font-size:clamp(21px,2.8vw,31px);font-weight:800;overflow-wrap:anywhere}
+.tool-total>small{color:#748095;font-size:12px}
+.tool-subtitle{font-size:17px;margin:0;color:#283750}
+.tool-settings{border-top:1px solid #e6e2ed;padding-top:15px}
+.tool-settings summary{cursor:pointer;font-size:13px;color:#593b7f;font-weight:780;padding:10px 0}
+.tool-settings .tool-form-grid{padding:13px 0}
+.tool-actions{display:flex;gap:8px;justify-content:flex-end}
+.tool-table{width:100%;border-collapse:collapse;min-width:460px;font-size:12px}
+.tool-table th,.tool-table td{text-align:left;border-bottom:1px solid var(--line);padding:13px 11px}
+.tool-table th{font-size:11px;text-transform:uppercase;color:#65768f;letter-spacing:.05em;background:#f6f7fb}
+.tool-table td{color:#283650;font-weight:600}
+.nav-unread{background:#d74159!important;color:#fff!important}
+.sidebar-nav button[data-unread-priority]{border-color:#f1d8e0;background:#fff6f8}
+@media(max-width:1250px){.layout.tools-open{grid-template-columns:154px minmax(0,1fr) 214px}.tools-sidebar{padding:25px 7px}.tools-nav button{font-size:12px;padding:10px 8px}}
+@media(max-width:750px){
+  .layout.tools-open{display:flex;flex-direction:column}
+  .layout.tools-open .right-sidebar{order:0}
+  .layout.tools-open .tools-sidebar{order:1}
+  .layout.tools-open .content{order:2}
+  .tools-sidebar{position:sticky;top:91px;z-index:2;padding:7px 12px;background:rgba(253,251,255,.97);border-right:0;border-bottom:1px solid #e5def0;backdrop-filter:blur(12px)}
+  .tools-sidebar .sidebar-heading{display:none}
+  .tools-nav{display:flex;flex-direction:row;overflow-x:auto;scrollbar-width:thin;gap:8px;white-space:nowrap}
+  .tools-nav button{flex:0 0 auto;padding:11px}
+  .right-sidebar{top:0}
+  .mobile-nav-hint{display:inline}
+  .sidebar-heading{display:flex;align-items:center;justify-content:space-between}
+  .sidebar-nav{padding-bottom:4px;scroll-snap-type:x proximity}
+  .sidebar-nav button{scroll-snap-align:start}
+  .nav-group-label{display:none}
+  .nav-hint{font-size:10px}
+  .tool-feature-grid{grid-template-columns:1fr}
+  .tool-panel{gap:16px}
+  .tool-form-grid,.tool-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:425px){.tool-form-grid,.tool-inputs{grid-template-columns:1fr}.tool-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.tool-stat{padding:11px}.tool-stat strong{font-size:17px}}
