@@ -383,8 +383,8 @@
           </div>
           <div class="filter-bar"><input id="accounts-search" type="search" placeholder="Search players or email..." aria-label="Search accounts"><select id="accounts-filter" aria-label="Filter accounts"><option value="">All accounts</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
           <div id="accounts-list" class="accounts-list"></div>
-          <div class="page-title" style="margin-top:32px"><h2>Password change requests</h2></div>
-          <p class="accounts-muted">Review requests and provide players with time-limited reset codes. Original passwords are never visible.</p>
+          <div class="page-title" style="margin-top:32px"><h2>Password change requests <span id="password-requests-badge" class="nav-unread" hidden>0</span></h2><button type="button" class="small-button" id="password-requests-refresh">Refresh requests</button></div>
+          <p class="accounts-muted">New requests appear here. Approve to generate a one-time code and share it privately. Reviewed requests disappear from this list after 48 hours; unused codes expire after 1 hour.</p>
           <div id="password-requests-list" class="accounts-list"></div>
         </section>
       </main>
@@ -408,6 +408,21 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </div>
+
+  <dialog id="account-edit-dialog" class="dialog">
+    <form id="account-edit-form">
+      <div class="dialog-top"><div><span class="section-kicker">SaS – ACCOUNTS</span><h2>Edit player account</h2></div><button type="button" class="close-button" data-close="account-edit-dialog" aria-label="Close">×</button></div>
+      <input type="hidden" id="account-edit-id">
+      <label for="account-edit-player">In-game name</label>
+      <input id="account-edit-player" required minlength="2" maxlength="60">
+      <label for="account-edit-username">Username</label>
+      <input id="account-edit-username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_.-]+">
+      <label for="account-edit-email">Email</label>
+      <input id="account-edit-email" required type="email" maxlength="254">
+      <p id="account-edit-error" class="form-error" aria-live="polite"></p>
+      <div class="dialog-actions"><button type="button" class="small-button" data-close="account-edit-dialog">Cancel</button><button type="submit" class="primary-button">Save account</button></div>
+    </form>
+  </dialog>
 
   <dialog id="account-detail-dialog" class="dialog">
     <div class="dialog-top"><div><span class="section-kicker">SaS – ACCOUNTS</span><h2>Player account details</h2></div>
