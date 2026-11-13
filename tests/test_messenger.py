@@ -116,10 +116,72 @@ class MessengerTests(unittest.TestCase):
         self.assertEqual(self.call("/api/messenger/read","POST",{"peer":aid},b,bc)[0],200)
         self.assertEqual(self.call("/api/messenger",cookie=b)[1]["unread"],0)
 
+    def test_self_notes_are_private_to_owner_and_survive_new_login(self):
+        a,ac,aid=self.login("Alpha")
+        b,bc,bid=self.login("Bravo")
+        status,data=self.call("/api/messenger/messages","POST",
+            {"peer":aid,"body":"Remember speedups"},a,ac)
+        self.assertEqual(status,201,data)
+        self.assertEqual(self.call("/api/messenger/messages?peer="+aid,cookie=a)[1]["messages"][0]["body"],
+                         "Remember speedups")
+        self.assertEqual(self.call("/api/messenger/messages?peer="+bid,cookie=b)[1]["messages"],[])
+        self.assertEqual(self.call("/api/messenger",cookie=a)[1]["unread"],0)
+        self.assertTrue(any(x["self"] for x in self.call("/api/messenger",cookie=a)[1]["contacts"]))
+        with server.connect() as db:
+            self.assertEqual(db.execute(
+                "SELECT thread_key FROM chat_messages WHERE body='Remember speedups'").fetchone()[0],
+                "notes:"+aid)
+
+    def test_alliance_join_is_one_time_and_history_locked_before_join(self):
+        a,ac,aid=self.login("Alpha")
+        b,bc,bid=self.login("Bravo")
+        admin,adcsrf=self.login_admin()
+        self.assertEqual(self.call("/api/messenger/messages","POST",
+            {"peer":"alliance","body":"Existing important info"},admin,adcsrf)[0],201)
+        first=self.call("/api/messenger",cookie=a)[1]
+        self.assertFalse(first["contacts"][0]["joined"])
+        self.assertEqual(first["contacts"][0]["unread"],0)
+        self.assertEqual(self.call("/api/messenger/messages?peer=alliance",cookie=a)[0],404)
+        self.assertEqual(self.call("/api/messenger/messages","POST",
+            {"peer":"alliance","body":"Spoof"},a,ac)[0],400)
+        self.assertEqual(self.call("/api/messenger/read","POST",
+            {"peer":"alliance"},a,ac)[0],400)
+        self.assertEqual(self.call("/api/messenger/alliance/join","POST",{},a)[0],403)
+        status,data=self.call("/api/messenger/alliance/join","POST",{},a,ac)
+        self.assertEqual(status,200,data)
+        self.assertTrue(data["joined"])
+        self.assertFalse(self.call("/api/messenger/alliance/join","POST",{},a,ac)[1]["joined"])
+        self.assertTrue(self.call("/api/messenger",cookie=a)[1]["contacts"][0]["joined"])
+        history=self.call("/api/messenger/messages?peer=alliance",cookie=a)[1]["messages"]
+        self.assertEqual(history[0]["body"],"Existing important info")
+        self.assertEqual(history[-1]["body"],"Alpha Game just Joined the Group-Chat !")
+        self.assertEqual(len([x for x in history if x["sender_key"]=="system"]),1)
+        self.assertEqual(self.call("/api/messenger",cookie=b)[1]["unread"],0)
+        self.assertEqual(self.call("/api/messenger/messages?peer=alliance",cookie=b)[0],404)
+
+    def test_joined_group_can_retrieve_older_history(self):
+        a,ac,aid=self.login("Alpha")
+        admin,adcsrf=self.login_admin()
+        with server.connect() as db:
+            for index in range(95):
+                db.execute("""INSERT INTO chat_messages(thread_key,sender_key,body,created_at)
+                    VALUES('alliance','admin',?,?)""",(str(index),messenger.now_utc()))
+        self.assertEqual(self.call("/api/messenger/alliance/join","POST",{},a,ac)[0],200)
+        first=self.call("/api/messenger/messages?peer=alliance",cookie=a)[1]
+        self.assertTrue(first["has_more"])
+        self.assertEqual(len(first["messages"]),80)
+        before=first["messages"][0]["id"]
+        older=self.call("/api/messenger/messages?peer=alliance&before="+str(before),cookie=a)[1]
+        self.assertFalse(older["has_more"])
+        self.assertTrue(older["messages"])
+        self.assertEqual(older["messages"][0]["body"],"0")
+
     def test_alliance_group_and_admin_conversation(self):
         a,ac,aid=self.login("Alpha")
         b,bc,bid=self.login("Bravo")
         admin,adcsrf=self.login_admin()
+        self.assertEqual(self.call("/api/messenger/alliance/join","POST",{},a,ac)[0],200)
+        self.assertEqual(self.call("/api/messenger/alliance/join","POST",{},b,bc)[0],200)
         self.assertEqual(self.call("/api/messenger/messages","POST",
             {"peer":"alliance","body":"SvS soon"},admin,adcsrf)[0],201)
         self.assertEqual(self.call("/api/messenger",cookie=a)[1]["unread"],1)
@@ -200,12 +262,13 @@ class MessengerTests(unittest.TestCase):
         a,ac,aid=self.login("Alpha")
         b,bc,bid=self.login("Bravo")
         admin,adcsrf=self.login_admin()
-        for peer in ("member:999999","member:0","member:bad",aid):
+        for peer in ("member:999999","member:0","member:bad"):
             self.assertIn(self.call("/api/messenger/messages","POST",
                 {"peer":peer,"body":"test"},a,ac)[0],(400,))
         self.assertEqual(self.call("/api/messenger/messages","POST",{"peer":bid,"body":"  "},a,ac)[0],400)
         self.assertEqual(self.call("/api/messenger/messages","POST",{"peer":bid,"body":"x"*2001},a,ac)[0],400)
         self.assertEqual(self.call("/api/messenger/messages","POST",{"peer":bid,"body":"<script>attack</script>"},a,ac)[0],201)
+        self.assertEqual(self.call("/api/messenger/alliance/join","POST",{},a,ac)[0],200)
         self.assertEqual(self.call("/api/messenger/messages","POST",{"peer":"alliance","body":"Group"},
             a,ac)[0],201)
         self.assertEqual(self.call("/api/accounts/"+bid[7:],"DELETE",cookie=admin,csrf=adcsrf)[0],200)
@@ -218,6 +281,7 @@ class MessengerTests(unittest.TestCase):
 
     def test_chat_rate_limit_blocks_bulk_spam(self):
         a,ac,aid=self.login("Alpha")
+        self.assertEqual(self.call("/api/messenger/alliance/join","POST",{},a,ac)[0],200)
         for i in range(30):
             self.assertEqual(self.call("/api/messenger/messages","POST",
                 {"peer":"alliance","body":"Message "+str(i)},a,ac)[0],201)
