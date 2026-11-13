@@ -43,6 +43,8 @@ ADMIN_PASSWORD = os.environ.get("SAS_ADMIN_PASSWORD", "")
 COOKIE_SECURE = os.environ.get("SAS_COOKIE_SECURE", "1") != "0"
 MAINTENANCE_MODE = os.environ.get("Const-Web", "false").strip().lower() in ("true", "1", "yes", "on")
 WEBHOOK = os.environ.get("SAS_DISCORD_WEBHOOK_URL", "")
+REGISTRATION_WEBHOOK = os.environ.get("SAS_DISCORD_REGISTRATION_WEBHOOK_URL", "")
+LOGIN_WEBHOOK = os.environ.get("SAS_DISCORD_LOGIN_WEBHOOK_URL", "")
 LOCK = threading.RLock()
 KINDS = ("events", "alliance", "updates", "announcements")
 CATEGORIES = ("Events", "Deals", "Alliance", "Port Inspection", "Other")
@@ -416,6 +418,37 @@ def webhook_valid(url):
         and not parts.password and parts.port in (None, 443) and not parts.query and not parts.fragment
         and re.fullmatch(r"/api/webhooks/\d+/[A-Za-z0-9_-]+", parts.path) is not None)
 
+def discord_account_notice(category, role, username, email="", player_name=""):
+    """Best-effort minimal audit event. Webhook tokens are read only from private environment."""
+    url = REGISTRATION_WEBHOOK if category == "registration" else LOGIN_WEBHOOK if category == "login" else ""
+    if not url:
+        return
+    if not webhook_valid(url):
+        logging.warning("Account notification webhook is invalid or not configured safely.")
+        return
+    title = "New member registration" if category == "registration" else "Website login"
+    fields = [
+        {"name": "Role", "value": role, "inline": True},
+        {"name": "Username", "value": str(username)[:64] or "Unknown", "inline": True}
+    ]
+    if email:
+        fields.append({"name": "Email", "value": str(email)[:254], "inline": False})
+    if player_name and category == "registration":
+        fields.append({"name": "In-game name", "value": str(player_name)[:70], "inline": False})
+    payload = {"username": "SaS Account Notifications", "allowed_mentions": {"parse": []},
+               "embeds": [{"title": title, "color": 5916792, "fields": fields}]}
+    def deliver():
+        try:
+            request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(request, timeout=5) as response:
+                if response.status >= 300:
+                    logging.warning("Account Discord notification returned a non-success status.")
+        except Exception:
+            # Do not log the secret URL or response body containing webhook credentials.
+            logging.warning("Unable to deliver account notification.")
+    threading.Thread(target=deliver, name="sas-discord-account-notice", daemon=True).start()
+
 def reminder_loop():
     if not WEBHOOK:
         return
@@ -682,6 +715,8 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK, connect() as db:
                     members.register(db, values)
                 note_login_failure("registration", source)
+                discord_account_notice("registration", "MEMBER", values.get("username", ""),
+                    values.get("email", ""), values.get("player_name", ""))
                 return self.respond(201, {"status": "pending", "message": "Registration submitted for administrator review."})
             if path == "/api/member/login" and method == "POST":
                 data = self.read_json()
@@ -704,6 +739,7 @@ class Handler(BaseHTTPRequestHandler):
                     token, csrf = members.new_session(db, row["id"])
                 clear_login_failures("member", source)
                 self.session_cookie("sas_member", token, {"approved": True, "admin": False, "csrf": csrf, "username": row["username"]})
+                discord_account_notice("login", "MEMBER", row["username"], row["email"])
                 return
             if path == "/api/member/logout" and method == "POST":
                 player = members.member_session(self, connect, LOCK)
@@ -760,6 +796,7 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute("INSERT INTO sessions VALUES(?,?,?)", (digest, csrf, int(time.time()) + 43200))
                 clear_login_failures("admin", source)
                 self.session_cookie("sas_session", token, {"admin": True, "csrf": csrf})
+                discord_account_notice("login", "ADMIN", ADMIN_USER)
                 return
             if not self.authorized():
                 return
