@@ -213,7 +213,7 @@ def validate_entry(data):
             raise ValueError("Choose R4 or R5.")
         if kind == "updates":
             author = ""
-    return kind, title, category, start, end, rewards, details, author, points, scoring
+    return kind, title, category, start, end, rewards, details, points, scoring, author
 
 def optional_rss_number(value, field, maximum=1000000000000000):
     if value is None or value == "":
@@ -1162,7 +1162,7 @@ class Handler(BaseHTTPRequestHandler):
                 values = validate_entry(self.read_json())
                 with LOCK, connect() as db:
                     stamp = datetime.now(timezone.utc).isoformat(timespec="microseconds")
-                    cursor = db.execute("""INSERT INTO entries(kind,title,category,start_utc,end_utc,rewards,details,author,points,scoring,created_at,modified_at)
+                    cursor = db.execute("""INSERT INTO entries(kind,title,category,start_utc,end_utc,rewards,details,points,scoring,author,created_at,modified_at)
                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""", (*values, stamp, stamp))
                     created_id = cursor.lastrowid
                 return self.respond(201, {"id": created_id})
@@ -1176,7 +1176,7 @@ class Handler(BaseHTTPRequestHandler):
                         values = validate_entry(self.read_json())
                         stamp = datetime.now(timezone.utc).isoformat(timespec="microseconds")
                         cursor = db.execute("""UPDATE entries SET kind=?,title=?,category=?,start_utc=?,end_utc=?,
-                            rewards=?,details=?,author=?,points=?,scoring=?,modified_at=?,reminded_at=NULL,reminder_claimed_at=NULL WHERE id=?""",
+                            rewards=?,details=?,points=?,scoring=?,author=?,modified_at=?,reminded_at=NULL,reminder_claimed_at=NULL WHERE id=?""",
                             (*values, stamp, entry_id))
                     if cursor.rowcount == 0:
                         return self.respond(404, {"error": "Entry not found."})
