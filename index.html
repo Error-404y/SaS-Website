@@ -15,6 +15,7 @@
   <script src="/reference-data.js" defer></script>
   <script src="/reference-ui.js" defer></script>
   <script src="/planner-ui.js" defer></script>
+  <script src="/messenger-ui.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -442,6 +443,50 @@
           </div>
         </section>
 
+        <section class="page hidden" id="page-messenger" data-section="messenger">
+          <div class="page-title messenger-titlebar">
+            <div><p class="section-kicker">SAINTS AND SINNERS</p><h1>SaS Messenger</h1></div>
+            <span class="messenger-page-unread" id="messenger-page-unread" hidden>0 unread</span>
+          </div>
+          <div class="messenger-shell" id="messenger-shell">
+            <aside class="messenger-list" aria-label="Conversations">
+              <div class="messenger-list-heading">
+                <strong>Messages</strong>
+                <span class="messenger-unread-count" id="messenger-list-unread" hidden>0</span>
+              </div>
+              <label class="messenger-search-label" for="messenger-search"><span class="sr-only">Find a player</span>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4.5 4.5"/></svg>
+                <input id="messenger-search" type="search" autocomplete="off" placeholder="Find a player...">
+              </label>
+              <div class="messenger-contact-list" id="messenger-contact-list" role="list">
+                <p class="messenger-loading">Loading conversations…</p>
+              </div>
+            </aside>
+            <div class="messenger-chat" id="messenger-chat">
+              <div class="messenger-chat-header">
+                <button type="button" id="messenger-back" class="messenger-back" aria-label="Back to conversations">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <div class="messenger-avatar messenger-active-avatar" id="messenger-active-avatar" aria-hidden="true">SaS</div>
+                <div class="messenger-chat-identity">
+                  <strong id="messenger-active-name">SaS Messenger</strong>
+                  <span id="messenger-active-detail">Select a conversation to get started.</span>
+                </div>
+              </div>
+              <div class="messenger-history" id="messenger-history" role="log" aria-live="polite" aria-relevant="additions text">
+                <div class="messenger-empty">Choose a player or the alliance group to start chatting.</div>
+              </div>
+              <form class="messenger-compose" id="messenger-compose">
+                <label class="sr-only" for="messenger-message">Your message</label>
+                <input id="messenger-message" autocomplete="off" maxlength="2000" placeholder="Write a message..." disabled required>
+                <button type="submit" id="messenger-send" disabled aria-label="Send message" title="Send message">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                </button>
+              </form>
+              <p class="messenger-error" id="messenger-error" role="status" hidden></p>
+            </div>
+          </div>
+        </section>
         <section class="page hidden" id="page-accounts" data-section="accounts">
           <div class="page-title"><div><p class="section-kicker">ADMINISTRATION</p><h1>SaS – Accounts</h1></div></div>
           <div class="stats-grid accounts-stats">
@@ -471,6 +516,7 @@
           <button type="button" data-view="rss"><span>Alliance RSS</span><span class="nav-unread" data-unread="rss" hidden aria-label="No new updates">0</span></button>
           <button type="button" data-view="updates"><span>Website Updates</span><span class="nav-unread" data-unread="updates" hidden aria-label="No new updates">0</span></button>
           <button type="button" data-view="announcements"><span>HR Announcements</span><span class="nav-unread" data-unread="announcements" hidden aria-label="No new updates">0</span></button>
+          <button type="button" data-view="messenger"><span>SaS Messenger</span><span id="messenger-nav-unread" class="nav-unread" hidden aria-label="No unread messages">0</span></button>
           <span class="nav-group-label">TOOLS</span>
           <button type="button" data-view="tool-overview"><span>Calculators</span><span class="nav-hint">10 sections</span></button>
           <button type="button" class="admin-only" data-view="accounts" hidden><span>SaS – Accounts</span><span id="accounts-badge" class="nav-unread" hidden>0</span></button>

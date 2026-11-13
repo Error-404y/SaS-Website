@@ -7,6 +7,7 @@
   const site = { entries: [], settings: {}, rss: null, admin: false, member: false, csrf: null, page: 'events', selected: null, loaded: false, clockOffset: 0, rssFormRevision: '', rssFormInitialBalances: {}, rssFormInitialRemaining: '' };
   const labels = { events: 'Events', alliance: 'Alliance Events', rss: 'Alliance RSS',
     updates: 'Website Updates', announcements: 'HR Announcements', accounts: 'SaS – Accounts',
+    messenger: 'SaS Messenger',
     'tool-overview': 'Calculators', 'tool-events': 'Event Points', 'tool-training': 'Troop Training',
     'tool-buildings': 'Building Costs', 'tool-speedups': 'Speedups', 'tool-gathering': 'RSS Gathering',
     'tool-svs': 'State vs. State', 'tool-chief': 'Chief Almighty',
@@ -26,6 +27,7 @@
     site.accounts = [];
     site.rss = null;
     site.member = false;
+    window.SasMessenger?.stop();
     setAdmin(false);
     window.location.replace('/');
   }
@@ -181,6 +183,7 @@
   function switchPage(name) {
     if (!labels[name] || (name === 'accounts' && !site.admin)) return;
     site.page = name;
+    window.SasMessenger?.onPage(name);
     all('.page').forEach(node => {
       const selected = node.dataset.section === name;
       node.classList.toggle('hidden', !selected);
@@ -631,6 +634,7 @@
       }) });
       site.member = false;
       setAdmin(true, data.csrf);
+      window.SasMessenger?.start(data.csrf);
       adminLastInteraction = Date.now();
       adminActivityLastSent = adminLastInteraction;
       unlockSite();
@@ -651,6 +655,7 @@
     try {
       await request(site.admin ? '/api/logout' : '/api/member/logout', { method: 'POST', body: '{}' });
       site.member = false;
+      window.SasMessenger?.stop();
       site.entries = [];
       site.settings = {};
       site.rss = null;
@@ -702,7 +707,10 @@
       }) });
       site.member = true;
       setAdmin(false, response.csrf);
+      window.SasMessenger?.start(response.csrf);
       unlockSite();
+      window.SasMessenger?.start(session.csrf);
+      window.SasMessenger?.onPage(site.page);
       await reload();
       one('#member-login-form').reset();
     } catch (error) { authMessage(error.message); }
@@ -1145,6 +1153,7 @@
     }
   }, 1000);
   one('#entrance').classList.add('hidden');
+  window.SasMessenger?.init();
   window.SasPlannerUI?.init();
   window.SasReferenceUI?.init();
   const page = location.hash.slice(1);
