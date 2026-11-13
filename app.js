@@ -8,7 +8,9 @@
   const labels = { events: 'Events', alliance: 'Alliance Events', rss: 'Alliance RSS',
     updates: 'Website Updates', announcements: 'HR Announcements', accounts: 'SaS – Accounts',
     'tool-overview': 'Calculators', 'tool-events': 'Event Points', 'tool-training': 'Troop Training',
-    'tool-buildings': 'Building Costs', 'tool-speedups': 'Speedups', 'tool-gathering': 'RSS Gathering' };
+    'tool-buildings': 'Building Costs', 'tool-speedups': 'Speedups', 'tool-gathering': 'RSS Gathering',
+    'tool-svs': 'State vs. State', 'tool-chief': 'Chief Almighty',
+    'tool-shards': 'Hero Star-Up', 'tool-pd': 'PD Level 1–30' };
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const calendar = window.SasCalendar;
   const toTime = value => calendar.utcTime(value);
@@ -191,7 +193,8 @@
       return order[status(a)] - order[status(b)] || toTime(a.start_utc) - toTime(b.start_utc);
     });
     one('#' + kind + '-rows').innerHTML = filtered.map(item => {
-      return '<tr class="event-row" tabindex="0" role="button" data-id="' + item.id + '" aria-label="View ' + escapeHtml(item.title) + ' details">' +
+      const urgency = status(item) === 'upcoming' ? window.SasReference.upcomingUrgency(item.start_utc, Date.now()) : 'normal';
+      return '<tr class="event-row event-soon-' + urgency + '" tabindex="0" role="button" data-id="' + item.id + '" aria-label="View ' + escapeHtml(item.title) + ' details">' +
         '<td><strong>' + escapeHtml(item.title) + '</strong><span class="mobile-date">' + escapeHtml(item.start_utc) + ' UTC</span></td>' +
         '<td>' + escapeHtml(item.category) + '</td>' +
         '<td class="date-cell">' + escapeHtml(item.start_utc) + '</td>' +
@@ -337,6 +340,12 @@
       const badge = row.querySelector('.status-pill');
       if (item && badge && !badge.classList.contains('status-' + calendar.eventStatus(item, now))) {
         changed = true;
+      }
+      if (item) {
+        const urgency = calendar.eventStatus(item, now) === 'upcoming' ? window.SasReference.upcomingUrgency(item.start_utc, now) : 'normal';
+        row.classList.toggle('event-soon-yellow', urgency === 'yellow');
+        row.classList.toggle('event-soon-red', urgency === 'red');
+        row.classList.toggle('event-soon-normal', urgency === 'normal');
       }
     });
     if (changed) {
@@ -1016,6 +1025,7 @@
   }, 1000);
   one('#entrance').classList.add('hidden');
   window.SasPlannerUI?.init();
+  window.SasReferenceUI?.init();
   const page = location.hash.slice(1);
   switchPage(labels[page] ? page : 'events');
   request('/api/session').then(async session => {
