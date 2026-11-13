@@ -100,6 +100,13 @@
       if (hours > 23 || minutes > 59 || seconds > 59 || days > 36500) return null;
       return days * 86400 + hours * 3600 + minutes * 60 + seconds;
     }
+    // Also accept the calculator's readable "1d 6h 29m 4s" format.
+    const readable = text.match(/^(?:(\d+)d\s*)?(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s\s*)?$/);
+    if (readable && text && /\d+[dhms]/.test(text)) {
+      const [days, hours, minutes, seconds] = readable.slice(1).map(x => Number(x || 0));
+      if (days > 36500 || hours > 23 || minutes > 59 || seconds > 59) return null;
+      return days * 86400 + hours * 3600 + minutes * 60 + seconds;
+    }
     return null;
   }
   function troopsForTargetPoints(key, targetPoints, capacityBoost = false, actualSampleSeconds = null) {
@@ -116,7 +123,7 @@
     const result = troops(key, baseQuantity, capacityBoost);
     const validSample = typeof actualSampleSeconds === 'number' &&
       Number.isFinite(actualSampleSeconds) && actualSampleSeconds > 0 &&
-      actualSampleSeconds <= result.originalSeconds * SAMPLE_SIZE / (result.quantity || 1) * 2;
+      actualSampleSeconds <= troop.seconds;
     const actualSeconds = validSample
       ? actualSampleSeconds * result.quantity / SAMPLE_SIZE : null;
     return {...result, rate, targetPoints:goal, requiredTroops:needed,
