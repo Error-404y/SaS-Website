@@ -6,7 +6,8 @@
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let csrf = '', identity = '', contacts = [], activePeer = '', shownIds = '',
     currentPage = false, running = false, busy = false, loadingPeer = '', listFlight = false,
-    lastNotify = 0, selectedGroupPlayers = new Set(), sessionGeneration = 0;
+    lastNotify = 0, selectedGroupPlayers = new Set(), sessionGeneration = 0,
+    olderMessages = [], historyHasMore = false, oldestBefore = null, loadingOlder = false;
   const avatar = item => item.group ? (item.id==='alliance'?'SaS':'GR') :
     String(item.username || '??').slice(0, 2).toUpperCase();
   const showTime = time => {
@@ -64,11 +65,12 @@
   function contactMarkup(item) {
     return '<button type="button" class="messenger-contact'+(item.id===activePeer?' is-active':'')+
       (item.id==='alliance'?' messenger-alliance-pinned':'')+
+      (item.id==='alliance' && !item.joined?' is-new-group':'')+
       (item.self?' messenger-own-profile':'')+
       '" data-messenger-peer="'+escape(item.id)+'" role="listitem">'+
       '<span class="messenger-avatar'+(item.group?' is-group':'')+'">'+escape(avatar(item))+'</span>'+
       '<span class="messenger-contact-details"><strong>'+escape(item.username)+
-      (item.id==='alliance'?' <span class="messenger-group-pin">PINNED</span>':'')+'</strong>'+
+      (item.id==='alliance'?' <span class="messenger-group-pin'+(!item.joined?' is-new':'')+'">'+(!item.joined?'NEW · JOIN':'PINNED')+'</span>':'')+'</strong>'+
       '<small>'+escape(item.self ? (item.last_message || 'Private notes · Only you can see this') :
         (item.id==='alliance' && !item.joined ? 'Join to see all messages' :
           (item.last_message || (item.group ? 'Group chat' : (item.player_name||'Say hello')))))+'</small></span>'+
@@ -116,6 +118,7 @@
     if (!running || !contacts.some(c=>c.id===peer)) return;
     activePeer=peer;
     shownIds='';
+    olderMessages=[];historyHasMore=false;oldestBefore=null;
     // A slow request for another conversation must never block this one.
     loadingPeer='';
     error();
@@ -137,6 +140,33 @@
     } else {
       await loadMessages(true);
     }
+  }
+  function renderHistory(messages) {
+    const holder=$('messenger-history');
+    const combined=new Map([...olderMessages,...messages].map(m=>[m.id,m]));
+    const allMessages=[...combined.values()].sort((a,b)=>a.id-b.id);
+    holder.innerHTML=(historyHasMore ? '<button type="button" class="messenger-load-older" data-load-older="1">Load older messages</button>' : '')+
+      messagesMarkup(allMessages);
+  }
+  async function loadOlder() {
+    if (loadingOlder || !historyHasMore || !oldestBefore || !activePeer || !running) return;
+    loadingOlder=true;
+    const current=activePeer, generation=sessionGeneration;
+    const holder=$('messenger-history'), beforeHeight=holder.scrollHeight;
+    try {
+      const result=await api('/api/messenger/messages?peer='+encodeURIComponent(current)+
+        '&before='+encodeURIComponent(oldestBefore));
+      if (current!==activePeer || generation!==sessionGeneration) return;
+      const page=result.messages||[];
+      olderMessages=[...page,...olderMessages];
+      historyHasMore=Boolean(result.has_more);
+      if (page.length) oldestBefore=page[0].id;
+      const fresh=await api('/api/messenger/messages?peer='+encodeURIComponent(current));
+      if (current!==activePeer || generation!==sessionGeneration) return;
+      renderHistory(fresh.messages||[]);
+      holder.scrollTop += holder.scrollHeight-beforeHeight;
+    }catch(e){error('Could not load older messages: '+e.message);}
+    finally{loadingOlder=false;}
   }
   function messagesMarkup(messages) {
     if (!messages.length) return '<div class="messenger-empty">No messages yet. '+(activePeer===identity?'Save a note to yourself!':'Say hello!')+'</div>';
@@ -169,7 +199,11 @@
       if (force || key!==shownIds) {
         const holder=$('messenger-history');
         const stickToBottom=force || holder.scrollHeight-holder.scrollTop-holder.clientHeight<90;
-        holder.innerHTML=messagesMarkup(messages);
+        if (!shownIds) {
+          historyHasMore=Boolean(result.has_more);
+          oldestBefore=messages.length?messages[0].id:null;
+        }
+        renderHistory(messages);
         shownIds=key;
         if (stickToBottom) holder.scrollTop=holder.scrollHeight;
       }
@@ -277,6 +311,7 @@
   function stop(){
     sessionGeneration++;
     running=false;csrf='';identity='';activePeer='';contacts=[];shownIds='';loadingPeer='';
+    olderMessages=[];historyHasMore=false;oldestBefore=null;
     $('messenger-shell').classList.remove('chat-open');
     $('messenger-message').disabled=true;
     $('messenger-send').disabled=true;
@@ -295,6 +330,9 @@
     }
   }
   function init(){
+    $('messenger-history').addEventListener('click',event=>{
+      if (event.target.closest('[data-load-older]')) loadOlder();
+    });
     $('messenger-contact-list').addEventListener('click',event=>{
       const button=event.target.closest('[data-messenger-peer]');
       if (button) openPeer(button.dataset.messengerPeer);
