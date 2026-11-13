@@ -197,9 +197,9 @@ class SecurityBoundaryTests(unittest.TestCase):
                 self.assertNotIn(b'data-view="accounts"', body)
                 self.assertEqual(headers.get("Cache-Control"), "no-store, max-age=0")
             status, data, headers = self.call("/assets/logo.webp")
-            self.assertEqual(status, 200)
-            self.assertEqual(headers.get("Content-Type"), "image/webp")
-            self.assertTrue(data)
+            self.assertEqual(status, 503)
+            self.assertIn(b"under maintenance", data)
+            self.assertIn(b'data:image/webp;base64,', body)
             for path in ("/index.html", "/app", "/login.html", "/auth.js",
                          "/app.js", "/styles.css", "/api/state", "/api/session",
                          "/api/accounts", "/api/not-real"):
@@ -230,6 +230,8 @@ class SecurityBoundaryTests(unittest.TestCase):
         self.assertIn("Under Construction", content)
         self.assertIn("Thank you for your patience.", content)
         self.assertIn("SAINTS AND SINNERS", content)
+        self.assertIn("data:image/webp;base64,", content)
+        self.assertNotIn("src=\"/assets/logo.webp\"", content)
         for forbidden in ('<nav', '<form', '<button', '<a href=', 'id="website"',
                           'id="auth-gate"', '/app.js', '/auth.js', '/api/'):
             self.assertNotIn(forbidden, content)
