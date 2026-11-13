@@ -836,6 +836,12 @@
   function renderBans() {
     const active = banRecords.filter(item => item.status === 'pending' || item.status === 'active');
     const finished = banRecords.filter(item => item.status !== 'pending' && item.status !== 'active');
+    const count = banRecords.filter(item => item.status === 'pending').length;
+    const accountPending = (site.accounts || []).filter(item => item.status === 'pending').length;
+    const resets = (site.passwordRequests || []).filter(item => item.status === 'pending').length;
+    const total = count + accountPending + resets;
+    one('#accounts-badge').hidden = total === 0;
+    one('#accounts-badge').textContent = total > 99 ? '99+' : String(total);
     one('#ban-queue-list').innerHTML = active.map(item =>
       '<article class="ban-queue-row '+escapeHtml(item.status)+'"><div class="account-row-info">'+
       '<strong>@'+escapeHtml(item.username)+' · '+escapeHtml(item.kind.toUpperCase())+' BAN</strong>'+
@@ -927,7 +933,8 @@
     const requests = site.passwordRequests || [];
     const pending = requests.filter(item => item.status === 'pending').length;
     const accountPending = (site.accounts || []).filter(item => item.status === 'pending').length;
-    const totalPending = pending + accountPending;
+    const banPending = banRecords.filter(item => item.status === 'pending').length;
+    const totalPending = pending + accountPending + banPending;
     one('#accounts-badge').hidden = totalPending === 0;
     one('#accounts-badge').textContent = totalPending > 99 ? '99+' : String(totalPending);
     one('#password-requests-badge').hidden = pending === 0;
