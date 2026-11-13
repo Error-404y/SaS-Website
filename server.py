@@ -765,13 +765,19 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, {"me": actor, "contacts": contacts,
                     "unread": sum(contact["unread"] for contact in contacts)})
             from urllib.parse import parse_qs
-            peer = parse_qs(urlsplit(self.path).query).get("peer", [""])[0]
+            query = parse_qs(urlsplit(self.path).query)
+            peer = query.get("peer", [""])[0]
+            cursor = query.get("before", [""])[0]
+            if cursor and (not cursor.isdecimal() or len(cursor)>20):
+                return self.respond(400, {"error": "Invalid message cursor."})
             with LOCK, connect() as db:
                 try:
-                    messages = messenger.history(db, actor, peer)
+                    messages, has_more = messenger.history_page(
+                        db, actor, peer, int(cursor) if cursor else None)
                 except ValueError as exc:
                     return self.respond(404, {"error": str(exc)})
-            return self.respond(200, {"me": actor, "peer": peer, "messages": messages})
+            return self.respond(200, {"me": actor, "peer": peer, "messages": messages,
+                                      "has_more": has_more})
         if path == "/api/reads":
             player = members.member_session(self, connect, LOCK)
             if not player or player["status"] != "approved":
@@ -918,6 +924,15 @@ class Handler(BaseHTTPRequestHandler):
                     except LookupError:
                         return self.respond(404, {"error": "Ban not found."})
                 return self.respond(200, {"ok": True, "undone": cancelled})
+            if path == "/api/messenger/alliance/join" and method == "POST":
+                actor, csrf = self.messenger_actor()
+                if actor is None:
+                    return self.respond(401, {"error": "An approved account is required."})
+                if not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), csrf):
+                    return self.respond(403, {"error": "Invalid CSRF token."})
+                with LOCK, connect() as db:
+                    joined = messenger.join_alliance(db, actor)
+                return self.respond(200, {"joined": joined, "member": True})
             if path == "/api/messenger/groups" and method == "POST":
                 actor, csrf = self.messenger_actor()
                 if actor is None:
