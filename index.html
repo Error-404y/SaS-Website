@@ -38,8 +38,8 @@
         <button type="submit" class="auth-primary">Submit registration</button>
       </form>
       <form id="password-request-form" class="auth-form hidden">
-        <label for="reset-identifier">Username or email</label>
-        <input id="reset-identifier" required maxlength="254" autocomplete="username" placeholder="Enter your account username or email">
+        <label for="reset-identifier">Username, email or in-game name</label>
+        <input id="reset-identifier" required maxlength="254" autocomplete="username" placeholder="e.g. ZER, email or OgX">
         <button type="submit" class="auth-primary">Request password change</button>
         <div class="auth-recovery-actions">
           <button type="button" class="auth-admin-link" id="have-reset-code">I have a reset code</button>
@@ -47,7 +47,7 @@
         </div>
       </form>
       <form id="password-complete-form" class="auth-form hidden">
-        <label for="reset-username">Username</label>
+        <label for="reset-username">Username, email or in-game name</label>
         <input id="reset-username" required autocomplete="username">
         <label for="reset-code">Reset code provided by an administrator</label>
         <input id="reset-code" required autocomplete="off">
@@ -143,6 +143,7 @@
         </section>
 
         <section class="page hidden" id="page-rss" data-section="rss">
+          <div class="rss-underlay" inert aria-hidden="true">
           <div class="page-title"><h1>Alliance RSS</h1><div class="rss-title-actions"><button type="button" class="small-button admin-only" id="rss-spend-open" hidden>Spend resources</button><button type="button" class="primary-button admin-only" id="rss-edit" hidden>Edit RSS</button></div></div>
           <div class="rss-resource-grid" aria-label="Alliance resource balances and production rates">
             <article class="rss-resource-card">
@@ -214,6 +215,13 @@
           </section>
           <div class="rss-footer"><span id="rss-last-updated">No alliance RSS data posted yet.</span><span>Values are entered by alliance staff.</span></div>
           <p class="rss-legacy-note hidden" id="rss-legacy-note"></p>
+          </div>
+          <div class="rss-construction" role="status">
+            <div class="rss-construction-card">
+              <span class="rss-construction-mark" aria-hidden="true">✦</span>
+              <h2>UNDER CONSTRUCTION</h2>
+            </div>
+          </div>
         </section>
 
         <section class="page hidden" id="page-updates" data-section="updates">
@@ -249,16 +257,24 @@
               <label>Which troops?
                 <select id="planner-troop">
                   <option value="guard-9">Guard IX — Honored</option>
-                  <option value="guard-10">Guard X — Royal</option>
+
                   <option value="biker-9">Biker IX — Honored</option>
                   <option value="marksman-9">Marksman IX — Honored</option>
-                  <option value="marksman-10">Marksman X — Royal</option>
+
                 </select>
+                <div class="locked-troops" aria-label="Unavailable level ten troops">
+                  <button class="locked-troop" type="button" data-locked-troop="Royal Guard — T10" aria-label="Royal Guard T10 locked">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Guard X
+                  </button>
+                  <button class="locked-troop" type="button" data-locked-troop="Royal Marksman — T10" aria-label="Royal Marksman T10 locked">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Marksman X
+                  </button>
+                </div>
               </label>
               <label>How many troops?<input id="planner-count" type="number" min="0" step="1" value="722"></label>
               <label>Training time reduction (%)<input id="planner-training-reduction" type="number" min="0" max="99.99" step="0.1" value="0"></label>
             </div>
-            <button id="planner-capacity" class="capacity-toggle" type="button" aria-pressed="false"><span><strong class="capacity-title">Training Capacity UP (2h)</strong><small>Optional · doubles RSS costs and training time</small></span><strong id="planner-capacity-state">OFF</strong></button>
+            <button id="planner-capacity" class="capacity-toggle" type="button" aria-pressed="false"><span><strong class="capacity-title">Training Capacity UP (2h)</strong><small>Optional · +200% capacity means 3× troops, RSS and time</small></span><strong id="planner-capacity-state">OFF</strong></button>
             <h2 class="tool-subtitle">Your training estimate</h2>
             <div class="tool-stats" id="planner-training-results" aria-live="polite"></div>
             <div class="tool-metadata" id="planner-training-notes"></div>
@@ -266,7 +282,7 @@
               <button type="button" id="planner-send-speedups" class="small-button">Calculate speedups →</button>
               <button type="button" id="planner-send-event" class="small-button">Officer event points →</button>
             </div>
-            <details class="tool-settings"><summary>How are these numbers calculated?</summary><p class="tool-footnote">The screenshots show rounded costs and training time for 722 troops. Other quantities are proportional estimates, not guaranteed in-game totals. With the optional boost ON, RSS and time are doubled (2×) as requested. The pictured boost costs 3K Diamonds.</p></details>
+            <details class="tool-settings"><summary>How are these numbers calculated?</summary><p class="tool-footnote">The screenshots show rounded costs and training time for 722 troops. Other quantities are proportional estimates, not guaranteed in-game totals. With the +200% boost ON, 722 base troops become 2,166 and RSS/time increase 3×, as shown in the game screenshots. The pictured boost costs 3K Diamonds.</p></details>
           </div>
         </section>
 
@@ -439,6 +455,29 @@
       <div><span>Review message</span><strong id="account-detail-review"></strong></div>
     </div>
     <div class="dialog-actions"><button type="button" class="small-button" data-close="account-detail-dialog">Close</button></div>
+  </dialog>
+
+  <dialog id="reset-approve-dialog" class="dialog">
+    <form id="reset-approve-form">
+      <div class="dialog-top">
+        <div><span class="section-kicker">PASSWORD RECOVERY</span><h2>Approve password change?</h2></div>
+        <button class="close-button" type="button" data-close="reset-approve-dialog" aria-label="Close">×</button>
+      </div>
+      <input type="hidden" id="reset-approve-id">
+      <p id="reset-approve-player" class="form-intro"></p>
+      <p>A one-time reset code will be generated. Share it privately with the correct player. The code expires after 1 hour.</p>
+      <p id="reset-approve-error" class="form-error" aria-live="polite"></p>
+      <div class="dialog-actions"><button type="button" class="small-button" data-close="reset-approve-dialog">Cancel</button><button type="submit" class="primary-button">Approve &amp; generate code</button></div>
+    </form>
+  </dialog>
+  <dialog id="locked-troop-dialog" class="dialog">
+    <div class="dialog-top"><div><span class="section-kicker">TROOP TRAINING</span><h2>Currently locked</h2></div>
+      <button type="button" class="close-button" data-close="locked-troop-dialog" aria-label="Close">×</button></div>
+    <div class="locked-troop-notice">
+      <svg aria-hidden="true" width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      <p>This option is currently locked.</p>
+    </div>
+    <div class="dialog-actions"><button type="button" class="primary-button" data-close="locked-troop-dialog">OK</button></div>
   </dialog>
 
   <dialog id="reset-code-dialog" class="dialog">
