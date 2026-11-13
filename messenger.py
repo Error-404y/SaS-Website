@@ -144,6 +144,9 @@ def contact_list(db, actor):
                          "group": True, "pinned": False})
     if actor != ADMIN:
         contacts.append({"id": ADMIN, "username": "SaS Admin", "player_name": "Administrator", "group": False})
+        own = approved_member(db, actor)
+        if own:
+            contacts.append({**member_profile(own), "group": False, "self": True})
     for row in rows:
         profile = member_profile(row)
         if profile["id"] != actor:
@@ -158,6 +161,10 @@ def summaries(db, actor):
     summaries_out = []
     for contact in contacts:
         target = contact["id"]
+        if contact.get("self"):
+            summaries_out.append({**contact,"last_message":"","last_at":None,
+                "last_id":0,"last_sender":None,"unread":0})
+            continue
         thread = thread_for(db, actor, target)
         latest = db.execute("""SELECT id,sender_key,body,created_at
             FROM chat_messages WHERE thread_key=? ORDER BY id DESC LIMIT 1""",
