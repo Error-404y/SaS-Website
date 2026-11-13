@@ -938,3 +938,25 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
  .messenger-contact-list{padding-bottom:20px}
  .messenger-titlebar h1{font-size:27px}
 }
+
+
+/* Clear clickable event rows and structured detail areas */
+.event-click-hint{display:block;width:max-content;margin-top:7px;padding:4px 9px;background:#efe7f8;border:1px solid #dfceee;border-radius:99px;color:#70479b;font-size:11px;font-weight:750;letter-spacing:.01em}
+.event-row:hover .event-click-hint,.event-row:focus-visible .event-click-hint{background:#e2d4f3;color:#522d80}
+.event-row:focus-visible{outline:3px solid #ae7fd8;outline-offset:-3px}
+#detail-body{grid-template-columns:repeat(2,minmax(0,1fr))}
+#detail-body .detail-item:nth-child(n+5){grid-column:1/-1}
+#detail-body .detail-item:nth-child(n+5) p{white-space:normal}
+#detail-body .detail-item{background:#fbfaff;border:1px solid #eee7f4;padding:13px 15px;border-radius:10px}
+.account-ban{border:1px solid #d9b3e4;background:#f7effc;color:#70428e;border-radius:8px;padding:9px 13px;font-size:12px;font-weight:750}
+.account-ban:hover{background:#ebdef6}
+.ban-queue-list{display:grid;gap:11px}
+.ban-queue-row{display:flex;align-items:center;justify-content:space-between;gap:18px;background:white;border:1px solid #e6dfec;border-radius:12px;padding:16px}
+.ban-queue-row.pending{border-left:4px solid #d6a143;background:#fffaf0}
+.ban-queue-row.active{border-left:4px solid #cf485d;background:#fff7f8}
+.ban-delay-info{background:#f4eefb;border:1px solid #e2d5ef;border-radius:11px;padding:15px;display:grid;gap:5px;margin-top:14px}
+.ban-delay-info strong{color:#523270;font-size:13px}
+.ban-delay-info span{color:#67738b;font-size:12px;line-height:1.5}
+#ban-dialog select,#ban-dialog textarea{display:block;margin:7px 0 15px;padding:11px;border-radius:9px;border:1px solid #d9deea;background:white;width:100%;font-size:13px}
+#ban-dialog .form-intro{color:#394460;font-weight:700;font-size:14px}
+@media(max-width:750px){.ban-queue-row{align-items:flex-start;flex-direction:column}#detail-body{grid-template-columns:1fr}#detail-body .detail-item{grid-column:1/-1}}
