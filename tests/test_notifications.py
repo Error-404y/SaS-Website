@@ -7,13 +7,15 @@ import server
 
 
 class ImmediateThread:
-    def __init__(self, *, target, name, daemon):
+    def __init__(self, *, target, name, daemon, args=(), kwargs=None):
         self.target = target
+        self.args = args
+        self.kwargs = kwargs or {}
         self.name = name
         self.daemon = daemon
 
     def start(self):
-        self.target()
+        self.target(*self.args, **self.kwargs)
 
 
 class DiscordAccountNotificationTests(unittest.TestCase):
