@@ -303,7 +303,7 @@
 
         <section class="page hidden" id="page-tool-training" data-section="tool-training">
           <div class="page-title"><h1>Troop Training</h1></div>
-          <div class="tool-steps" aria-label="Training calculator instructions"><span><b>1</b> Choose troops</span><span><b>2</b> Enter amount</span><span><b>3</b> See costs &amp; time</span></div>
+          <div class="tool-steps" aria-label="Training calculator instructions"><span><b>1</b> Choose troops</span><span><b>2</b> Enter point target</span><span><b>3</b> See required troops, costs &amp; time</span></div>
           <div class="tool-panel">
             <div class="tool-form-grid">
               <label>Which troops?
@@ -322,11 +322,13 @@
                   </button>
                 </div>
               </label>
-              <label>How many troops?<input id="planner-count" type="number" min="0" step="1" value="722"></label>
+              <label>How many Event Points do you want?<input id="planner-target-points" type="number" min="0" step="1" value="1072170"></label>
+              <input id="planner-count" type="hidden" value="722">
               <label>Training time reduction (%)<input id="planner-training-reduction" type="number" min="0" max="99.99" step="0.1" value="0"></label>
             </div>
             <button id="planner-capacity" class="capacity-toggle" type="button" aria-pressed="false"><span><strong class="capacity-title">Training Capacity UP (2h)</strong><small>Optional · +200% capacity means 3× troops, RSS and time</small></span><strong id="planner-capacity-state">OFF</strong></button>
-            <h2 class="tool-subtitle">Your training estimate</h2>
+            <h2 class="tool-subtitle">Troops needed for your point target</h2>
+            <p class="tool-footnote">Uses Phase 3 Officer Training points: Level IX = 1,485 points per troop; Level X = 1,960 points per troop. The +200% Training Capacity boost changes batch size, not points earned per troop.</p>
             <div class="tool-stats" id="planner-training-results" aria-live="polite"></div>
             <div class="tool-metadata" id="planner-training-notes"></div>
             <div class="tool-actions">
@@ -454,6 +456,8 @@
                 <strong>Messages</strong>
                 <span class="messenger-unread-count" id="messenger-list-unread" hidden>0</span>
               </div>
+              <button type="button" class="messenger-create-group" id="messenger-create-group">+ Create Group</button>
+              <p class="messenger-list-help">Find approved players or choose a group to start chatting.</p>
               <label class="messenger-search-label" for="messenger-search"><span class="sr-only">Find a player</span>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4.5 4.5"/></svg>
                 <input id="messenger-search" type="search" autocomplete="off" placeholder="Find a player...">
@@ -585,6 +589,24 @@
     </form>
   </dialog>
 
+  <dialog id="messenger-group-dialog" class="dialog messenger-group-dialog">
+    <form id="messenger-group-form">
+      <div class="dialog-top"><div><span class="section-kicker">SAS MESSENGER</span><h2>Create private group</h2></div>
+        <button type="button" class="close-button" data-close="messenger-group-dialog" aria-label="Close">×</button></div>
+      <p class="accounts-muted">Only selected members can see this group or read its messages.</p>
+      <label for="messenger-group-name">Group name</label>
+      <input id="messenger-group-name" maxlength="60" minlength="3" required placeholder="e.g. SvS Team">
+      <label for="messenger-group-player-search">Find players</label>
+      <input id="messenger-group-player-search" type="search" placeholder="Search username or in-game name">
+      <div id="messenger-group-players" class="messenger-player-picker" role="group" aria-label="Select group participants"></div>
+      <p id="messenger-group-selected" class="accounts-muted">0 players selected</p>
+      <p id="messenger-group-error" class="form-error" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" class="small-button" data-close="messenger-group-dialog">Cancel</button>
+        <button type="submit" class="primary-button">Create Group</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="account-detail-dialog" class="dialog">
     <div class="dialog-top"><div><span class="section-kicker">SaS – ACCOUNTS</span><h2>Player account details</h2></div>
       <button type="button" class="close-button" data-close="account-detail-dialog" aria-label="Close">×</button></div>
