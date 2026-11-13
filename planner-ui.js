@@ -94,11 +94,9 @@
     el('planner-send-speedups').title = data.actualSeconds === null
       ? 'Enter the actual training time first.' : 'Calculate speedups for Actual Time.';
     el('planner-training-notes').textContent = P.TROOPS[data.key].name + ' · ' +
-      readable(data.requiredTroops) + ' troops needed for ' + readable(data.targetPoints) +
-      ' Phase 3 points' + (data.capacityMultiplier === 3
-        ? ' · +200% capacity: ' + readable(data.baseQuantity) + ' base → ' +
-          readable(data.quantity) + ' in batch · ' + readable(data.extraPoints) + ' surplus points'
-        : ' · no capacity boost');
+      readable(data.requiredTroops) + ' troops required for ' + readable(data.targetPoints) +
+      ' points' + (data.extraPoints ? ' · ' + readable(data.extraPoints) +
+      ' extra points from full batch' : '');
   }
   function renderBuildings() {
     const level = el('planner-building-level').value;
