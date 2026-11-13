@@ -855,3 +855,15 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .ref-speed-tile small{font-size:10px;color:#73849b}
 @media(max-width:750px){.ref-speed-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:430px){.ref-speed-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Admin-only Discord delivery health cards */
+.discord-status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-top:12px}
+.discord-status-card{display:flex;flex-direction:column;gap:10px;border:1px solid #e2deee;border-radius:12px;background:#fbfaff;padding:16px;min-width:0}
+.discord-status-card>strong{color:#28364e;font-size:14px}
+.discord-status-card>small{font-size:11px;color:#65748c;overflow-wrap:anywhere;min-height:30px}
+.discord-status-indicator{font-size:11px;font-weight:750;padding:5px 9px;border-radius:100px;width:fit-content}
+.discord-status-indicator.is-set{background:#e8f6ee;color:#278452}
+.discord-status-indicator.is-unset{background:#fce9eb;color:#b3394e}
+.discord-status-card .small-button{align-self:flex-start}
+@media(max-width:760px){.discord-status-grid{grid-template-columns:1fr}}
