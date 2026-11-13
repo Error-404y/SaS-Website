@@ -45,7 +45,11 @@ MAINTENANCE_MODE = os.environ.get("Const-Web", "false").strip().lower() in ("tru
 WEBHOOK = os.environ.get("SAS_DISCORD_WEBHOOK_URL", "")
 REGISTRATION_WEBHOOK = os.environ.get("SAS_DISCORD_REGISTRATION_WEBHOOK_URL", "")
 LOGIN_WEBHOOK = os.environ.get("SAS_DISCORD_LOGIN_WEBHOOK_URL", "")
+ADMIN_IDLE_SECONDS = 30 * 60
 LOCK = threading.RLock()
+NOTICE_STATUS = {kind: {"configured": bool(url), "last_result": "not attempted",
+    "last_attempt": None} for kind, url in (
+    ("registration", REGISTRATION_WEBHOOK), ("login", LOGIN_WEBHOOK), ("reminder", WEBHOOK))}
 KINDS = ("events", "alliance", "updates", "announcements")
 CATEGORIES = ("Events", "Deals", "Alliance", "Port Inspection", "Other")
 RSS_RESOURCES = ("ammo", "cash", "electricity", "gas")
@@ -104,8 +108,14 @@ def init():
         db.execute("""CREATE TABLE IF NOT EXISTS sessions (
             token_hash TEXT PRIMARY KEY,
             csrf TEXT NOT NULL,
-            expires_at INTEGER NOT NULL
+            expires_at INTEGER NOT NULL,
+            last_activity_at INTEGER NOT NULL DEFAULT 0
         )""")
+        if "last_activity_at" not in [row["name"] for row in db.execute("PRAGMA table_info(sessions)")]:
+            db.execute("ALTER TABLE sessions ADD COLUMN last_activity_at INTEGER NOT NULL DEFAULT 0")
+        # Previously issued sessions lack a trustworthy human-activity timestamp.
+        # Re-authentication is required to establish a new 30-minute idle window.
+        db.execute("DELETE FROM sessions WHERE last_activity_at=0")
         members.setup(db)
         db.execute("""CREATE TABLE IF NOT EXISTS auth_failures (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -356,8 +366,12 @@ def current_session(handler):
     if not value:
         return None
     token_hash = __import__("hashlib").sha256(value.value.encode()).hexdigest()
+    now = int(time.time())
     with LOCK, connect() as db:
-        row = db.execute("SELECT * FROM sessions WHERE token_hash=? AND expires_at>?", (token_hash, int(time.time()))).fetchone()
+        row = db.execute("""SELECT * FROM sessions WHERE token_hash=? AND expires_at>?
+            AND last_activity_at>?""", (token_hash, now, now - ADMIN_IDLE_SECONDS)).fetchone()
+        if not row:
+            db.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash,))
     return dict(row) if row else None
 
 
@@ -418,6 +432,39 @@ def webhook_valid(url):
         and not parts.password and parts.port in (None, 443) and not parts.query and not parts.fragment
         and re.fullmatch(r"/api/webhooks/\d+/[A-Za-z0-9_-]+", parts.path) is not None)
 
+def discord_send(kind, url, payload):
+    """Deliver a Discord webhook safely, reporting only status without exposing its secret."""
+    with LOCK:
+        NOTICE_STATUS[kind]["last_attempt"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if not url or not webhook_valid(url):
+        state = "not configured" if not url else "invalid URL"
+        with LOCK:
+            NOTICE_STATUS[kind]["last_result"] = state
+        return False
+    try:
+        request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "User-Agent": "SaS-Website/1.0"},
+            method="POST")
+        with urllib.request.urlopen(request, timeout=10) as response:
+            code = response.status
+        success = 200 <= code < 300
+        with LOCK:
+            NOTICE_STATUS[kind]["last_result"] = "delivered" if success else "HTTP " + str(code)
+        if not success:
+            logging.warning("Discord %s webhook: HTTP %s", kind, code)
+        return success
+    except urllib.error.HTTPError as exc:
+        # Do not log exception strings or the webhook URL, which contains a secret.
+        with LOCK:
+            NOTICE_STATUS[kind]["last_result"] = "HTTP " + str(exc.code)
+        logging.warning("Discord %s webhook: HTTP %s", kind, exc.code)
+    except Exception as exc:
+        state = type(exc).__name__
+        with LOCK:
+            NOTICE_STATUS[kind]["last_result"] = "network error (" + state + ")"
+        logging.warning("Discord %s webhook failed: %s", kind, state)
+    return False
+
 def discord_account_notice(category, role, username, email="", player_name=""):
     """Best-effort minimal audit event. Webhook tokens are read only from private environment."""
     url = REGISTRATION_WEBHOOK if category == "registration" else LOGIN_WEBHOOK if category == "login" else ""
@@ -437,17 +484,8 @@ def discord_account_notice(category, role, username, email="", player_name=""):
         fields.append({"name": "In-game name", "value": str(player_name)[:70], "inline": False})
     payload = {"username": "SaS Account Notifications", "allowed_mentions": {"parse": []},
                "embeds": [{"title": title, "color": 5916792, "fields": fields}]}
-    def deliver():
-        try:
-            request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(request, timeout=5) as response:
-                if response.status >= 300:
-                    logging.warning("Account Discord notification returned a non-success status.")
-        except Exception:
-            # Do not log the secret URL or response body containing webhook credentials.
-            logging.warning("Unable to deliver account notification.")
-    threading.Thread(target=deliver, name="sas-discord-account-notice", daemon=True).start()
+    threading.Thread(target=discord_send, args=(category, url, payload),
+        name="sas-discord-account-notice", daemon=True).start()
 
 def reminder_loop():
     if not WEBHOOK:
@@ -478,16 +516,12 @@ def reminder_loop():
                         {"name": "Section", "value": "Alliance Events" if row["kind"] == "alliance" else "Events"}
                     ]}]
                 }
-                request = urllib.request.Request(WEBHOOK, data=json.dumps(data).encode(), headers={"Content-Type": "application/json"}, method="POST")
-                try:
-                    with urllib.request.urlopen(request, timeout=10) as response:
-                        if response.status >= 300:
-                            raise RuntimeError("Notification unsuccessful.")
+                if discord_send("reminder", WEBHOOK, data):
                     with LOCK, connect() as db:
                         db.execute("UPDATE entries SET reminded_at=? WHERE id=? AND start_utc=?",
                             (current, row["id"], row["start_utc"]))
-                except Exception:
-                    logging.warning("Unable to send event reminder.")
+                else:
+                    logging.warning("Event reminder delivery failed and will be retried.")
             else:
                 time.sleep(25)
         except Exception:
@@ -578,6 +612,12 @@ class Handler(BaseHTTPRequestHandler):
             if not current_session(self) and not (player and player["status"] == "approved"):
                 return self.respond(401, {"error": "An approved account is required."})
             return self.respond(200, get_state())
+        if path == "/api/notifications/status":
+            if not current_session(self):
+                return self.respond(403, {"error": "Administrator access required."})
+            with LOCK:
+                status = {key: dict(value) for key, value in NOTICE_STATUS.items()}
+            return self.respond(200, {"channels": status})
         if path == "/api/accounts":
             if not current_session(self):
                 return self.respond(403, {"error": "Administrator access required."})
@@ -594,7 +634,8 @@ class Handler(BaseHTTPRequestHandler):
                 "username": player["username"] if player else (ADMIN_USER if session else None),
                 "status": player["status"] if player else None,
                 "review_message": player["review_message"] if player else "",
-                "csrf": session["csrf"] if session else (player["csrf"] if player else None)})
+                "csrf": session["csrf"] if session else (player["csrf"] if player else None),
+                "admin_idle_timeout_seconds": ADMIN_IDLE_SECONDS if session else None})
         if path in ("/", "/index.html", "/app"):
             player = members.member_session(self, connect, LOCK)
             permitted = bool(current_session(self)) or bool(player and player["status"] == "approved")
@@ -661,6 +702,37 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if not self.valid_request_origin():
                 return self.respond(403, {"error": "Cross-origin request rejected."})
+            if path == "/api/notifications/test" and method == "POST":
+                if not self.authorized():
+                    return
+                values = self.read_json()
+                channel = values.get("channel")
+                urls = {"registration": REGISTRATION_WEBHOOK,
+                    "login": LOGIN_WEBHOOK, "reminder": WEBHOOK}
+                if channel not in urls:
+                    return self.respond(400, {"error": "Choose registration, login or reminder."})
+                notice = {"username": "SaS Notifications", "allowed_mentions": {"parse": []},
+                    "embeds": [{"title": "SaS notification test",
+                        "description": "Test message for " + channel + " notifications."}]}
+                delivered = discord_send(channel, urls[channel], notice)
+                return self.respond(200 if delivered else 502,
+                    {"ok": delivered, "channel": channel,
+                     "result": NOTICE_STATUS[channel]["last_result"],
+                     "error": None if delivered else "Discord delivery failed: " + NOTICE_STATUS[channel]["last_result"]})
+            if path == "/api/admin/activity" and method == "POST":
+                if not self.authorized():
+                    return
+                cookie = SimpleCookie()
+                cookie.load(self.headers.get("Cookie", ""))
+                digest = hashlib.sha256(cookie["sas_session"].value.encode()).hexdigest()
+                now = int(time.time())
+                with LOCK, connect() as db:
+                    updated = db.execute("""UPDATE sessions SET last_activity_at=?
+                        WHERE token_hash=? AND expires_at>? AND last_activity_at>?""",
+                        (now, digest, now, now - ADMIN_IDLE_SECONDS))
+                if not updated.rowcount:
+                    return self.respond(403, {"error": "Administrator session expired."})
+                return self.respond(200, {"ok": True, "idle_timeout_seconds": ADMIN_IDLE_SECONDS})
             if path == "/api/reads" and method == "POST":
                 player = members.member_session(self, connect, LOCK)
                 if not player or player["status"] != "approved":
@@ -832,9 +904,11 @@ class Handler(BaseHTTPRequestHandler):
                 digest = __import__("hashlib").sha256(token.encode()).hexdigest()
                 with LOCK, connect() as db:
                     db.execute("DELETE FROM sessions WHERE expires_at<?", (int(time.time()),))
-                    db.execute("INSERT INTO sessions VALUES(?,?,?)", (digest, csrf, int(time.time()) + 43200))
+                    stamp = int(time.time())
+                    db.execute("""INSERT INTO sessions(token_hash,csrf,expires_at,last_activity_at)
+                        VALUES(?,?,?,?)""", (digest, csrf, stamp + 43200, stamp))
                 clear_login_failures("admin", source)
-                self.session_cookie("sas_session", token, {"admin": True, "csrf": csrf})
+                self.session_cookie("sas_session", token, {"admin": True, "csrf": csrf, "idle_timeout_seconds": ADMIN_IDLE_SECONDS})
                 discord_account_notice("login", "ADMIN", ADMIN_USER)
                 return
             if not self.authorized():
@@ -972,6 +1046,9 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     init()
+    for kind, url in (("reminder", WEBHOOK), ("registration", REGISTRATION_WEBHOOK), ("login", LOGIN_WEBHOOK)):
+        logging.info("Discord %s webhook: %s", kind,
+            "ready" if url and webhook_valid(url) else "invalid URL" if url else "NOT CONFIGURED")
     if WEBHOOK:
         threading.Thread(target=reminder_loop, daemon=True).start()
     logging.info("SaS Website listening on %s:%s", HOST, PORT)

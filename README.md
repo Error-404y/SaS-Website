@@ -141,6 +141,28 @@ The login screen offers **Forgot your password? → Request password change**. T
 
 Admins can approve a pending request to generate a one-use code and share it **privately** with the correct player; the code expires after **one hour**. Players then use **I have a reset code** to set a new password. Reviewed requests remain visible in the admin list for **48 hours** and then disappear automatically from that list (database audit history is preserved). Pending requests remain visible until reviewed. A repeat request made within 15 minutes does not create another pending entry.
 
+### Discord notifications: setup and troubleshooting
+
+The three different notification types have **three different environment variables**. Set each to a newly generated private Discord webhook URL in **Bot-Hosting's actual Python application's environment or its deployed `.env`**, without quotes or spaces around the value. Restart/redeploy the Python application after changing environment values:
+
+```dotenv
+SAS_DISCORD_WEBHOOK_URL=YOUR_EVENT_REMINDER_WEBHOOK
+SAS_DISCORD_REGISTRATION_WEBHOOK_URL=YOUR_REGISTRATION_REVIEW_WEBHOOK
+SAS_DISCORD_LOGIN_WEBHOOK_URL=YOUR_SUCCESSFUL_LOGIN_WEBHOOK
+```
+
+If using `.env`, it must be in the **same directory as `server.py`** in the running Bot-Hosting filesystem. The host's already-set environment variables take precedence over `.env` (the loader uses `os.environ.setdefault`). Setting a variable to an empty value in the hosting dashboard also overrides a non-empty `.env` value. Public GitHub does **not** contain real webhook secrets.
+
+The admin account page **SaS – Accounts → Discord notifications** reports **Configured/Not configured**, last delivery result, and a **Send test** button for each of the three channels. Successful test sends create a simple message in Discord. Delivery failures show only HTTP status or exception category (never the secret webhook URL). Examples: `HTTP 404` can indicate a deleted/rotated URL; `HTTP 401` a rejected credential; `HTTP 429` rate limiting; `network error` an outbound hosting/network problem. Account alerts fire for *new successful registrations* and *successful logins only*; neither a page refresh nor failed sign-in sends a new login message.
+
+Event reminders require an **upcoming Events or Alliance Events entry with a valid UTC start**. The server sends an `@everyone` reminder during the **final 60 minutes before an event starts**. It retries a failed delivery until it succeeds or the start time passes. Keep the Python process running. Discord permissions must allow the webhook to mention everyone; otherwise delivery might succeed without pinging everyone.
+
+**Do not paste active webhook URLs into GitHub, screenshots or chat.** Previously shared URLs should be revoked/regenerated in Discord. Never include webhook URLs in a bug report; share only the sanitized delivery status instead.
+
+### Administrator inactivity timeout
+
+All administrator sessions now expire after **30 minutes with no actual browser activity**. API polling and the live event countdown do not refresh the server-side timer. The app records active user interaction through an authenticated, CSRF-protected `POST /api/admin/activity` endpoint (sent at most once per minute). The server checks last human activity for all administrative routes including `GET /api/accounts`, and destroys expired sessions. After expiry the admin must sign in again; normal approved-member sessions are unaffected. Previously issued admin sessions must reauthenticate after the SQLite migration. Login still has an absolute session expiry as a separate safety limit.
+
 ### Discord registration and login notifications
 
 Create two Discord webhooks in your chosen channels and store them privately in `.env` or the host's environment settings:

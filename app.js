@@ -16,6 +16,39 @@
   const toTime = value => calendar.utcTime(value);
   const currentUtc = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
   let toastTimer;
+  let adminLastInteraction = Date.now();
+  let adminActivityLastSent = 0;
+  let adminActivitySending = false;
+  const ADMIN_IDLE_MS = 30 * 60 * 1000;
+
+  function adminExpired() {
+    site.entries = [];
+    site.accounts = [];
+    site.rss = null;
+    site.member = false;
+    setAdmin(false);
+    window.location.replace('/');
+  }
+
+  function trackAdminInteraction(event) {
+    if (!site.admin || (event.type === 'keydown' && (
+      event.key === 'Shift' || event.key === 'Control' || event.key === 'Alt'))) return;
+    const now = Date.now();
+    if (now - adminLastInteraction >= ADMIN_IDLE_MS) {
+      adminExpired();
+      return;
+    }
+    adminLastInteraction = now;
+    if (adminActivitySending || now - adminActivityLastSent < 60000) return;
+    adminActivityLastSent = now;
+    adminActivitySending = true;
+    request('/api/admin/activity', { method: 'POST', body: '{}' })
+      .catch(() => adminExpired())
+      .finally(() => { adminActivitySending = false; });
+  }
+
+  ['pointerdown', 'keydown', 'touchstart'].forEach(type =>
+    document.addEventListener(type, trackAdminInteraction, { passive: true }));
 
   async function request(path, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
@@ -325,7 +358,10 @@
     posts('updates');
     posts('announcements');
     rss();
-    if (site.admin && site.page === 'accounts') loadAccounts();
+    if (site.admin && site.page === 'accounts') {
+      loadAccounts();
+      loadDiscordStatus();
+    }
     refreshCountdowns();
     showUnread();
   }
@@ -557,6 +593,8 @@
       }) });
       site.member = false;
       setAdmin(true, data.csrf);
+      adminLastInteraction = Date.now();
+      adminActivityLastSent = adminLastInteraction;
       unlockSite();
       one('#login-form').reset();
       one('#login-dialog').close();
@@ -646,6 +684,42 @@
       authTab('signin');
       authMessage('Registration received. An administrator must approve your account before you can sign in.', true);
     } catch (error) { authMessage(error.message); }
+  }
+
+  async function loadDiscordStatus() {
+    if (!site.admin) return;
+    const target = one('#discord-status-grid');
+    if (!target) return;
+    try {
+      const data = await request('/api/notifications/status');
+      const names = { registration: 'New registrations', login: 'Member / admin login', reminder: 'Event reminders (1h)' };
+      target.innerHTML = Object.entries(data.channels).map(([key, channel]) =>
+        '<article class="discord-status-card"><strong>' + escapeHtml(names[key] || key) + '</strong>' +
+        '<span class="discord-status-indicator ' + (channel.configured ? 'is-set' : 'is-unset') + '">' +
+        (channel.configured ? 'Configured' : 'Not configured') + '</span>' +
+        '<small>Last delivery: ' + escapeHtml(channel.last_result) + '</small>' +
+        '<button type="button" class="small-button" data-test-discord="' + escapeHtml(key) + '"' +
+        (channel.configured ? '' : ' disabled') + '>Send test</button></article>'
+      ).join('');
+    } catch (error) {
+      target.textContent = 'Unable to read Discord status: ' + error.message;
+    }
+  }
+
+  async function testDiscord(channel, button) {
+    if (!site.admin) return;
+    button.disabled = true;
+    try {
+      await request('/api/notifications/test', {
+        method: 'POST', body: JSON.stringify({ channel })
+      });
+      notify('Test sent to Discord: ' + channel);
+    } catch (error) {
+      notify('Discord test failed: ' + error.message);
+    } finally {
+      await loadDiscordStatus();
+      button.disabled = false;
+    }
   }
 
   async function loadAccounts() {
@@ -892,6 +966,11 @@
   one('#accounts-filter').addEventListener('change', renderAccounts);
   one('#account-edit-form').addEventListener('submit', saveAccountEdits);
   one('#password-requests-refresh').addEventListener('click', loadAccounts);
+  one('#discord-status-refresh').addEventListener('click', loadDiscordStatus);
+  one('#discord-status-grid').addEventListener('click', event => {
+    const button = event.target.closest('[data-test-discord]');
+    if (button) testDiscord(button.dataset.testDiscord, button);
+  });
   one('#review-form').addEventListener('submit', submitReview);
   one('#forgot-password').addEventListener('click', () => recoveryView('request'));
   one('#have-reset-code').addEventListener('click', () => recoveryView('complete'));
@@ -1031,6 +1110,8 @@
   request('/api/session').then(async session => {
     site.member = !!session.approved && !session.admin;
     setAdmin(!!session.admin, session.csrf);
+    adminLastInteraction = Date.now();
+    adminActivityLastSent = adminLastInteraction;
     if (session.admin || session.approved) {
       window.SasPlannerUI?.setIdentity(session.username || 'admin');
       if (site.member) {
@@ -1049,6 +1130,10 @@
     if (site.admin && !document.hidden) loadAccounts();
   }, 15000);
   setInterval(async () => {
+    if (site.admin && Date.now() - adminLastInteraction >= ADMIN_IDLE_MS) {
+      adminExpired();
+      return;
+    }
     if (document.hidden || (!site.admin && !site.member)) return;
     try {
       const session = await request('/api/session');
