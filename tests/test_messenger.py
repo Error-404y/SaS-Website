@@ -129,6 +129,56 @@ class MessengerTests(unittest.TestCase):
         self.assertEqual(self.call("/api/messenger",cookie=admin)[1]["unread"],1)
         self.assertEqual(self.call("/api/messenger/messages?peer="+aid,cookie=admin)[1]["messages"][0]["body"],"Hello admin")
 
+    def test_private_groups_only_visible_to_invited_members(self):
+        alpha, alpha_csrf, alpha_id = self.login("Alpha")
+        bravo, bravo_csrf, bravo_id = self.login("Bravo")
+        charlie, charlie_csrf, charlie_id = self.login("Charlie")
+        admin, admin_csrf = self.login_admin()
+        self.assertEqual(self.call("/api/messenger/groups", "POST", {
+            "name": "Secret SvS", "members": [bravo_id]}, alpha)[0], 403)
+        status, result = self.call("/api/messenger/groups", "POST", {
+            "name": "Secret SvS", "members": [bravo_id]}, alpha, alpha_csrf)
+        self.assertEqual(status, 201, result)
+        group_id = result["id"]
+        self.assertTrue(group_id.startswith("group:"))
+        for cookie, expected in [(alpha,True),(bravo,True),(charlie,False),(admin,False)]:
+            status, payload = self.call("/api/messenger",cookie=cookie)
+            self.assertEqual(status,200)
+            self.assertEqual(any(c["id"]==group_id for c in payload["contacts"]),expected)
+            self.assertEqual(payload["contacts"][0]["username"],"SaS - Group Chat")
+        self.assertEqual(self.call("/api/messenger/messages","POST",{
+            "peer": group_id,"body": "Top secret"},charlie,charlie_csrf)[0],400)
+        self.assertEqual(self.call("/api/messenger/messages?peer="+group_id,cookie=charlie)[0],404)
+        self.assertEqual(self.call("/api/messenger/messages?peer="+group_id,cookie=admin)[0],404)
+        self.assertEqual(self.call("/api/messenger/read","POST",{
+            "peer":group_id},charlie,charlie_csrf)[0],400)
+        self.assertEqual(self.call("/api/messenger/messages","POST",{
+            "peer":group_id,"body":"Top secret"},alpha,alpha_csrf)[0],201)
+        self.assertEqual(self.call("/api/messenger",cookie=bravo)[1]["unread"],1)
+        self.assertEqual(self.call("/api/messenger",cookie=charlie)[1]["unread"],0)
+        self.assertEqual(self.call("/api/messenger/messages?peer="+group_id,cookie=bravo)[1]["messages"][0]["body"],"Top secret")
+        self.assertEqual(self.call("/api/messenger/read","POST",{
+            "peer":group_id},bravo,bravo_csrf)[0],200)
+        self.assertEqual(self.call("/api/messenger",cookie=bravo)[1]["unread"],0)
+
+    def test_group_rejects_pending_and_duplicate_members(self):
+        alpha, csrf, alpha_id = self.login("Alpha")
+        bravo, _, bravo_id = self.login("Bravo")
+        with server.connect() as db:
+            pending_id = db.execute("SELECT id FROM members WHERE username='Pending'").fetchone()["id"]
+        for members_list in ([bravo_id,bravo_id], [alpha_id], ["member:"+str(pending_id)], [],
+                             [bravo_id,"member:999999"]):
+            status, data = self.call("/api/messenger/groups","POST",
+                {"name":"Private Test","members":members_list},alpha,csrf)
+            self.assertEqual(status,400,data)
+        status,data=self.call("/api/messenger/groups","POST",
+            {"name":"Private Test","members":[bravo_id]},alpha,csrf)
+        self.assertEqual(status,201,data)
+        # Account deletion removes member access to their private groups.
+        admin,admin_csrf=self.login_admin()
+        self.assertEqual(self.call("/api/accounts/"+bravo_id[7:],"DELETE",cookie=admin,csrf=admin_csrf)[0],200)
+        self.assertEqual(self.call("/api/messenger",cookie=alpha)[0],200)
+
     def test_validation_and_account_deletion(self):
         a,ac,aid=self.login("Alpha")
         b,bc,bid=self.login("Bravo")
