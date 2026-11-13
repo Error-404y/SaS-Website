@@ -358,7 +358,10 @@
     posts('updates');
     posts('announcements');
     rss();
-    if (site.admin && site.page === 'accounts') loadAccounts();
+    if (site.admin && site.page === 'accounts') {
+      loadAccounts();
+      loadDiscordStatus();
+    }
     refreshCountdowns();
     showUnread();
   }
@@ -683,6 +686,42 @@
     } catch (error) { authMessage(error.message); }
   }
 
+  async function loadDiscordStatus() {
+    if (!site.admin) return;
+    const target = one('#discord-status-grid');
+    if (!target) return;
+    try {
+      const data = await request('/api/notifications/status');
+      const names = { registration: 'New registrations', login: 'Member / admin login', reminder: 'Event reminders (1h)' };
+      target.innerHTML = Object.entries(data.channels).map(([key, channel]) =>
+        '<article class="discord-status-card"><strong>' + escapeHtml(names[key] || key) + '</strong>' +
+        '<span class="discord-status-indicator ' + (channel.configured ? 'is-set' : 'is-unset') + '">' +
+        (channel.configured ? 'Configured' : 'Not configured') + '</span>' +
+        '<small>Last delivery: ' + escapeHtml(channel.last_result) + '</small>' +
+        '<button type="button" class="small-button" data-test-discord="' + escapeHtml(key) + '"' +
+        (channel.configured ? '' : ' disabled') + '>Send test</button></article>'
+      ).join('');
+    } catch (error) {
+      target.textContent = 'Unable to read Discord status: ' + error.message;
+    }
+  }
+
+  async function testDiscord(channel, button) {
+    if (!site.admin) return;
+    button.disabled = true;
+    try {
+      await request('/api/notifications/test', {
+        method: 'POST', body: JSON.stringify({ channel })
+      });
+      notify('Test sent to Discord: ' + channel);
+    } catch (error) {
+      notify('Discord test failed: ' + error.message);
+    } finally {
+      await loadDiscordStatus();
+      button.disabled = false;
+    }
+  }
+
   async function loadAccounts() {
     if (!site.admin) return;
     try {
@@ -927,6 +966,11 @@
   one('#accounts-filter').addEventListener('change', renderAccounts);
   one('#account-edit-form').addEventListener('submit', saveAccountEdits);
   one('#password-requests-refresh').addEventListener('click', loadAccounts);
+  one('#discord-status-refresh').addEventListener('click', loadDiscordStatus);
+  one('#discord-status-grid').addEventListener('click', event => {
+    const button = event.target.closest('[data-test-discord]');
+    if (button) testDiscord(button.dataset.testDiscord, button);
+  });
   one('#review-form').addEventListener('submit', submitReview);
   one('#forgot-password').addEventListener('click', () => recoveryView('request'));
   one('#have-reset-code').addEventListener('click', () => recoveryView('complete'));
