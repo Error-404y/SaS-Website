@@ -641,6 +641,7 @@
       site.member = false;
       setAdmin(true, data.csrf);
       window.SasMessenger?.start(data.csrf);
+      window.SasMessenger?.onPage(site.page);
       adminLastInteraction = Date.now();
       adminActivityLastSent = adminLastInteraction;
       unlockSite();
@@ -715,7 +716,6 @@
       setAdmin(false, response.csrf);
       window.SasMessenger?.start(response.csrf);
       unlockSite();
-      window.SasMessenger?.start(session.csrf);
       window.SasMessenger?.onPage(site.page);
       await reload();
       one('#member-login-form').reset();
@@ -1313,6 +1313,8 @@
         readState = result.seen || { events: {}, alliance: {}, rss: '', updates: {}, announcements: {} };
       }
       unlockSite();
+      window.SasMessenger?.start(session.csrf);
+      window.SasMessenger?.onPage(site.page);
       await reload();
       if (site.admin) loadAccounts();
     } else {
