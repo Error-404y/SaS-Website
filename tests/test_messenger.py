@@ -126,7 +126,7 @@ class MessengerTests(unittest.TestCase):
                          "Remember speedups")
         self.assertEqual(self.call("/api/messenger/messages?peer="+bid,cookie=b)[1]["messages"],[])
         self.assertEqual(self.call("/api/messenger",cookie=a)[1]["unread"],0)
-        self.assertTrue(any(x["self"] for x in self.call("/api/messenger",cookie=a)[1]["contacts"]))
+        self.assertTrue(any(x.get("self") for x in self.call("/api/messenger",cookie=a)[1]["contacts"]))
         with server.connect() as db:
             self.assertEqual(db.execute(
                 "SELECT thread_key FROM chat_messages WHERE body='Remember speedups'").fetchone()[0],
@@ -187,7 +187,7 @@ class MessengerTests(unittest.TestCase):
         self.assertEqual(self.call("/api/messenger/messages","POST",
             {"peer":"alliance","body":"SvS soon"},admin,adcsrf)[0],201)
         self.assertEqual(self.call("/api/messenger",cookie=a)[1]["unread"],1)
-        self.assertEqual(self.call("/api/messenger/messages?peer=alliance",cookie=b)[1]["messages"][0]["body"],"SvS soon")
+        self.assertEqual(self.call("/api/messenger/messages?peer=alliance",cookie=b)[1]["messages"][-1]["body"],"SvS soon")
         self.assertEqual(self.call("/api/messenger/read","POST",{"peer":"alliance"},a,ac)[0],200)
         self.assertEqual(self.call("/api/messenger",cookie=a)[1]["unread"],0)
         self.assertEqual(self.call("/api/messenger",cookie=b)[1]["unread"],1)
