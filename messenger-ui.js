@@ -69,9 +69,9 @@
       (item.self?' messenger-own-profile':'')+
       '" data-messenger-peer="'+escape(item.id)+'" role="listitem">'+
       '<span class="messenger-avatar'+(item.group?' is-group':'')+'">'+escape(avatar(item))+'</span>'+
-      '<span class="messenger-contact-details"><strong>'+escape(item.username)+
+      '<span class="messenger-contact-details"><strong>'+escape(item.self?'Your Profile':item.username)+
       (item.id==='alliance'?' <span class="messenger-group-pin'+(!item.joined?' is-new':'')+'">'+(!item.joined?'NEW · JOIN':'PINNED')+'</span>':'')+'</strong>'+
-      '<small>'+escape(item.self ? (item.last_message || 'Private notes · Only you can see this') :
+      '<small>'+escape(item.self ? (item.last_message || (item.username+' · Private notes to yourself')) :
         (item.id==='alliance' && !item.joined ? 'Join to see all messages' :
           (item.last_message || (item.group ? 'Group chat' : (item.player_name||'Say hello')))))+'</small></span>'+
       '<span class="messenger-contact-meta"><small>'+escape(showTime(item.last_at))+'</small>'+
@@ -123,7 +123,7 @@
     loadingPeer='';
     error();
     const contact=contacts.find(c=>c.id===peer);
-    $('messenger-active-name').textContent=contact.username;
+    $('messenger-active-name').textContent=contact.self?'Your Profile':contact.username;
     $('messenger-active-detail').textContent=contact.self ? 'Notes to self · Private' :
       (contact.group ? (contact.id==='alliance'?'All joined SaS members':'Private group · '+contact.player_name) :
       (contact.player_name || 'Private conversation'));
