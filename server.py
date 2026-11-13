@@ -30,7 +30,7 @@ def load_local_env():
             continue
         key, setting = value.split("=", 1)
         key = key.strip()
-        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
+        if key != "Const-Web" and not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
             continue
         os.environ.setdefault(key, setting.strip().strip('"').strip("'"))
 
@@ -41,6 +41,7 @@ PORT = int(os.environ.get("SERVER_PORT") or os.environ.get("PORT") or "8080")
 ADMIN_USER = os.environ.get("SAS_ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("SAS_ADMIN_PASSWORD", "")
 COOKIE_SECURE = os.environ.get("SAS_COOKIE_SECURE", "1") != "0"
+MAINTENANCE_MODE = os.environ.get("Const-Web", "false").strip().lower() in ("true", "1", "yes", "on")
 WEBHOOK = os.environ.get("SAS_DISCORD_WEBHOOK_URL", "")
 LOCK = threading.RLock()
 KINDS = ("events", "alliance", "updates", "announcements")
@@ -483,8 +484,33 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(result)
 
+    def maintenance_response(self, path):
+        """Maintenance disables the application, authentication and all API routes."""
+        if path == "/":
+            try:
+                body = (ROOT / "maintenance.html").read_bytes()
+            except OSError:
+                return self.respond(503, {"error": "Website is under maintenance."})
+            self.send_response(503)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store, max-age=0")
+            self.send_header("Retry-After", "3600")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path == "/assets/logo.webp":
+            return self.asset("assets/logo.webp", "image/webp", private=True)
+        return self.respond(503, {"error": "Website is under maintenance."})
+
     def do_GET(self):
         path = urlsplit(self.path).path
+        if MAINTENANCE_MODE:
+            return self.maintenance_response(path)
         if path == "/api/state":
             player = members.member_session(self, connect, LOCK)
             if not current_session(self) and not (player and player["status"] == "approved"):
@@ -564,6 +590,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def write(self, method):
         path = urlsplit(self.path).path
+        if MAINTENANCE_MODE:
+            return self.respond(503, {"error": "Website is under maintenance."})
         try:
             if not self.valid_request_origin():
                 return self.respond(403, {"error": "Cross-origin request rejected."})

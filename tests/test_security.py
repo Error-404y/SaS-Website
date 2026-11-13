@@ -182,6 +182,65 @@ class SecurityBoundaryTests(unittest.TestCase):
         })[2].get("Set-Cookie"))
         self.assertEqual(self.call("/api/state", cookie=cookie)[0], 401)
 
+    def test_maintenance_mode_blocks_every_app_and_api_route(self):
+        previous = server.MAINTENANCE_MODE
+        try:
+            # Use a valid admin session to make sure maintenance does not trust it.
+            cookie, csrf = self.login_admin()
+            server.MAINTENANCE_MODE = True
+            for path in ("/", "/#events"):
+                status, body, headers = self.call(path)
+                self.assertEqual(status, 503)
+                self.assertIn(b"Under Construction", body)
+                self.assertNotIn(b'id="website"', body)
+                self.assertNotIn(b'id="auth-gate"', body)
+                self.assertNotIn(b'data-view="accounts"', body)
+                self.assertEqual(headers.get("Cache-Control"), "no-store, max-age=0")
+            status, data, headers = self.call("/assets/logo.webp")
+            self.assertEqual(status, 200)
+            self.assertEqual(headers.get("Content-Type"), "image/webp")
+            self.assertTrue(data)
+            for path in ("/index.html", "/app", "/login.html", "/auth.js",
+                         "/app.js", "/styles.css", "/api/state", "/api/session",
+                         "/api/accounts", "/api/not-real"):
+                status, _, _ = self.call(path, cookie=cookie)
+                self.assertEqual(status, 503, path)
+            requests = [
+                ("/api/login", "POST", {"username": "admin", "password": "test"}),
+                ("/api/member/login", "POST", {"username": "Somebody", "password": "test"}),
+                ("/api/register", "POST", {"username": "Somebody"}),
+                ("/api/password/request", "POST", {"identifier": "Somebody"}),
+                ("/api/password/complete", "POST", {"username": "Somebody", "code": "test", "new_password": "password"}),
+                ("/api/accounts/1", "PATCH", {"status": "approved"}),
+                ("/api/entries", "POST", {}),
+                ("/api/entries/1", "PUT", {}),
+                ("/api/entries/1", "DELETE", None),
+                ("/api/rss", "PUT", {}),
+                ("/api/logout", "POST", {})
+            ]
+            for path, method, body in requests:
+                status, response, _ = self.call(path, method, body, cookie, csrf)
+                self.assertEqual(status, 503, (method, path, response))
+        finally:
+            server.MAINTENANCE_MODE = previous
+
+    def test_maintenance_mode_off_restores_normal_authentication(self):
+        previous = server.MAINTENANCE_MODE
+        try:
+            server.MAINTENANCE_MODE = False
+            status, page, _ = self.call("/")
+            self.assertEqual(status, 200)
+            self.assertIn(b'id="auth-gate"', page)
+            self.assertEqual(self.call("/api/state")[0], 401)
+            self.assertEqual(self.call("/api/session")[0], 200)
+            self.register("NormalModePlayer", "approved")
+            member_cookie, _ = self.login_member("NormalModePlayer")
+            status, app, _ = self.call("/", cookie=member_cookie)
+            self.assertEqual(status, 200)
+            self.assertIn(b'id="website"', app)
+        finally:
+            server.MAINTENANCE_MODE = previous
+
     def test_admin_login_rate_limit(self):
         for _ in range(10):
             status, _, _ = self.call("/api/login", "POST", {
