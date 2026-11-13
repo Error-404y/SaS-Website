@@ -2,7 +2,7 @@
 
 The alliance website has five separate sections: Events, Alliance Events, Alliance RSS, Website Updates and HR Announcements.
 
-The public website opens with an animated welcome screen. Anyone can use **Bring me in!** to view the site without an account.
+The website now requires an approved SaS member account. New players register with a username, in-game player name, email and password, then enter the administrator review queue. The previous public welcome screen remains in the code but no longer bypasses member authentication.
 
 The Saints and Sinners crest appears on the welcome screen, in the header and in the navigation. The entrance uses a sharper transparent AVIF crest derived from the supplied artwork with a WebP fallback, subtle motion, and a smooth transition after **Bring me in!** is pressed. The rest of the website keeps its clean, light design. Motion is reduced when the visitor enables reduced-motion accessibility settings. The website is responsive and works on desktop, tablet and mobile.
 
@@ -32,9 +32,17 @@ This page is manually updated, not connected to live game servers. Earlier singl
 
 The Events page initially contains the eight names and dates from the supplied Event Center screenshot. Those are starting records, not a live sync with the Discord bot or the game. Ended events remain in the database and are available through the **Ended** filter.
 
-## Public and editor access
+## Member accounts and administrator approval
 
-Public visitors can read all five sections without signing in. The welcome button is not a password check.
+Visitors must register and be approved before they can read any alliance data. New registrations are stored in SQLite with per-user salted scrypt password hashes; approval status is initially pending. Pending and rejected users cannot sign in. Rejected registrations receive a mandatory administrator review reason, which is shown when they attempt to log in. Approved players can sign in subsequently without repeating approval. Member sessions persist for up to 30 days through an HttpOnly cookie; revoking access invalidates existing sessions. Only administrators can access the **SaS – Accounts** page to review, approve, reject or revoke accounts. This does not connect to an in-game identity provider or automatically verify alliance membership.
+
+The `/api/state` endpoint requires an approved member or administrator session. Static site files are publicly retrievable but alliance data is protected server-side.
+
+### Persistence and deployment
+
+The existing SQLite database configured by `SAS_DB_PATH` also contains `members` and `member_sessions` tables, created automatically on the next start. Keep this database file on persistent storage and back it up before deployment. Never commit the SQLite database, passwords or session tokens. HTTPS with `SAS_COOKIE_SECURE=1` is required in production.
+
+## Editor access
 
 Only authorized site editors can change information. Choose **Admin login** and sign in using the credentials configured privately on the host. Editors can add, edit and delete events, announcements and updates, and change the RSS figures. Each edit is saved to a SQLite file shared by all website visitors.
 

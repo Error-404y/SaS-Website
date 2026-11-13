@@ -1,4 +1,6 @@
 import hmac
+import hashlib
+import members
 import json
 import logging
 import math
@@ -101,6 +103,7 @@ def init():
             csrf TEXT NOT NULL,
             expires_at INTEGER NOT NULL
         )""")
+        members.setup(db)
         db.execute("""CREATE TABLE IF NOT EXISTS meta (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -436,13 +439,39 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def session_cookie(self, name, token, payload):
+        result = json.dumps(payload).encode()
+        secure = "; Secure" if COOKIE_SECURE else ""
+        self.send_response(200)
+        self.send_header("Set-Cookie", f"{name}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={30 * 86400 if name == 'sas_member' else 43200}{secure}")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(result)))
+        self.end_headers()
+        self.wfile.write(result)
+
     def do_GET(self):
         path = urlsplit(self.path).path
         if path == "/api/state":
+            player = members.member_session(self, connect, LOCK)
+            if not current_session(self) and not (player and player["status"] == "approved"):
+                return self.respond(401, {"error": "An approved account is required."})
             return self.respond(200, get_state())
+        if path == "/api/accounts":
+            if not current_session(self):
+                return self.respond(403, {"error": "Administrator access required."})
+            with LOCK, connect() as db:
+                accounts = [members.public_member(row) for row in db.execute(
+                    "SELECT * FROM members ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, created_at DESC")]
+            return self.respond(200, {"accounts": accounts})
         if path == "/api/session":
             session = current_session(self)
-            return self.respond(200, {"admin": bool(session), "csrf": session["csrf"] if session else None})
+            player = members.member_session(self, connect, LOCK)
+            return self.respond(200, {"admin": bool(session), "approved": bool(player and player["status"] == "approved"),
+                "username": player["username"] if player else (ADMIN_USER if session else None),
+                "status": player["status"] if player else None,
+                "review_message": player["review_message"] if player else "",
+                "csrf": session["csrf"] if session else (player["csrf"] if player else None)})
         assets = {"/": ("index.html", "text/html; charset=utf-8"),
                   "/index.html": ("index.html", "text/html; charset=utf-8"),
                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
@@ -481,6 +510,64 @@ class Handler(BaseHTTPRequestHandler):
     def write(self, method):
         path = urlsplit(self.path).path
         try:
+            if path == "/api/register" and method == "POST":
+                values = self.read_json()
+                with LOCK, connect() as db:
+                    members.register(db, values)
+                return self.respond(201, {"status": "pending", "message": "Registration submitted for administrator review."})
+            if path == "/api/member/login" and method == "POST":
+                data = self.read_json()
+                username = str(data.get("username", "")).strip()
+                password = data.get("password", "")
+                with LOCK, connect() as db:
+                    row = db.execute("SELECT * FROM members WHERE username=? OR email=?", (username, username)).fetchone()
+                    if not row or not isinstance(password, str) or not members.check_password(password, row["password_hash"]):
+                        time.sleep(0.5)
+                        return self.respond(401, {"error": "Invalid username or password."})
+                    if row["status"] != "approved":
+                        return self.respond(403, {"error": "Your account is awaiting approval." if row["status"] == "pending" else
+                            "Your application was declined: " + (row["review_message"] or "Contact an administrator.")})
+                    token, csrf = members.new_session(db, row["id"])
+                self.session_cookie("sas_member", token, {"approved": True, "admin": False, "csrf": csrf, "username": row["username"]})
+                return
+            if path == "/api/member/logout" and method == "POST":
+                player = members.member_session(self, connect, LOCK)
+                if not player or not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), player["csrf"]):
+                    return self.respond(403, {"error": "Invalid session."})
+                cookie = SimpleCookie()
+                cookie.load(self.headers.get("Cookie", ""))
+                item = cookie.get("sas_member")
+                if item:
+                    with LOCK, connect() as db:
+                        db.execute("DELETE FROM member_sessions WHERE token_hash=?", (hashlib.sha256(item.value.encode()).hexdigest(),))
+                self.send_response(200)
+                self.send_header("Set-Cookie", "sas_member=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"{}")
+                return
+            account_match = re.fullmatch(r"/api/accounts/(\d+)", path)
+            if account_match and method == "PATCH":
+                if not self.authorized():
+                    return
+                data = self.read_json()
+                status = data.get("status")
+                message = clean(data.get("message", ""), 500)
+                if status not in ("approved", "rejected", "pending"):
+                    raise ValueError("Invalid account status.")
+                if status == "rejected" and not message:
+                    raise ValueError("A rejection reason is required.")
+                if status != "rejected":
+                    message = ""
+                with LOCK, connect() as db:
+                    cursor = db.execute("UPDATE members SET status=?,review_message=?,reviewed_at=? WHERE id=?",
+                        (status, message, now_utc(), int(account_match.group(1))))
+                    if not cursor.rowcount:
+                        return self.respond(404, {"error": "Account not found."})
+                    if status != "approved":
+                        db.execute("DELETE FROM member_sessions WHERE member_id=?", (int(account_match.group(1)),))
+                return self.respond(200, {"ok": True})
             if path == "/api/login" and method == "POST":
                 data = self.read_json()
                 if not ADMIN_PASSWORD or not hmac.compare_digest(str(data.get("username", "")), ADMIN_USER) or not hmac.compare_digest(str(data.get("password", "")), ADMIN_PASSWORD):
@@ -492,15 +579,7 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK, connect() as db:
                     db.execute("DELETE FROM sessions WHERE expires_at<?", (int(time.time()),))
                     db.execute("INSERT INTO sessions VALUES(?,?,?)", (digest, csrf, int(time.time()) + 43200))
-                self.send_response(200)
-                secure = "; Secure" if COOKIE_SECURE else ""
-                self.send_header("Set-Cookie", f"sas_session={token}; Path=/; HttpOnly; SameSite=Lax{secure}")
-                self.send_header("Cache-Control", "no-store")
-                result = json.dumps({"admin": True, "csrf": csrf}).encode()
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(result)))
-                self.end_headers()
-                self.wfile.write(result)
+                self.session_cookie("sas_session", token, {"admin": True, "csrf": csrf})
                 return
             if not self.authorized():
                 return
@@ -631,6 +710,8 @@ class Handler(BaseHTTPRequestHandler):
         self.write("PUT")
     def do_DELETE(self):
         self.write("DELETE")
+    def do_PATCH(self):
+        self.write("PATCH")
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")

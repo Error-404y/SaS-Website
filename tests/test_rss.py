@@ -25,6 +25,7 @@ class RssTests(unittest.TestCase):
         self.thread = threading.Thread(target=self.http.serve_forever, daemon=True)
         self.thread.start()
         self.url = f"http://127.0.0.1:{self.http.server_port}"
+        self.state_cookie, _ = self.login()
 
     def tearDown(self):
         self.http.shutdown()
@@ -37,6 +38,8 @@ class RssTests(unittest.TestCase):
 
     def send(self, path, method="GET", payload=None, cookie=None, csrf=None):
         headers = {"Content-Type": "application/json"}
+        if path == "/api/state" and cookie is None:
+            cookie = self.state_cookie
         if cookie:
             headers["Cookie"] = cookie
         if csrf:
@@ -76,6 +79,12 @@ class RssTests(unittest.TestCase):
             "tech_progress": 72,
             "territory_plan": "Place another flag near the main resource area."
         }
+
+    def test_state_requires_approved_login(self):
+        request = Request(self.url + "/api/state")
+        with self.assertRaises(HTTPError) as failure:
+            urlopen(request, timeout=5)
+        self.assertEqual(failure.exception.code, 401)
 
     def test_first_load_contains_no_fabricated_rss_values(self):
         status, response, _ = self.send("/api/state")

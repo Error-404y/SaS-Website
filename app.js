@@ -4,8 +4,8 @@
   const unreadTools = window.SasUnread;
   const readKey = 'sas-read-state-v1';
   const all = selector => [...document.querySelectorAll(selector)];
-  const site = { entries: [], settings: {}, rss: null, admin: false, csrf: null, page: 'events', selected: null, loaded: false, clockOffset: 0, rssFormRevision: '', rssFormInitialBalances: {}, rssFormInitialRemaining: '' };
-  const labels = { events: 'Events', alliance: 'Alliance Events', rss: 'Alliance RSS', updates: 'Website Updates', announcements: 'HR Announcements' };
+  const site = { entries: [], settings: {}, rss: null, admin: false, member: false, csrf: null, page: 'events', selected: null, loaded: false, clockOffset: 0, rssFormRevision: '', rssFormInitialBalances: {}, rssFormInitialRemaining: '' };
+  const labels = { events: 'Events', alliance: 'Alliance Events', rss: 'Alliance RSS', updates: 'Website Updates', announcements: 'HR Announcements', accounts: 'SaS – Accounts' };
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const calendar = window.SasCalendar;
   const toTime = value => calendar.utcTime(value);
@@ -45,8 +45,9 @@
   function setAdmin(isAdmin, csrf = null) {
     site.admin = isAdmin;
     site.csrf = csrf;
+    one('[data-view="accounts"]').hidden = !isAdmin;
     all('.admin-only').forEach(node => { node.hidden = !isAdmin; });
-    one('#admin-toggle').textContent = isAdmin ? 'Sign out' : 'Admin login';
+    one('#admin-toggle').textContent = isAdmin || site.member ? 'Sign out' : 'Admin login';
   }
 
   let readState = null;
@@ -115,7 +116,7 @@
   }
 
   function switchPage(name) {
-    if (!labels[name]) return;
+    if (!labels[name] || (name === 'accounts' && !site.admin)) return;
     site.page = name;
     all('.page').forEach(node => {
       const selected = node.dataset.section === name;
@@ -289,6 +290,7 @@
     posts('updates');
     posts('announcements');
     rss();
+    if (site.admin && site.page === 'accounts') loadAccounts();
     refreshCountdowns();
     showUnread();
   }
@@ -512,7 +514,9 @@
       const data = await request('/api/login', { method: 'POST', body: JSON.stringify({
         username: one('#login-username').value, password: one('#login-password').value
       }) });
+      site.member = false;
       setAdmin(true, data.csrf);
+      unlockSite();
       one('#login-form').reset();
       one('#login-dialog').close();
       render();
@@ -523,21 +527,161 @@
   }
 
   async function toggleAdmin() {
-    if (!site.admin) {
+    if (!site.admin && !site.member) {
       openDialog('login-dialog');
       return;
     }
     try {
-      await request('/api/logout', { method: 'POST', body: '{}' });
+      await request(site.admin ? '/api/logout' : '/api/member/logout', { method: 'POST', body: '{}' });
+      site.member = false;
       setAdmin(false);
       render();
+      sessionStorage.removeItem('sas-entered');
+      one('#website').classList.add('hidden');
+      one('#entrance').classList.add('hidden');
+      one('#auth-gate').classList.remove('hidden');
       notify('Signed out.');
     } catch (error) {
       notify(error.message);
     }
   }
 
+
+  function unlockSite() {
+    one('#auth-gate').classList.add('hidden');
+    one('#entrance').classList.add('hidden');
+    one('#website').classList.remove('hidden');
+    sessionStorage.setItem('sas-entered', '1');
+    one('#admin-toggle').textContent = 'Sign out';
+  }
+
+  function authMessage(message, ok = false) {
+    const node = one('#auth-feedback');
+    node.textContent = message;
+    node.classList.toggle('success', ok);
+  }
+
+  function authTab(tab) {
+    all('[data-auth-tab]').forEach(node => node.classList.toggle('active', node.dataset.authTab === tab));
+    one('#member-login-form').classList.toggle('hidden', tab !== 'signin');
+    one('#member-register-form').classList.toggle('hidden', tab !== 'register');
+    one('#auth-heading').textContent = tab === 'signin' ? 'Welcome back' : 'Join Saints and Sinners';
+    one('#auth-subheading').textContent = tab === 'signin' ?
+      'Sign in to continue to Saints and Sinners.' : 'Submit your account for alliance review.';
+    authMessage('');
+  }
+
+  async function playerLogin(event) {
+    event.preventDefault();
+    authMessage('');
+    try {
+      const response = await request('/api/member/login', { method: 'POST', body: JSON.stringify({
+        username: one('#member-login-name').value, password: one('#member-login-password').value
+      }) });
+      site.member = true;
+      setAdmin(false, response.csrf);
+      unlockSite();
+      await reload();
+      one('#member-login-form').reset();
+    } catch (error) { authMessage(error.message); }
+  }
+
+  async function registerPlayer(event) {
+    event.preventDefault();
+    authMessage('');
+    try {
+      await request('/api/register', { method: 'POST', body: JSON.stringify({
+        username: one('#member-username').value,
+        player_name: one('#member-player').value,
+        email: one('#member-email').value,
+        password: one('#member-password').value
+      }) });
+      one('#member-register-form').reset();
+      authTab('signin');
+      authMessage('Registration received. An administrator must approve your account before you can sign in.', true);
+    } catch (error) { authMessage(error.message); }
+  }
+
+  async function loadAccounts() {
+    if (!site.admin) return;
+    try {
+      const data = await request('/api/accounts');
+      site.accounts = data.accounts || [];
+      renderAccounts();
+    } catch (error) { notify(error.message); }
+  }
+
+  function renderAccounts() {
+    const accounts = site.accounts || [];
+    for (const status of ['pending', 'approved', 'rejected']) {
+      one('#accounts-' + status).textContent = accounts.filter(item => item.status === status).length;
+    }
+    const pending = accounts.filter(item => item.status === 'pending').length;
+    one('#accounts-badge').hidden = pending === 0;
+    one('#accounts-badge').textContent = pending > 99 ? '99+' : String(pending);
+    const query = one('#accounts-search').value.trim().toLowerCase();
+    const filter = one('#accounts-filter').value;
+    const visible = accounts.filter(item => (!filter || item.status === filter) &&
+      [item.username, item.player_name, item.email].some(v => v.toLowerCase().includes(query)));
+    one('#accounts-list').innerHTML = visible.map(item => {
+      const actions = item.status === 'pending' ?
+        '<button type="button" class="account-approve" data-account-approve="' + item.id + '">Approve</button>' +
+        '<button type="button" class="account-reject" data-account-reject="' + item.id + '">Reject</button>' :
+        item.status === 'approved' ?
+        '<button type="button" class="account-reject" data-account-reject="' + item.id + '">Revoke access</button>' :
+        '<button type="button" class="account-approve" data-account-approve="' + item.id + '">Approve</button>';
+      return '<article class="account-row"><div class="account-row-info"><strong>' + escapeHtml(item.player_name) +
+        '</strong><span>@' + escapeHtml(item.username) + ' · ' + escapeHtml(item.email) +
+        '</span><span>Registered ' + escapeHtml(item.created_at.slice(0, 10)) + '</span>' +
+        (item.review_message ? '<p>Review note: ' + escapeHtml(item.review_message) + '</p>' : '') +
+        '</div><div class="account-actions"><span class="account-pill ' + item.status + '">' + item.status +
+        '</span>' + actions + '</div></article>';
+    }).join('') || '<p class="rss-empty-spending">No matching accounts.</p>';
+  }
+
+  async function approveAccount(id) {
+    try {
+      await request('/api/accounts/' + id, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) });
+      await loadAccounts();
+      notify('Account approved.');
+    } catch (error) { notify(error.message); }
+  }
+
+  function rejectAccount(id) {
+    const item = (site.accounts || []).find(account => account.id === id);
+    if (!item) return;
+    one('#review-id').value = String(id);
+    one('#review-player').textContent = 'Player: ' + item.player_name + ' (@' + item.username + ')';
+    one('#review-message').value = '';
+    one('#review-error').textContent = '';
+    openDialog('review-dialog');
+  }
+
+  async function submitReview(event) {
+    event.preventDefault();
+    const id = Number(one('#review-id').value);
+    const message = one('#review-message').value.trim();
+    try {
+      await request('/api/accounts/' + id, { method: 'PATCH', body: JSON.stringify({ status: 'rejected', message }) });
+      one('#review-dialog').close();
+      await loadAccounts();
+      notify('Account rejected. Reason saved.');
+    } catch (error) { one('#review-error').textContent = error.message; }
+  }
+
+  all('[data-auth-tab]').forEach(node => node.addEventListener('click', () => authTab(node.dataset.authTab)));
+  one('#member-login-form').addEventListener('submit', playerLogin);
+  one('#member-register-form').addEventListener('submit', registerPlayer);
+  one('#auth-admin').addEventListener('click', () => openDialog('login-dialog'));
+  one('#accounts-search').addEventListener('input', renderAccounts);
+  one('#accounts-filter').addEventListener('change', renderAccounts);
+  one('#review-form').addEventListener('submit', submitReview);
+
   document.addEventListener('click', event => {
+    const approve = event.target.closest('[data-account-approve]');
+    if (approve && site.admin) approveAccount(Number(approve.dataset.accountApprove));
+    const reject = event.target.closest('[data-account-reject]');
+    if (reject && site.admin) rejectAccount(Number(reject.dataset.accountReject));
     const nav = event.target.closest('[data-view]');
     if (nav) switchPage(nav.dataset.view);
     const create = event.target.closest('[data-create]');
@@ -639,21 +783,35 @@
       if (site.page === 'rss') refreshResourceBalances();
     }
   }, 1000);
-  if (sessionStorage.getItem('sas-entered') === '1') {
-    one('#entrance').classList.add('hidden');
-    one('#website').classList.remove('hidden');
-  }
+  one('#entrance').classList.add('hidden');
   const page = location.hash.slice(1);
   switchPage(labels[page] ? page : 'events');
-  Promise.all([request('/api/session'), request('/api/state')]).then(([session, data]) => {
+  request('/api/session').then(async session => {
+    site.member = !!session.approved && !session.admin;
     setAdmin(!!session.admin, session.csrf);
-    site.entries = Array.isArray(data.entries) ? data.entries : [];
-    site.settings = data.settings || {};
-    site.rss = data.rss || null;
-    setClockOffset(data.utc);
-    site.loaded = true;
-    acknowledgePage(site.page);
-    render();
-  }).catch(() => notify('Unable to load website data. Please refresh.'));
-  setInterval(() => { if (!document.hidden) reload().catch(() => {}); }, 60000);
+    if (session.admin || session.approved) {
+      unlockSite();
+      await reload();
+      if (site.admin) loadAccounts();
+    } else {
+      one('#auth-gate').classList.remove('hidden');
+      if (session.status === 'pending') authMessage('Your account is awaiting administrator approval.');
+      if (session.status === 'rejected') authMessage('Your application was declined: ' + (session.review_message || 'Contact an administrator.'));
+    }
+  }).catch(() => authMessage('Could not verify your session. Please refresh.'));
+  setInterval(async () => {
+    if (document.hidden || (!site.admin && !site.member)) return;
+    try {
+      const session = await request('/api/session');
+      if (!session.admin && !session.approved) {
+        site.member = false; setAdmin(false);
+        one('#website').classList.add('hidden');
+        one('#auth-gate').classList.remove('hidden');
+        authMessage('Your account no longer has access.');
+        return;
+      }
+      await reload();
+      if (site.admin) await loadAccounts();
+    } catch (_) {}
+  }, 60000);
 })();

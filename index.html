@@ -14,6 +14,32 @@
   <script src="/app.js" defer></script>
 </head>
 <body>
+  <section id="auth-gate" class="auth-gate" aria-label="SaS account access">
+    <div class="auth-brand"><img src="/assets/logo.webp" alt="" width="65" height="65"><div><strong>SaS</strong><span>SAINTS AND SINNERS</span></div></div>
+    <div class="auth-card">
+      <div class="auth-emblem"><img src="/assets/logo.webp" alt="Saints and Sinners crest" width="96" height="96"></div>
+      <p class="auth-eyebrow">ALLIANCE ACCESS</p>
+      <h1 id="auth-heading">Welcome back</h1>
+      <p id="auth-subheading">Sign in to continue to Saints and Sinners.</p>
+      <div class="auth-tabs"><button type="button" class="auth-tab active" data-auth-tab="signin">Sign in</button><button type="button" class="auth-tab" data-auth-tab="register">Create account</button></div>
+      <form id="member-login-form" class="auth-form">
+        <label for="member-login-name">Username or email</label><input id="member-login-name" autocomplete="username" required placeholder="Your username or email">
+        <label for="member-login-password">Password</label><input id="member-login-password" type="password" autocomplete="current-password" required placeholder="Enter your password">
+        <button type="submit" class="auth-primary">Sign in</button>
+      </form>
+      <form id="member-register-form" class="auth-form hidden">
+        <label for="member-username">Username</label><input id="member-username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_.-]+" autocomplete="username" required placeholder="Choose a username">
+        <label for="member-player">In-game player name</label><input id="member-player" minlength="2" maxlength="60" required placeholder="Your Police Chief name">
+        <label for="member-email">Email address</label><input id="member-email" type="email" maxlength="254" autocomplete="email" required placeholder="you@example.com">
+        <label for="member-password">Password</label><input id="member-password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required placeholder="At least 12 characters">
+        <button type="submit" class="auth-primary">Submit registration</button>
+      </form>
+      <p id="auth-feedback" class="auth-feedback" role="status" aria-live="polite"></p>
+      <button id="auth-admin" type="button" class="auth-admin-link">Administrator sign in</button>
+    </div>
+    <span class="auth-bottom">© SAINTS AND SINNERS · ALL TIMES UTC</span>
+  </section>
+
   <div id="entrance" class="entrance">
     <div class="entrance-glow entrance-glow-one" aria-hidden="true"></div>
     <div class="entrance-glow entrance-glow-two" aria-hidden="true"></div>
@@ -166,6 +192,16 @@
           <div class="page-title"><h1>HR Announcements</h1><button type="button" class="primary-button admin-only" data-create="announcements" hidden>Post announcement</button></div>
           <div class="post-list" id="announcements-list"></div>
         </section>
+        <section class="page hidden" id="page-accounts" data-section="accounts">
+          <div class="page-title"><div><p class="section-kicker">ADMINISTRATION</p><h1>SaS – Accounts</h1></div></div>
+          <div class="stats-grid accounts-stats">
+            <div class="stat-box"><span>Pending requests</span><strong id="accounts-pending">0</strong></div>
+            <div class="stat-box"><span>Approved players</span><strong id="accounts-approved">0</strong></div>
+            <div class="stat-box"><span>Rejected requests</span><strong id="accounts-rejected">0</strong></div>
+          </div>
+          <div class="filter-bar"><input id="accounts-search" type="search" placeholder="Search players or email..." aria-label="Search accounts"><select id="accounts-filter" aria-label="Filter accounts"><option value="">All accounts</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
+          <div id="accounts-list" class="accounts-list"></div>
+        </section>
       </main>
 
       <aside class="right-sidebar" aria-label="Website navigation">
@@ -177,6 +213,7 @@
           <button type="button" data-view="rss"><span>Alliance RSS</span><span class="nav-unread" data-unread="rss" hidden aria-label="No new updates">0</span></button>
           <button type="button" data-view="updates"><span>Website Updates</span><span class="nav-unread" data-unread="updates" hidden aria-label="No new updates">0</span></button>
           <button type="button" data-view="announcements"><span>HR Announcements</span><span class="nav-unread" data-unread="announcements" hidden aria-label="No new updates">0</span></button>
+          <button type="button" class="admin-only" data-view="accounts" hidden><span>SaS – Accounts</span><span id="accounts-badge" class="nav-unread" hidden>0</span></button>
         </nav>
         <div class="sidebar-footer"><span>SaS Alliance</span><span>All event times are UTC.</span></div>
       </aside>
@@ -184,6 +221,18 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </div>
+
+  <dialog id="review-dialog" class="dialog">
+    <form id="review-form">
+      <div class="dialog-top"><div><span class="section-kicker">ACCOUNT MANAGEMENT</span><h2>Reject application</h2></div><button type="button" data-close="review-dialog" class="close-button" aria-label="Close">×</button></div>
+      <input id="review-id" type="hidden">
+      <p id="review-player"></p>
+      <label for="review-message">Reason for rejection</label>
+      <textarea id="review-message" rows="4" minlength="3" maxlength="500" required placeholder="Explain why this player cannot be approved."></textarea>
+      <p id="review-error" class="form-error" aria-live="polite"></p>
+      <div class="dialog-actions"><button type="button" class="small-button" data-close="review-dialog">Cancel</button><button class="danger-button" type="submit">Reject application</button></div>
+    </form>
+  </dialog>
 
   <dialog id="detail-dialog" class="dialog">
     <div class="dialog-top"><div><span class="section-kicker">EVENT DETAILS</span><h2 id="detail-title"></h2></div><button type="button" data-close="detail-dialog" class="close-button" aria-label="Close">×</button></div>
