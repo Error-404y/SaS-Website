@@ -960,3 +960,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 #ban-dialog select,#ban-dialog textarea{display:block;margin:7px 0 15px;padding:11px;border-radius:9px;border:1px solid #d9deea;background:white;width:100%;font-size:13px}
 #ban-dialog .form-intro{color:#394460;font-weight:700;font-size:14px}
 @media(max-width:750px){.ban-queue-row{align-items:flex-start;flex-direction:column}#detail-body{grid-template-columns:1fr}#detail-body .detail-item{grid-column:1/-1}}
+
+
+.ban-queue-controls{display:flex;flex-wrap:wrap;gap:9px;align-items:center;justify-content:flex-end}
+.ban-queue-controls .account-delete{white-space:normal}
+@media(max-width:750px){.ban-queue-controls{justify-content:flex-start}}
