@@ -635,3 +635,532 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "SaSWebsite"
+    def respond(self, status, payload):
+        body = json.dumps(payload, ensure_ascii=False).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "same-origin")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; object-src 'none'")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def asset(self, filename, mime, private=False):
+        path = ROOT / filename
+        try:
+            data = path.read_bytes()
+        except FileNotFoundError:
+            self.respond(404, {"error": "Not found."})
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "private, no-store" if private else "public, max-age=300")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "same-origin")
+        self.send_header("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; object-src 'none'")
+        if private:
+            self.send_header("Vary", "Cookie")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def session_cookie(self, name, token, payload):
+        result = json.dumps(payload).encode()
+        secure = "; Secure" if COOKIE_SECURE else ""
+        self.send_response(200)
+        self.send_header("Set-Cookie", f"{name}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={30 * 86400 if name == 'sas_member' else 43200}{secure}")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(result)))
+        self.end_headers()
+        self.wfile.write(result)
+
+    def maintenance_response(self, path):
+        """Maintenance disables the application, authentication and all API routes."""
+        if path == "/":
+            try:
+                body = (ROOT / "maintenance.html").read_bytes()
+            except OSError:
+                return self.respond(503, {"error": "Website is under maintenance."})
+            self.send_response(503)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store, max-age=0")
+            self.send_header("Retry-After", "3600")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy", "default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        return self.respond(503, {"error": "Website is under maintenance."})
+
+    def do_GET(self):
+        path = urlsplit(self.path).path
+        if MAINTENANCE_MODE:
+            return self.maintenance_response(path)
+        if path == "/api/reads":
+            player = members.member_session(self, connect, LOCK)
+            if not player or player["status"] != "approved":
+                return self.respond(401, {"error": "An approved player account is required."})
+            with LOCK, connect() as db:
+                seen = member_read_state(db, player["id"])
+            return self.respond(200, {"seen": seen})
+        if path == "/api/state":
+            player = members.member_session(self, connect, LOCK)
+            if not current_session(self) and not (player and player["status"] == "approved"):
+                return self.respond(401, {"error": "An approved account is required."})
+            return self.respond(200, get_state())
+        if path == "/api/notifications/status":
+            if not current_session(self):
+                return self.respond(403, {"error": "Administrator access required."})
+            with LOCK:
+                status = {key: dict(value) for key, value in NOTICE_STATUS.items()}
+            return self.respond(200, {"channels": status})
+        if path == "/api/accounts":
+            if not current_session(self):
+                return self.respond(403, {"error": "Administrator access required."})
+            with LOCK, connect() as db:
+                accounts = [members.public_member(row) for row in db.execute(
+                    "SELECT * FROM members ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, created_at DESC")]
+            with LOCK, connect() as db:
+                resets = members.list_password_requests(db)
+            return self.respond(200, {"accounts": accounts, "password_requests": resets})
+        if path == "/api/session":
+            session = current_session(self)
+            player = members.member_session(self, connect, LOCK)
+            return self.respond(200, {"admin": bool(session), "approved": bool(player and player["status"] == "approved"),
+                "username": player["username"] if player else (ADMIN_USER if session else None),
+                "status": player["status"] if player else None,
+                "review_message": player["review_message"] if player else "",
+                "csrf": session["csrf"] if session else (player["csrf"] if player else None),
+                "admin_idle_timeout_seconds": ADMIN_IDLE_SECONDS if session else None})
+        if path in ("/", "/index.html", "/app"):
+            player = members.member_session(self, connect, LOCK)
+            permitted = bool(current_session(self)) or bool(player and player["status"] == "approved")
+            if permitted:
+                return self.asset("index.html", "text/html; charset=utf-8", private=True)
+            if path == "/":
+                return self.asset("login.html", "text/html; charset=utf-8", private=True)
+            return self.respond(401, {"error": "An approved account is required."})
+        assets = {"/auth.js": ("auth.js", "text/javascript; charset=utf-8"),
+                  "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                  "/calendar.js": ("calendar.js", "text/javascript; charset=utf-8"),
+                  "/rss.js": ("rss.js", "text/javascript; charset=utf-8"),
+                  "/unread.js": ("unread.js", "text/javascript; charset=utf-8"),
+                  "/planner.js": ("planner.js", "text/javascript; charset=utf-8"),
+                  "/planner-ui.js": ("planner-ui.js", "text/javascript; charset=utf-8"),
+                  "/reference-data.js": ("reference-data.js", "text/javascript; charset=utf-8"),
+                  "/reference-ui.js": ("reference-ui.js", "text/javascript; charset=utf-8"),
+                  "/styles.css": ("styles.css", "text/css; charset=utf-8"),
+                  "/assets/logo.webp": ("assets/logo.webp", "image/webp"),
+                  "/assets/crest.avif": ("assets/crest.avif", "image/avif")}
+        if path in assets:
+            return self.asset(*assets[path])
+        return self.respond(404, {"error": "Not found."})
+
+    def read_json(self):
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            raise ValueError("Invalid content length.")
+        if size < 1 or size > 16000:
+            raise ValueError("Invalid request size.")
+        try:
+            value = json.loads(self.rfile.read(size))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Invalid JSON.") from exc
+        if not isinstance(value, dict):
+            raise ValueError("Invalid form.")
+        return value
+
+    def valid_request_origin(self):
+        # Cross-origin requests must never be allowed to use authenticated browser cookies.
+        if self.headers.get("Sec-Fetch-Site", "").lower() == "cross-site":
+            return False
+        origin = self.headers.get("Origin")
+        if origin:
+            parsed = urlsplit(origin)
+            host = self.headers.get("Host", "").lower()
+            return (parsed.scheme in ("http", "https") and parsed.netloc.lower() == host
+                    and (parsed.scheme == "https" or not COOKIE_SECURE)
+                    and not parsed.username and not parsed.password)
+        return True
+
+    def authorized(self):
+        session = current_session(self)
+        if not session or not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), session["csrf"]):
+            self.respond(403, {"error": "Administrator access required."})
+            return False
+        return True
+
+    def write(self, method):
+        path = urlsplit(self.path).path
+        if MAINTENANCE_MODE:
+            return self.respond(503, {"error": "Website is under maintenance."})
+        try:
+            if not self.valid_request_origin():
+                return self.respond(403, {"error": "Cross-origin request rejected."})
+            if path == "/api/notifications/test" and method == "POST":
+                if not self.authorized():
+                    return
+                values = self.read_json()
+                channel = values.get("channel")
+                urls = {"registration": REGISTRATION_WEBHOOK,
+                    "login": LOGIN_WEBHOOK, "reminder": WEBHOOK}
+                if channel not in urls:
+                    return self.respond(400, {"error": "Choose registration, login or reminder."})
+                notice = {"username": "SaS Notifications", "allowed_mentions": {"parse": []},
+                    "embeds": [{"title": "SaS notification test",
+                        "description": "Test message for " + channel + " notifications."}]}
+                delivered = discord_send(channel, urls[channel], notice)
+                return self.respond(200 if delivered else 502,
+                    {"ok": delivered, "channel": channel,
+                     "result": NOTICE_STATUS[channel]["last_result"],
+                     "error": None if delivered else "Discord delivery failed: " + NOTICE_STATUS[channel]["last_result"]})
+            if path == "/api/admin/activity" and method == "POST":
+                if not self.authorized():
+                    return
+                cookie = SimpleCookie()
+                cookie.load(self.headers.get("Cookie", ""))
+                digest = hashlib.sha256(cookie["sas_session"].value.encode()).hexdigest()
+                now = int(time.time())
+                with LOCK, connect() as db:
+                    updated = db.execute("""UPDATE sessions SET last_activity_at=?
+                        WHERE token_hash=? AND expires_at>? AND last_activity_at>?""",
+                        (now, digest, now, now - ADMIN_IDLE_SECONDS))
+                if not updated.rowcount:
+                    return self.respond(403, {"error": "Administrator session expired."})
+                return self.respond(200, {"ok": True, "idle_timeout_seconds": ADMIN_IDLE_SECONDS})
+            if path == "/api/reads" and method == "POST":
+                player = members.member_session(self, connect, LOCK)
+                if not player or player["status"] != "approved":
+                    return self.respond(401, {"error": "An approved player account is required."})
+                if not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), player["csrf"]):
+                    return self.respond(403, {"error": "Invalid CSRF token."})
+                data = self.read_json()
+                kind = data.get("kind")
+                if kind not in READ_KINDS:
+                    return self.respond(400, {"error": "Unknown section."})
+                with LOCK, connect() as db:
+                    seen = member_read_state(db, player["id"])
+                    current = member_read_snapshot(db)
+                    seen[kind] = current[kind]
+                    db.execute("""INSERT INTO member_reads(member_id,seen_json,updated_at)
+                        VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE
+                        SET seen_json=excluded.seen_json,updated_at=excluded.updated_at""",
+                        (player["id"], json.dumps(seen, separators=(",", ":")),
+                         datetime.now(timezone.utc).isoformat()))
+                return self.respond(200, {"seen": seen})
+            if path == "/api/password/request" and method == "POST":
+                source = self.client_address[0]
+                if login_throttled("password-request", source, limit=25):
+                    return self.respond(429, {"error": "Too many password requests. Try later."})
+                data = self.read_json()
+                with LOCK, connect() as db:
+                    result = members.request_password_reset(db, data.get("identifier"))
+                note_login_failure("password-request", source)
+                return self.respond(200, result)
+            if path == "/api/password/complete" and method == "POST":
+                data = self.read_json()
+                with LOCK, connect() as db:
+                    result = members.complete_password_reset(db, data.get("username"),
+                        data.get("code"), data.get("new_password"))
+                return self.respond(200, result)
+            reset_review_match = re.fullmatch(r"/api/password/requests/(\d+)", path)
+            if reset_review_match and method == "PATCH":
+                if not self.authorized():
+                    return
+                data = self.read_json()
+                with LOCK, connect() as db:
+                    try:
+                        code = members.review_password_request(db, int(reset_review_match.group(1)),
+                            data.get("decision"), data.get("message", ""))
+                    except LookupError:
+                        return self.respond(404, {"error": "Password request not found."})
+                return self.respond(200, {"ok": True, "reset_code": code,
+                    "message": "Share the reset code privately with the player. It expires in one hour and is shown only once." if code else "Request rejected."})
+            if path == "/api/register" and method == "POST":
+                source = self.client_address[0]
+                if login_throttled("registration", source, limit=25):
+                    return self.respond(429, {"error": "Too many registrations. Try later."})
+                values = self.read_json()
+                with LOCK, connect() as db:
+                    members.register(db, values)
+                note_login_failure("registration", source)
+                discord_account_notice("registration", "MEMBER", values.get("username", ""),
+                    values.get("email", ""), values.get("player_name", ""))
+                return self.respond(201, {"status": "pending", "message": "Registration submitted for administrator review."})
+            if path == "/api/member/login" and method == "POST":
+                data = self.read_json()
+                username = str(data.get("username", "")).strip()
+                # Include the login identifier to avoid locking out unrelated players
+                # when they share a reverse proxy IP.
+                source = self.client_address[0] + ":" + hashlib.sha256(username.casefold().encode()).hexdigest()[:20]
+                if login_throttled("member", source):
+                    return self.respond(429, {"error": "Too many login attempts. Try again later."})
+                password = data.get("password", "")
+                with LOCK, connect() as db:
+                    row = db.execute("SELECT * FROM members WHERE username=? OR email=?", (username, username)).fetchone()
+                    if not row or not isinstance(password, str) or not members.check_password(password, row["password_hash"]):
+                        note_login_failure("member", source)
+                        time.sleep(0.5)
+                        return self.respond(401, {"error": "Invalid username or password."})
+                    if row["status"] != "approved":
+                        return self.respond(403, {"error": "Your account is awaiting approval." if row["status"] == "pending" else
+                            "Your application was declined: " + (row["review_message"] or "Contact an administrator.")})
+                    token, csrf = members.new_session(db, row["id"])
+                clear_login_failures("member", source)
+                self.session_cookie("sas_member", token, {"approved": True, "admin": False, "csrf": csrf, "username": row["username"]})
+                discord_account_notice("login", "MEMBER", row["username"], row["email"])
+                return
+            if path == "/api/member/logout" and method == "POST":
+                player = members.member_session(self, connect, LOCK)
+                if not player or not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), player["csrf"]):
+                    return self.respond(403, {"error": "Invalid session."})
+                cookie = SimpleCookie()
+                cookie.load(self.headers.get("Cookie", ""))
+                item = cookie.get("sas_member")
+                if item:
+                    with LOCK, connect() as db:
+                        db.execute("DELETE FROM member_sessions WHERE token_hash=?", (hashlib.sha256(item.value.encode()).hexdigest(),))
+                self.send_response(200)
+                self.send_header("Set-Cookie", "sas_member=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"{}")
+                return
+            account_match = re.fullmatch(r"/api/accounts/(\d+)", path)
+            if account_match and method == "DELETE":
+                if not self.authorized():
+                    return
+                member_id = int(account_match.group(1))
+                with LOCK, connect() as db:
+                    target = db.execute("SELECT id FROM members WHERE id=?", (member_id,)).fetchone()
+                    if not target:
+                        return self.respond(404, {"error": "Account not found."})
+                    # Explicitly remove all dependent records for databases with older
+                    # foreign-key definitions. The account is permanently deleted.
+                    db.execute("DELETE FROM password_requests WHERE member_id=?", (member_id,))
+                    db.execute("DELETE FROM member_reads WHERE member_id=?", (member_id,))
+                    db.execute("DELETE FROM member_sessions WHERE member_id=?", (member_id,))
+                    db.execute("DELETE FROM members WHERE id=?", (member_id,))
+                return self.respond(200, {"ok": True})
+            if account_match and method == "PUT":
+                if not self.authorized():
+                    return
+                data = self.read_json()
+                username = str(data.get("username", "")).strip()
+                player_name = str(data.get("player_name", "")).strip()
+                email = str(data.get("email", "")).strip().lower()
+                if not re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", username):
+                    raise ValueError("Username must be 3–32 characters.")
+                if not 2 <= len(player_name) <= 60:
+                    raise ValueError("In-game name must be 2–60 characters.")
+                if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email) or len(email) > 254:
+                    raise ValueError("Enter a valid email.")
+                with LOCK, connect() as db:
+                    try:
+                        cursor = db.execute("UPDATE members SET username=?,player_name=?,email=? WHERE id=?",
+                            (username, player_name, email, int(account_match.group(1))))
+                    except sqlite3.IntegrityError as exc:
+                        raise ValueError("Username or email is already registered.") from exc
+                    if not cursor.rowcount:
+                        return self.respond(404, {"error": "Account not found."})
+                return self.respond(200, {"ok": True})
+            if account_match and method == "PATCH":
+                if not self.authorized():
+                    return
+                data = self.read_json()
+                status = data.get("status")
+                message = clean(data.get("message", ""), 500)
+                if status not in ("approved", "rejected", "pending"):
+                    raise ValueError("Invalid account status.")
+                if status == "rejected" and not message:
+                    raise ValueError("A rejection reason is required.")
+                if status != "rejected":
+                    message = ""
+                with LOCK, connect() as db:
+                    cursor = db.execute("UPDATE members SET status=?,review_message=?,reviewed_at=? WHERE id=?",
+                        (status, message, now_utc(), int(account_match.group(1))))
+                    if not cursor.rowcount:
+                        return self.respond(404, {"error": "Account not found."})
+                    if status != "approved":
+                        db.execute("DELETE FROM member_sessions WHERE member_id=?", (int(account_match.group(1)),))
+                return self.respond(200, {"ok": True})
+            if path == "/api/login" and method == "POST":
+                source = self.client_address[0]
+                if login_throttled("admin", source):
+                    return self.respond(429, {"error": "Too many login attempts. Try again later."})
+                data = self.read_json()
+                if not ADMIN_PASSWORD or not hmac.compare_digest(str(data.get("username", "")), ADMIN_USER) or not hmac.compare_digest(str(data.get("password", "")), ADMIN_PASSWORD):
+                    note_login_failure("admin", source)
+                    time.sleep(0.5)
+                    return self.respond(401, {"error": "Incorrect credentials or administrator login is not configured."})
+                token = secrets.token_urlsafe(32)
+                csrf = secrets.token_urlsafe(24)
+                digest = __import__("hashlib").sha256(token.encode()).hexdigest()
+                with LOCK, connect() as db:
+                    db.execute("DELETE FROM sessions WHERE expires_at<?", (int(time.time()),))
+                    stamp = int(time.time())
+                    db.execute("""INSERT INTO sessions(token_hash,csrf,expires_at,last_activity_at)
+                        VALUES(?,?,?,?)""", (digest, csrf, stamp + 43200, stamp))
+                clear_login_failures("admin", source)
+                self.session_cookie("sas_session", token, {"admin": True, "csrf": csrf, "idle_timeout_seconds": ADMIN_IDLE_SECONDS})
+                discord_account_notice("login", "ADMIN", ADMIN_USER)
+                return
+            if not self.authorized():
+                return
+            if path == "/api/logout" and method == "POST":
+                cookie = SimpleCookie()
+                cookie.load(self.headers.get("Cookie", ""))
+                if "sas_session" in cookie:
+                    digest = __import__("hashlib").sha256(cookie["sas_session"].value.encode()).hexdigest()
+                    with LOCK, connect() as db:
+                        db.execute("DELETE FROM sessions WHERE token_hash=?", (digest,))
+                self.send_response(200)
+                self.send_header("Set-Cookie", "sas_session=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax")
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"{}")
+                return
+            if path == "/api/entries" and method == "POST":
+                values = validate_entry(self.read_json())
+                with LOCK, connect() as db:
+                    stamp = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+                    cursor = db.execute("""INSERT INTO entries(kind,title,category,start_utc,end_utc,rewards,details,author,created_at,modified_at)
+                        VALUES(?,?,?,?,?,?,?,?,?,?)""", (*values, stamp, stamp))
+                    created_id = cursor.lastrowid
+                return self.respond(201, {"id": created_id})
+            match = re.fullmatch(r"/api/entries/(\d+)", path)
+            if match and method in ("PUT", "DELETE"):
+                entry_id = int(match.group(1))
+                with LOCK, connect() as db:
+                    if method == "DELETE":
+                        cursor = db.execute("DELETE FROM entries WHERE id=?", (entry_id,))
+                    else:
+                        values = validate_entry(self.read_json())
+                        stamp = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+                        cursor = db.execute("""UPDATE entries SET kind=?,title=?,category=?,start_utc=?,end_utc=?,
+                            rewards=?,details=?,author=?,modified_at=?,reminded_at=NULL,reminder_claimed_at=NULL WHERE id=?""",
+                            (*values, stamp, entry_id))
+                    if cursor.rowcount == 0:
+                        return self.respond(404, {"error": "Entry not found."})
+                return self.respond(200, {"ok": True})
+            if path == "/api/rss/spending" and method == "POST":
+                payload = self.read_json()
+                resource = payload.get("resource")
+                if resource not in RSS_RESOURCES:
+                    raise ValueError("Choose a valid resource.")
+                amount = optional_rss_number(payload.get("amount"), "Spending amount")
+                if amount is None or amount <= 0:
+                    raise ValueError("Spending amount must be greater than zero.")
+                spent_at = clean(payload.get("spent_at", ""), 19, True)
+                moment = parse_utc(spent_at)
+                note = clean(payload.get("note", ""), 280)
+                current = datetime.now(timezone.utc)
+                if moment > current.timestamp():
+                    raise ValueError("Spending time cannot be in the future.")
+                with LOCK, connect() as db:
+                    settings = {row["key"]: row["value"] for row in db.execute("SELECT key,value FROM settings")}
+                    anchor = settings.get("rss_base_at") or settings.get("rss_updated_at") or current.isoformat()
+                    if moment < datetime.fromisoformat(anchor).timestamp():
+                        raise ValueError("Spending must be dated on or after the last balance update.")
+                    history = [dict(row) for row in db.execute("SELECT * FROM rss_spending ORDER BY spent_at,id")]
+                    history.append({"id": max((row["id"] for row in history), default=0) + 1,
+                                    "resource": resource, "amount": amount, "spent_at": spent_at,
+                                    "note": note, "created_at": current.isoformat()})
+                    result = rss_state(settings, history, current)
+                    if result["resources"][resource]["current"] is None:
+                        raise ValueError("Enter a starting balance for this resource before recording spending.")
+                    cursor = db.execute("""INSERT INTO rss_spending(resource,amount,spent_at,note,created_at)
+                        VALUES(?,?,?,?,?)""", (resource, amount, spent_at, note, current.isoformat(timespec="microseconds")))
+                    db.execute("UPDATE settings SET value=? WHERE key='rss_updated_at'",
+                               (current.isoformat(timespec="microseconds"),))
+                return self.respond(201, {"id": cursor.lastrowid})
+            spending_match = re.fullmatch(r"/api/rss/spending/(\d+)", path)
+            if spending_match and method == "DELETE":
+                with LOCK, connect() as db:
+                    cursor = db.execute("DELETE FROM rss_spending WHERE id=?", (int(spending_match.group(1)),))
+                    if not cursor.rowcount:
+                        return self.respond(404, {"error": "Spending entry not found."})
+                    db.execute("UPDATE settings SET value=? WHERE key='rss_updated_at'",
+                               (datetime.now(timezone.utc).isoformat(timespec="microseconds"),))
+                return self.respond(200, {"ok": True})
+            if path == "/api/rss" and method == "PUT":
+                data = self.read_json()
+                if "resources" in data or "buffs" in data:
+                    values = validate_rss(data)
+                    current = datetime.now(timezone.utc)
+                    updates = {
+                        "rss_resources": json.dumps(values["resources"], separators=(",", ":")),
+                        "rss_base_at": current.isoformat(timespec="seconds"),
+                        "rss_buffs": json.dumps(values["buffs"], separators=(",", ":")),
+                        "rss_tech_name": values["tech_name"],
+                        "tech_plan": values["tech_plan"],
+                        "rss_territory_plan": values["territory_plan"],
+                        "rss_updated_at": datetime.now(timezone.utc).isoformat(timespec="microseconds")
+                    }
+                    if "tech_progress" in data:
+                        updates["rss_tech_progress"] = "" if values["tech_progress"] is None else str(values["tech_progress"])
+                    if "tech_stage" in data:
+                        updates["rss_tech_stage"] = values["tech_stage"]
+                    if "tech_remaining" in data:
+                        updates["rss_tech_ends_at"] = research_deadline(values["tech_remaining"])
+                else:
+                    hourly = clean(data.get("rss_hour", ""), 80)
+                    tech = clean(data.get("tech_plan", ""), 2500)
+                    if hourly and not re.fullmatch(r"\d[\d,. ]*", hourly):
+                        raise ValueError("Enter a numeric hourly RSS amount.")
+                    updates = {"rss_hour": hourly, "tech_plan": tech, "rss_updated_at": datetime.now(timezone.utc).isoformat(timespec="microseconds")}
+                with LOCK, connect() as db:
+                    stored_revision = db.execute("SELECT value FROM settings WHERE key='rss_updated_at'").fetchone()
+                    current_revision = stored_revision["value"] if stored_revision else ""
+                    if "revision" in data and data["revision"] != current_revision:
+                        return self.respond(409, {"error": "Alliance RSS changed while you were editing. Reload the page and try again."})
+                    if "rss_resources" in updates:
+                        latest_spending_id = db.execute("SELECT COALESCE(MAX(id),0) FROM rss_spending").fetchone()[0]
+                        updates["rss_base_spend_id"] = str(latest_spending_id)
+                    for key, value in updates.items():
+                        db.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                                   (key, value))
+                return self.respond(200, {"ok": True})
+            return self.respond(404, {"error": "Not found."})
+        except ValueError as exc:
+            return self.respond(400, {"error": str(exc)})
+        except Exception:
+            logging.exception("Request failed")
+            return self.respond(500, {"error": "Server error."})
+
+    def do_POST(self):
+        self.write("POST")
+    def do_PUT(self):
+        self.write("PUT")
+    def do_DELETE(self):
+        self.write("DELETE")
+    def do_PATCH(self):
+        self.write("PATCH")
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    init()
+    for kind, url in (("reminder", WEBHOOK), ("registration", REGISTRATION_WEBHOOK), ("login", LOGIN_WEBHOOK)):
+        logging.info("Discord %s webhook: %s", kind,
+            "ready" if url and webhook_valid(url) else "invalid URL" if url else "NOT CONFIGURED")
+    if WEBHOOK:
+        threading.Thread(target=reminder_loop, daemon=True).start()
+    logging.info("SaS Website listening on %s:%s", HOST, PORT)
+    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+
+if __name__ == "__main__":
+    main()
