@@ -182,6 +182,8 @@ class MessengerTests(unittest.TestCase):
         admin,adcsrf=self.login_admin()
         self.assertEqual(self.call("/api/messenger/alliance/join","POST",{},a,ac)[0],200)
         self.assertEqual(self.call("/api/messenger/alliance/join","POST",{},b,bc)[0],200)
+        self.assertEqual(self.call("/api/messenger/read","POST",{"peer":"alliance"},a,ac)[0],200)
+        self.assertEqual(self.call("/api/messenger/read","POST",{"peer":"alliance"},b,bc)[0],200)
         self.assertEqual(self.call("/api/messenger/messages","POST",
             {"peer":"alliance","body":"SvS soon"},admin,adcsrf)[0],201)
         self.assertEqual(self.call("/api/messenger",cookie=a)[1]["unread"],1)
