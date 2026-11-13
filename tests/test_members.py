@@ -96,6 +96,27 @@ class MemberAccountTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 members.complete_password_reset(db, "TimeKeeper", "not-the-code", "new-secret-password-123")
 
+    def test_reset_lookup_supports_username_email_ingame_and_avoids_ambiguous_names(self):
+        with server.connect() as db:
+            members.register(db, {"username": "ZER", "player_name": "OgX",
+                                  "email": "zer@example.com", "password": "old-password-long-1"})
+            members.request_password_reset(db, "OgX")
+            row = db.execute("SELECT id FROM password_requests WHERE status='pending'").fetchone()
+            self.assertIsNotNone(row)
+            code = members.review_password_request(db, row["id"], "approved")
+            members.complete_password_reset(db, "zer@example.com", code, "new-password-long-1")
+            updated = db.execute("SELECT password_hash FROM members WHERE username='ZER'").fetchone()[0]
+            self.assertTrue(members.check_password("new-password-long-1", updated))
+            # The same ingame nickname may appear on multiple accounts; do not guess.
+            members.register(db, {"username": "SecondZER", "player_name": "OgX",
+                                  "email": "second@example.com", "password": "another-password-1"})
+            before = db.execute("SELECT COUNT(*) FROM password_requests").fetchone()[0]
+            result = members.request_password_reset(db, "OgX")
+            self.assertIn("If the account exists", result["message"])
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM password_requests").fetchone()[0], before)
+            members.request_password_reset(db, "SecondZER")
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM password_requests").fetchone()[0], before + 1)
+
     def test_reset_requests_are_limited_and_rejection_requires_reason(self):
         with server.connect() as db:
             members.register(db, {"username": "RejectMe", "player_name": "Test Player",
