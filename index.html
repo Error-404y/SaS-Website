@@ -231,6 +231,7 @@
             <button type="button" data-view="tool-buildings" class="tool-feature"><span>Building Costs</span><strong>Verified upgrade milestones</strong><span class="tool-feature-arrow">Open →</span></button>
             <button type="button" data-view="tool-speedups" class="tool-feature"><span>Speedups</span><strong>1m / 5m / 1h / 3h / 8h</strong><span class="tool-feature-arrow">Open →</span></button>
             <button type="button" data-view="tool-gathering" class="tool-feature"><span>RSS Gathering</span><strong>Levels &amp; gathering bonuses</strong><span class="tool-feature-arrow">Open →</span></button>
+            <button type="button" data-view="rss" class="tool-feature"><span>Alliance Treasury</span><strong>RSS production, balances &amp; spending</strong><span class="tool-feature-arrow">Open →</span></button>
           </div>
         </section>
 
@@ -253,6 +254,10 @@
             <button id="planner-capacity" class="capacity-toggle" type="button" aria-pressed="false"><span>Training Capacity UP (2h)</span><strong id="planner-capacity-state">OFF</strong></button>
             <div class="tool-stats" id="planner-training-results" aria-live="polite"></div>
             <div class="tool-metadata" id="planner-training-notes"></div>
+            <div class="tool-actions">
+              <button type="button" id="planner-send-speedups" class="small-button">Calculate speedups →</button>
+              <button type="button" id="planner-send-event" class="small-button">Officer event points →</button>
+            </div>
             <p class="tool-footnote">Measured game screenshots show the cost for 722 troops. Other quantities are proportional estimates from rounded values. Training Capacity UP adds 200% to capacity <em>and</em> training time while active (3× each). It costs 3K Diamonds to buy in the screenshot.</p>
           </div>
         </section>
@@ -270,6 +275,26 @@
             <div id="planner-building-results" class="tool-stats" aria-live="polite"></div>
             <div class="table-container"><table class="tool-table"><thead><tr><th>To level</th><th>Cash</th><th>Ammo</th><th>Electricity</th><th>Gas</th></tr></thead><tbody id="planner-building-table"></tbody></table></div>
             <p class="tool-footnote">These are individual upgrade costs to the displayed level, not totals from level 1 or for a level range. Missing levels are deliberately not estimated as exact game costs.</p>
+            <details class="tool-settings"><summary>Chief's Office: full-build reference</summary>
+              <div class="tool-stats">
+                <div class="tool-stat"><span>Cash</span><strong>3.22B</strong></div>
+                <div class="tool-stat"><span>Ammo</span><strong>3.21B</strong></div>
+                <div class="tool-stat"><span>Electricity</span><strong>633.1M</strong></div>
+                <div class="tool-stat"><span>Gas</span><strong>161.1M</strong></div>
+                <div class="tool-stat"><span>Electro Cores</span><strong>5,715</strong></div>
+                <div class="tool-stat"><span>Base building time</span><strong>~480 days</strong></div>
+              </div>
+              <p class="tool-footnote">Approximate reference for full progression to Electro 5 from the public guide; it is not the price of the selected single upgrade.</p>
+            </details>
+            <details class="tool-settings"><summary>Joint Confiscation Point reference</summary>
+              <div class="tool-stats">
+                <div class="tool-stat"><span>Ammo</span><strong>200K</strong></div>
+                <div class="tool-stat"><span>Cash</span><strong>200K</strong></div>
+                <div class="tool-stat"><span>Electricity</span><strong>200K</strong></div>
+                <div class="tool-stat"><span>Gas</span><strong>200K</strong></div>
+              </div>
+              <p class="tool-footnote">Total 800K alliance RSS for a Joint Confiscation Point. These are treasury costs, not the individual player's gathering expenses.</p>
+            </details>
           </div>
         </section>
 
