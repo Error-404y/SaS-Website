@@ -337,6 +337,53 @@ class SecurityBoundaryTests(unittest.TestCase):
             self.assertNotIn("super-secret-pass-123", repr(events))
             self.assertNotIn("incorrect-password", repr(events))
 
+    def test_admin_can_edit_and_delete_accounts_with_csrf(self):
+        self.register("ManageTest", "approved")
+        with server.connect() as db:
+            member = db.execute("SELECT id FROM members WHERE username='ManageTest'").fetchone()
+            member_id = member["id"]
+            members.new_session(db, member_id)
+            members.request_password_reset(db, "ManageTest")
+        admin_cookie, csrf = self.login_admin()
+        member_cookie, member_csrf = self.login_member("ManageTest")
+        path = "/api/accounts/" + str(member_id)
+        values = {"username": "ManagedTest", "player_name": "Edited Ingame",
+                  "email": "edited@example.com"}
+
+        self.assertEqual(self.call(path, "PUT", values)[0], 403)
+        self.assertEqual(self.call(path, "DELETE", cookie=member_cookie, csrf=member_csrf)[0], 403)
+        self.assertEqual(self.call(path, "PUT", values, admin_cookie)[0], 403)
+        self.assertEqual(self.call(path, "DELETE", cookie=admin_cookie)[0], 403)
+
+        self.assertEqual(self.call(path, "PUT", values, admin_cookie, csrf)[0], 200)
+        with server.connect() as db:
+            row = db.execute("SELECT * FROM members WHERE id=?", (member_id,)).fetchone()
+            self.assertEqual(row["username"], "ManagedTest")
+            self.assertEqual(row["player_name"], "Edited Ingame")
+            self.assertEqual(row["email"], "edited@example.com")
+        self.assertEqual(self.call(path, "PUT", {
+            "username": "bad user", "player_name": "Bad", "email": "bad@example.com"
+        }, admin_cookie, csrf)[0], 400)
+        self.assertEqual(self.call(path, "DELETE", cookie=admin_cookie, csrf=csrf)[0], 200)
+        with server.connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM members WHERE id=?", (member_id,)).fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM member_sessions WHERE member_id=?", (member_id,)).fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM password_requests WHERE member_id=?", (member_id,)).fetchone()[0], 0)
+        self.assertEqual(self.call(path, "DELETE", cookie=admin_cookie, csrf=csrf)[0], 404)
+        self.assertEqual(self.call("/api/state", cookie=member_cookie)[0], 401)
+
+    def test_requested_password_reset_reaches_admin_queue(self):
+        self.register("LostPass", "approved")
+        admin_cookie, _ = self.login_admin()
+        status, raw, _ = self.call("/api/password/request", "POST", {"identifier": "LostPass"})
+        self.assertEqual(status, 200, raw)
+        self.assertIn(b"submitted", raw)
+        status, raw, _ = self.call("/api/accounts", cookie=admin_cookie)
+        self.assertEqual(status, 200, raw)
+        listing = json.loads(raw)["password_requests"]
+        self.assertTrue(any(item["username"] == "LostPass" and item["status"] == "pending"
+                            for item in listing))
+
     def test_admin_login_rate_limit(self):
         for _ in range(10):
             status, _, _ = self.call("/api/login", "POST", {

@@ -759,6 +759,43 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(b"{}")
                 return
             account_match = re.fullmatch(r"/api/accounts/(\d+)", path)
+            if account_match and method == "DELETE":
+                if not self.authorized():
+                    return
+                member_id = int(account_match.group(1))
+                with LOCK, connect() as db:
+                    target = db.execute("SELECT id FROM members WHERE id=?", (member_id,)).fetchone()
+                    if not target:
+                        return self.respond(404, {"error": "Account not found."})
+                    # Explicitly remove all dependent records for databases with older
+                    # foreign-key definitions. The account is permanently deleted.
+                    db.execute("DELETE FROM password_requests WHERE member_id=?", (member_id,))
+                    db.execute("DELETE FROM member_reads WHERE member_id=?", (member_id,))
+                    db.execute("DELETE FROM member_sessions WHERE member_id=?", (member_id,))
+                    db.execute("DELETE FROM members WHERE id=?", (member_id,))
+                return self.respond(200, {"ok": True})
+            if account_match and method == "PUT":
+                if not self.authorized():
+                    return
+                data = self.read_json()
+                username = str(data.get("username", "")).strip()
+                player_name = str(data.get("player_name", "")).strip()
+                email = str(data.get("email", "")).strip().lower()
+                if not re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", username):
+                    raise ValueError("Username must be 3–32 characters.")
+                if not 2 <= len(player_name) <= 60:
+                    raise ValueError("In-game name must be 2–60 characters.")
+                if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email) or len(email) > 254:
+                    raise ValueError("Enter a valid email.")
+                with LOCK, connect() as db:
+                    try:
+                        cursor = db.execute("UPDATE members SET username=?,player_name=?,email=? WHERE id=?",
+                            (username, player_name, email, int(account_match.group(1))))
+                    except sqlite3.IntegrityError as exc:
+                        raise ValueError("Username or email is already registered.") from exc
+                    if not cursor.rowcount:
+                        return self.respond(404, {"error": "Account not found."})
+                return self.respond(200, {"ok": True})
             if account_match and method == "PATCH":
                 if not self.authorized():
                     return

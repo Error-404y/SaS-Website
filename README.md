@@ -118,6 +118,14 @@ The .env file and local SQLite databases are ignored by Git. Never commit admini
 
 **Persistence matters:** The SQLite database path must remain on persistent storage when your service restarts or redeploys. Back up the database before changing your hosting runtime.
 
+### Account moderation and password recovery
+
+In **SaS – Accounts**, administrators can **Accept**, **Reject** (with a reason), **Edit** player name/username/email, and **Delete** accounts permanently after confirmation. Approved accounts appear in green and rejected ones in red. Deleting an account revokes its sessions and removes its pending password reset requests and unread state; make a database backup before bulk moderation.
+
+The login screen offers **Forgot your password? → Request password change**. The server always gives the same neutral confirmation for existing and unknown usernames/emails, so it cannot be used to discover accounts. Requests from registered accounts appear under **SaS – Accounts → Password change requests**. The admin navigation badge includes pending reset requests and the queue refreshes automatically every 15 seconds while an admin is active, with a manual refresh button as well.
+
+Admins can approve a pending request to generate a one-use code and share it **privately** with the correct player; the code expires after **one hour**. Players then use **I have a reset code** to set a new password. Reviewed requests remain visible in the admin list for **48 hours** and then disappear automatically from that list (database audit history is preserved). Pending requests remain visible until reviewed. A repeat request made within 15 minutes does not create another pending entry.
+
 ### Discord registration and login notifications
 
 Create two Discord webhooks in your chosen channels and store them privately in `.env` or the host's environment settings:

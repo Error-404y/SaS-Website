@@ -758,3 +758,18 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   .tool-welcome-symbol{display:none}
   .tool-feature{padding:18px;gap:9px}
 }
+
+/* Recovery links: readable, clearly separated touch targets */
+.auth-recovery-actions{display:flex;flex-direction:column;align-items:center;gap:13px;margin:17px 0 5px}
+.auth-form .auth-recovery-actions .auth-admin-link{margin:0;padding:6px 12px;min-height:32px;width:auto;line-height:1.45}
+.account-row.status-rejected{border-left:4px solid #c84d57;background:#fff8f8}
+.account-row.status-approved{border-left:4px solid #299764;background:#f9fffc}
+.account-row.status-pending{border-left:4px solid #d5a74b}
+.account-edit{border:1px solid #cbd7e5;color:#365d8a;background:#f7faff;border-radius:8px;padding:9px 13px;font-size:12px;font-weight:700}
+.account-delete{border:1px solid #e6bcc4;color:#b63849;background:#fff4f5;border-radius:8px;padding:9px 13px;font-size:12px;font-weight:700}
+.account-edit:hover{background:#e9f2fd}.account-delete:hover{background:#ffe3e7}
+.account-row.status-rejected .account-pill.rejected{background:#d83c4e;color:white}
+.account-row.status-approved .account-pill.approved{background:#278a55;color:white}
+#account-edit-dialog input{display:block;width:100%;border:1px solid #dbe2ec;border-radius:10px;padding:12px;margin:6px 0 15px}
+#password-requests-badge{display:inline-flex;vertical-align:middle;font-size:11px}
+#password-requests-badge[hidden]{display:none}
