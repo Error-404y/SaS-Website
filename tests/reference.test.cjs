@@ -60,3 +60,20 @@ test('Guard X and Marksman X available; only Biker X is locked',()=>{
   assert.doesNotMatch(html,/data-locked-troop="Royal Guard/);
   assert.doesNotMatch(html,/data-locked-troop="Royal Marksman/);
 });
+
+test('all destructive actions use the SaS confirmation dialog, not browser-native alerts',()=>{
+  const fs=require('node:fs');
+  const path=require('node:path');
+  const app=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
+  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+  assert.doesNotMatch(app,/\\b(?:window\\.)?confirm\\s*\\(/);
+  assert.doesNotMatch(app,/\\b(?:window\\.)?alert\\s*\\(/);
+  assert.doesNotMatch(app,/\\b(?:window\\.)?prompt\\s*\\(/);
+  assert.match(html,/<dialog id="confirm-action-dialog"/);
+  assert.match(html,/data-confirm-choice="cancel"/);
+  assert.match(html,/data-confirm-choice="accept"/);
+  assert.match(app,/confirmAction\\(\\{/);
+  assert.match(app,/title: 'Delete player account\\?'/);
+  assert.match(app,/title: 'Delete this entry\\?'/);
+  assert.match(app,/title: 'Remove spending record\\?'/);
+});
