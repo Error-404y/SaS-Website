@@ -8,8 +8,8 @@
   const GATHERING = {
     ammo: [316584, 332496, 348372, 364320, 380160, 396000, 411840, 427680],
     cash: [316584, 332496, 348372, 364320, 380160, 396000, 411840, 427680],
-    electricity: [63316.8, 66499.2, 69674.4, 72864, 76032, 79200, 82368, 85536],
-    gas: [15829.2, 16624.8, 17418.6, 18216, 19008, 19800, 20592, 21384]
+    electricity: [null, null, null, null, 76032, 79200, 82368, 85536],
+    gas: [null, null, null, null, 19008, 19800, 20592, 21384]
   };
   // Per-722 screenshot snapshots, shown as rounded game UI values. Original time BEFORE acceleration.
   // Both variants of Honored Guard/Marksman have tier IX costs; Royal Guard/Marksman tier X.
@@ -73,7 +73,8 @@
   }
   function gathering(type, level, bonus = 0) {
     if (!GATHERING[type] || !Number.isInteger(Number(level)) || level < 1 || level > 8) return null;
-    return GATHERING[type][level - 1] * (1 + numeric(bonus) / 100);
+    const base = GATHERING[type][level - 1];
+    return base === null ? null : base * (1 + numeric(bonus) / 100);
   }
   function troops(key, quantity, capacityBoost = false, timeReduction = 0) {
     const t = TROOPS[key];
