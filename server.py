@@ -717,7 +717,8 @@ class Handler(BaseHTTPRequestHandler):
                 delivered = discord_send(channel, urls[channel], notice)
                 return self.respond(200 if delivered else 502,
                     {"ok": delivered, "channel": channel,
-                     "result": NOTICE_STATUS[channel]["last_result"]})
+                     "result": NOTICE_STATUS[channel]["last_result"],
+                     "error": None if delivered else "Discord delivery failed: " + NOTICE_STATUS[channel]["last_result"]})
             if path == "/api/admin/activity" and method == "POST":
                 if not self.authorized():
                     return
