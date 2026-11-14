@@ -17,6 +17,7 @@ jobs:
       - run: python -m py_compile server.py members.py messenger.py ban_system.py reminder_cards.py main.py
       - run: node --check auth.js
       - run: node --check app.js
+      - run: node --check messenger-rich-ui.js
       - run: node --check messenger-ui.js
       - run: node --check calendar.js
       - run: node --test tests/calendar.test.cjs
