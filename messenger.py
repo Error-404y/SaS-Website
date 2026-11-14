@@ -180,7 +180,10 @@ def group_history_floor(db, actor, thread):
 
 def group_invite_status(db,actor,target):
     """Only group creators can view who is already a member or invited."""
-    group=group_details(db,actor,target)
+    try:
+        group=group_details(db,actor,target)
+    except ValueError as exc:
+        raise PermissionError("Only the group creator can invite players.") from exc
     if group is None or group["creator_key"]!=actor:
         raise PermissionError("Only the group creator can invite players.")
     group_id=group["id"]
