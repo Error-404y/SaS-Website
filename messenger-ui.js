@@ -61,8 +61,18 @@
     }
     const viewport=window.visualViewport;
     const height=viewport ? viewport.height : window.innerHeight;
+    // iOS Safari can pan the *visual* viewport down when an input receives
+    // focus, even though the document itself remains scroll-locked. Using
+    // visualViewport.height alone would shorten the Messenger from document
+    // y=0, leaving a large blank band between the composer and the keyboard.
+    // The bottom of the actually visible area is pageTop + height in document
+    // coordinates, so extend the page to that bottom only while typing.
+    const typing=document.body.classList.contains('sas-messenger-keyboard');
+    const pageTop=viewport ? (Number.isFinite(viewport.pageTop) ?
+      viewport.pageTop : (window.scrollY || 0)+(viewport.offsetTop || 0)) : 0;
+    const bottom=height+(typing ? Math.max(0,pageTop) : 0);
     root.style.setProperty('--sas-messenger-viewport-height',
-      Math.max(1,Math.round(height))+'px');
+      Math.max(1,Math.round(bottom))+'px');
   }
   const totalUnread = () => contacts.reduce((sum, c) => sum + (Number(c.unread)||0),0);
   async function api(path, options={}) {
