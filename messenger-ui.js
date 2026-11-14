@@ -9,6 +9,7 @@
     lastNotify = 0, selectedGroupPlayers = new Set(), sessionGeneration = 0,
     olderMessages = [], historyHasMore = false, oldestBefore = null, loadingOlder = false,
     lastPresencePing = 0, presenceFlight = false;
+  let messageLoadDone = Promise.resolve();
   const avatar = item => item.group ? (item.id==='alliance'?'SaS':'GR') :
     String(item.username || '??').slice(0, 2).toUpperCase();
   const showTime = time => {
@@ -257,9 +258,19 @@
         !$('messenger-shell').classList.contains('chat-open') ||
         contacts.some(c=>c.id===activePeer && (c.invitation || (c.id==='alliance' && !c.joined)))) return;
     const targetPeer=activePeer;
-    if (loadingPeer===targetPeer) return;
+    if (loadingPeer===targetPeer) {
+      if (!force) return;
+      // A Send or edit confirmation must wait for a polling request already
+      // in progress. Otherwise force refresh silently gets skipped and the
+      // next background poll can replace an open message menu.
+      await messageLoadDone;
+      if (!running || activePeer!==targetPeer || !currentPage) return;
+      return loadMessages(true);
+    }
     const generation=sessionGeneration;
     loadingPeer=targetPeer;
+    let finishLoad;
+    messageLoadDone=new Promise(resolve=>{finishLoad=resolve;});
     try {
       const result=await api('/api/messenger/messages?peer='+encodeURIComponent(targetPeer));
       if (!running || generation!==sessionGeneration || document.hidden ||
@@ -300,6 +311,7 @@
       }
     } finally {
       if (loadingPeer===targetPeer) loadingPeer='';
+      finishLoad();
     }
   }
   async function send(event){
