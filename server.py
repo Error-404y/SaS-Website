@@ -122,6 +122,14 @@ def init():
             deleted_at INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY(event_id,stage,event_start_utc)
         )""")
+        # Existing reminder posts keep their Discord message IDs on deployment.
+        # A new minute-refresh worker can therefore PATCH those messages in
+        # place immediately, without sending duplicate event announcements.
+        reminder_fields={row["name"] for row in db.execute("PRAGMA table_info(reminder_messages)")}
+        for field in ("refresh_at","refresh_attempt_at"):
+            if field not in reminder_fields:
+                db.execute("ALTER TABLE reminder_messages ADD COLUMN "+field+
+                           " INTEGER NOT NULL DEFAULT 0")
         db.execute("""CREATE INDEX IF NOT EXISTS reminder_messages_cleanup
             ON reminder_messages(deleted_at,sent_at)""")
         db.execute("""CREATE TABLE IF NOT EXISTS sessions (
@@ -559,6 +567,91 @@ def reminder_cleanup_once(now_epoch=None):
         except Exception as exc:
             logging.warning("Discord reminder cleanup failed: %s", type(exc).__name__)
 
+REMINDER_REFRESH_INTERVAL = 55  # Seconds; start at the next minute without excess edits.
+REMINDER_REFRESH_RETRY = 90     # Back off failed updates (or another worker's claim).
+REMINDER_REFRESH_BATCH = 12    # Keep webhook traffic bounded even with many events.
+
+def reminder_refresh_once(now_epoch=None):
+    """Refresh the original Discord image card for EVERY current event reminder.
+
+    Both yellow (2-hour) and red (1-hour) reminders receive a new countdown.
+    A red reminder receives one final "Event Started" edit when the timer
+    reaches zero, then remains unchanged until the normal 24-hour cleanup.
+    The persisted refresh timestamps survive restarts and existing reminders
+    are automatically brought into the refresh loop after migration.
+    """
+    if not WEBHOOK or not webhook_valid(WEBHOOK):
+        return 0
+    now_epoch = int(time.time()) if now_epoch is None else int(now_epoch)
+    with LOCK, connect() as db:
+        rows = db.execute("""SELECT r.*,e.title AS current_title,
+                e.start_utc AS current_start,e.kind AS current_kind
+            FROM reminder_messages r LEFT JOIN entries e ON r.event_id=e.id
+            WHERE r.message_id!='' AND r.sent_at>0 AND r.deleted_at=0
+            ORDER BY r.refresh_at ASC,r.sent_at ASC LIMIT 300""").fetchall()
+        due=[]
+        for row in rows:
+            # Cancellation, rescheduling and expiry are handled by cleanup,
+            # never overwrite an obsolete event reminder here.
+            if (row["current_start"] != row["event_start_utc"] or
+                row["current_kind"] not in ("events","alliance") or
+                now_epoch >= reminder_expiry(row["stage"],row["sent_at"])):
+                continue
+            try:
+                start_epoch = parse_utc(row["event_start_utc"])
+            except ValueError:
+                continue
+            last_display = max(row["sent_at"],row["refresh_at"])
+            if now_epoch < start_epoch:
+                if now_epoch - last_display < REMINDER_REFRESH_INTERVAL:
+                    continue
+            elif row["refresh_at"] >= start_epoch:
+                # The final "Event Started" card has already been uploaded.
+                continue
+            if row["refresh_attempt_at"] > now_epoch - REMINDER_REFRESH_RETRY:
+                continue
+            due.append(row)
+            if len(due) >= REMINDER_REFRESH_BATCH:
+                break
+        # Claim each reminder before the network I/O, preventing duplicate
+        # updates from concurrent threads and keeping database locks short.
+        for row in due:
+            db.execute("""UPDATE reminder_messages SET refresh_attempt_at=?
+                WHERE event_id=? AND stage=? AND event_start_utc=? AND message_id=?
+                AND deleted_at=0""",(now_epoch,row["event_id"],row["stage"],
+                                     row["event_start_utc"],row["message_id"]))
+    refreshed=0
+    for index,row in enumerate(due):
+        try:
+            reminder_cards.edit_card(WEBHOOK,row["message_id"],row["current_title"],
+                                     row["event_start_utc"],row["stage"],now_epoch=now_epoch)
+            with LOCK, connect() as db:
+                db.execute("""UPDATE reminder_messages SET refresh_at=?
+                    WHERE event_id=? AND stage=? AND event_start_utc=?
+                    AND message_id=? AND deleted_at=0""",
+                    (now_epoch,row["event_id"],row["stage"],row["event_start_utc"],
+                     row["message_id"]))
+            refreshed+=1
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                # The message was deleted in Discord. Never repost it.
+                with LOCK, connect() as db:
+                    db.execute("""UPDATE reminder_messages SET deleted_at=?
+                        WHERE event_id=? AND stage=? AND event_start_utc=?
+                        AND message_id=? AND deleted_at=0""",
+                        (now_epoch,row["event_id"],row["stage"],row["event_start_utc"],
+                         row["message_id"]))
+            else:
+                logging.warning("Discord countdown refresh failed (HTTP %s)",exc.code)
+        except Exception as exc:
+            # Do not log webhook URLs or tokens from network exceptions.
+            logging.warning("Discord countdown refresh failed (%s)",type(exc).__name__)
+        if index<len(due)-1:
+            # Discord's webhook rate limits apply to PATCH requests too.
+            time.sleep(0.55)
+    return refreshed
+
+
 def reminder_send_once(now_epoch=None):
     """Publish at most one due card, never duplicate an already acknowledged stage."""
     if not WEBHOOK or not webhook_valid(WEBHOOK):
@@ -626,15 +719,17 @@ def reminder_loop():
     if not webhook_valid(WEBHOOK):
         logging.error("Discord reminder webhook URL is invalid.")
         return
-    logging.info("Discord image reminders enabled: 2h yellow, 1h red.")
+    logging.info("Discord live countdown reminders enabled for all events: 2h yellow, 1h red.")
     while True:
         try:
             reminder_cleanup_once()
-            if not reminder_send_once():
-                time.sleep(25)
+            reminder_refresh_once()
+            reminder_send_once()
         except Exception:
             logging.exception("Reminder scheduler error")
-            time.sleep(30)
+        # Short polling avoids long gaps even when many events start together;
+        # refresh_at guards against updating a single image too frequently.
+        time.sleep(10)
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
