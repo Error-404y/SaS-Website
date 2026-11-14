@@ -1243,6 +1243,13 @@ html,body{max-width:100%;overflow-x:clip}
     min-height:0;
   }
   body.sas-messenger-page #site-layout{
+    /* .layout uses margin:0 auto. As a flex-column child it otherwise
+       shrink-wraps to the tab bar's max-content width (about 417px),
+       pushing Send off the right edge or collapsing to zero with keyboard. */
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    margin:0;
     display:flex;
     flex:1 1 0;
     flex-direction:column;
@@ -1252,6 +1259,8 @@ html,body{max-width:100%;overflow-x:clip}
     overflow:hidden;
   }
   body.sas-messenger-page #site-layout>.right-sidebar{
+    width:100%;
+    min-width:0;
     order:0;
     position:relative;
     top:auto;
@@ -1261,6 +1270,8 @@ html,body{max-width:100%;overflow-x:clip}
     overflow:hidden;
   }
   body.sas-messenger-page #site-layout>.content{
+    width:100%;
+    min-width:0;
     order:2;
     display:flex;
     flex:1 1 0;
