@@ -1122,3 +1122,69 @@ html,body{max-width:100%;overflow-x:clip}
   .page-title{min-width:0}
   .page-title h1{overflow-wrap:anywhere}
 }
+
+
+/* Mobile Messenger: prevent message rows from shrinking into the viewport.
+   An overflowing history must be scrollable without moving the composer. */
+.messenger-history{
+  overflow-y:auto;
+  overflow-x:hidden;
+  min-height:0;
+  min-width:0;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+  touch-action:pan-y;
+  scrollbar-gutter:stable;
+}
+.messenger-history>.messenger-line,
+.messenger-history>.messenger-system-message,
+.messenger-history>.messenger-load-older{
+  flex-shrink:0;
+}
+.messenger-line{min-width:0;flex-shrink:0}
+.messenger-bubble{min-width:0;max-width:min(83%,460px)}
+.messenger-bubble-footer{gap:3px}
+.messenger-read-receipt{width:13px;height:12px;flex:0 0 13px}
+.messenger-read-receipt svg{width:13px;height:10px;display:block}
+.messenger-bubble time{font-size:9px;line-height:1.2}
+@media(max-width:620px){
+  .messenger-shell.chat-open{
+    top:var(--sas-visual-top,0px);
+    bottom:auto;
+    height:var(--sas-visual-height,100dvh);
+    max-height:var(--sas-visual-height,100dvh);
+    isolation:isolate;
+  }
+  .messenger-shell.chat-open .messenger-chat{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    max-height:100%;
+    overflow:hidden;
+  }
+  .messenger-shell.chat-open .messenger-history{
+    flex:1 1 0;
+    min-height:0;
+    overflow-y:auto;
+    overflow-x:hidden;
+    overscroll-behavior:contain;
+    touch-action:pan-y;
+    padding:13px 12px;
+    scroll-behavior:auto;
+  }
+  .messenger-shell.chat-open .messenger-line{flex:none}
+  .messenger-shell.chat-open .messenger-system-message{flex:none}
+  .messenger-shell.chat-open .messenger-compose{
+    position:relative;
+    z-index:2;
+    flex:0 0 auto;
+    width:100%;
+    margin-top:auto;
+    padding:9px 10px max(9px,env(safe-area-inset-bottom,0px));
+  }
+  .messenger-shell.chat-open .messenger-bubble{max-width:min(87%,370px)}
+  .messenger-shell.chat-open .messenger-read-receipt{width:12px;flex-basis:12px}
+  .messenger-shell.chat-open .messenger-read-receipt svg{width:12px;height:10px}
+}
