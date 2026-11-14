@@ -508,7 +508,7 @@ class MessengerTests(unittest.TestCase):
         self.assertEqual(self.call("/api/messenger/groups/invite","POST",
             {"peer":group,"members":[bid],"allow_history":False},alpha)[0],403)
         self.assertEqual(self.call("/api/messenger/groups/invite","POST",
-            {"peer":group,"members":[bid],"allow_history":False},bravo,bc)[0],400)
+            {"peer":group,"members":[bid],"allow_history":False},bravo,bc)[0],403)
         for invalid in ([bid,bid],[aid],["member:"+str(pending)],["member:999999"]):
             self.assertEqual(self.call("/api/messenger/groups/invite","POST",
                 {"peer":group,"members":invalid,"allow_history":False},alpha,ac)[0],400)
