@@ -223,7 +223,12 @@
         '<div class="messenger-bubble">'+
         ((activePeer==='alliance'||activePeer.startsWith('group:')) ? '<strong>'+escape(mine?'You':sender)+'</strong>' : '')+
         '<span class="messenger-bubble-text">'+escape(msg.body)+'</span>'+
-        '<time>'+escape(showTime(msg.created_at))+'</time></div></div>';
+        '<span class="messenger-bubble-footer"><time>'+escape(showTime(msg.created_at))+'</time>'+
+        (mine && typeof msg.read==='boolean' ?
+          '<span class="messenger-read-receipt'+(msg.read?' is-read':'')+'" aria-label="'+(msg.read?'Read':'Sent, not yet read')+'" title="'+(msg.read?'Read':'Sent, not yet read')+'">'+
+          (msg.read ? '<svg viewBox="0 0 26 18" width="22" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l5 5L17 3"/><path d="M10 9l5 5L25 3"/></svg>' :
+          '<svg viewBox="0 0 18 18" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l5 5L16 3"/></svg>')+'</span>' : '')+
+        '</span></div></div>';
     }).join('');
   }
   async function loadMessages(force=false) {
@@ -238,7 +243,9 @@
       if (!running || generation!==sessionGeneration ||
           activePeer!==targetPeer || !currentPage) return;
       const messages=result.messages||[];
-      const key=messages.map(m=>m.id).join(',');
+      // Include receipt state so a read acknowledgement updates existing bubbles
+      // even if no new messages arrived.
+      const key=messages.map(m=>m.id+':'+(m.read===true?'r':m.read===false?'s':'-')).join(',');
       if (force || key!==shownIds) {
         const holder=$('messenger-history');
         const stickToBottom=force || holder.scrollHeight-holder.scrollTop-holder.clientHeight<90;
