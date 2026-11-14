@@ -1211,3 +1211,194 @@ html,body{max-width:100%;overflow-x:clip}
   #page-messenger{transform:none!important;filter:none!important;contain:none!important}
   #page-messenger .messenger-shell.chat-open{position:fixed!important;left:0;right:0;top:var(--sas-visual-top,0px);bottom:auto;z-index:999}
 }
+
+
+/* SaS Messenger / mobile layout v2
+ * The WHOLE Messenger section is sized by the visible viewport. Never
+ * position the chat as a fixed overlay inside the animated website: that
+ * escapes the parent's available height on Safari and hides the composer.
+ * Only the player list and message history can scroll vertically.
+ */
+@media(max-width:750px){
+  html.sas-messenger-root{
+    height:100%;
+    overflow:hidden;
+    overscroll-behavior:none;
+  }
+  body.sas-messenger-page{
+    height:var(--sas-messenger-viewport-height,100dvh);
+    min-height:0;
+    overflow:hidden!important;
+    overscroll-behavior:none;
+  }
+  body.sas-messenger-page #website{
+    display:flex;
+    flex-direction:column;
+    height:var(--sas-messenger-viewport-height,100dvh);
+    min-height:0;
+    overflow:hidden;
+  }
+  body.sas-messenger-page .site-header{
+    flex:0 0 auto;
+    min-height:0;
+  }
+  body.sas-messenger-page #site-layout{
+    display:flex;
+    flex:1 1 0;
+    flex-direction:column;
+    min-height:0;
+    max-height:none;
+    height:auto;
+    overflow:hidden;
+  }
+  body.sas-messenger-page #site-layout>.right-sidebar{
+    order:0;
+    position:relative;
+    top:auto;
+    flex:0 0 auto;
+    min-height:0;
+    max-width:100%;
+    overflow:hidden;
+  }
+  body.sas-messenger-page #site-layout>.content{
+    order:2;
+    display:flex;
+    flex:1 1 0;
+    flex-direction:column;
+    min-height:0;
+    height:auto;
+    overflow:hidden;
+    padding:8px 10px max(8px,env(safe-area-inset-bottom,0px));
+  }
+  body.sas-messenger-page #page-messenger{
+    display:flex;
+    flex:1 1 0;
+    flex-direction:column;
+    min-width:0;
+    min-height:0;
+    height:auto;
+    overflow:hidden;
+    transform:none!important;
+    animation:none!important;
+  }
+  /* The site header + highlighted Explore tab already name this page. */
+  body.sas-messenger-page #page-messenger .messenger-titlebar{
+    display:none;
+  }
+  body.sas-messenger-page #page-messenger .messenger-shell,
+  body.sas-messenger-page #page-messenger .messenger-shell.chat-open{
+    position:relative!important;
+    inset:auto!important;
+    top:auto!important;
+    right:auto!important;
+    bottom:auto!important;
+    left:auto!important;
+    display:block;
+    flex:1 1 0;
+    min-width:0;
+    min-height:0!important;
+    max-height:none!important;
+    height:auto!important;
+    width:100%!important;
+    margin:0;
+    overflow:hidden;
+    border-radius:13px;
+    box-shadow:0 5px 22px rgba(41,24,73,.06);
+    isolation:isolate;
+  }
+  body.sas-messenger-page #page-messenger .messenger-list,
+  body.sas-messenger-page #page-messenger .messenger-chat{
+    position:absolute;
+    inset:0;
+    min-width:0;
+    min-height:0;
+    max-height:100%;
+    overflow:hidden;
+  }
+  body.sas-messenger-page #page-messenger .messenger-list{
+    display:flex;
+    flex-direction:column;
+  }
+  body.sas-messenger-page #page-messenger .messenger-chat{
+    display:none;
+    flex-direction:column;
+  }
+  body.sas-messenger-page #page-messenger .messenger-shell.chat-open .messenger-list{
+    display:none;
+  }
+  body.sas-messenger-page #page-messenger .messenger-shell.chat-open .messenger-chat{
+    display:flex;
+  }
+  body.sas-messenger-page #page-messenger .messenger-back{display:flex}
+  body.sas-messenger-page #page-messenger .messenger-contact-list,
+  body.sas-messenger-page #page-messenger .messenger-history{
+    flex:1 1 0;
+    min-height:0;
+    max-height:none;
+    overflow-x:hidden;
+    overflow-y:auto;
+    touch-action:pan-y;
+    overscroll-behavior-y:contain;
+    -webkit-overflow-scrolling:touch;
+  }
+  body.sas-messenger-page #page-messenger .messenger-history{
+    padding:13px 12px;
+    scroll-behavior:auto;
+  }
+  body.sas-messenger-page #page-messenger .messenger-history>.messenger-line,
+  body.sas-messenger-page #page-messenger .messenger-history>.messenger-system-message{
+    flex:0 0 auto;
+  }
+  body.sas-messenger-page #page-messenger .messenger-chat-header{
+    flex:0 0 66px;
+    height:66px;
+    min-height:0;
+    padding:10px 13px;
+  }
+  body.sas-messenger-page #page-messenger .messenger-compose{
+    display:flex;
+    position:relative;
+    z-index:2;
+    flex:0 0 auto;
+    width:100%;
+    min-width:0;
+    margin:0;
+    padding:9px 10px max(9px,env(safe-area-inset-bottom,0px));
+    background:#fff;
+  }
+  body.sas-messenger-page #page-messenger .messenger-compose input{
+    flex:1 1 0;
+    width:0;
+    min-width:0;
+    height:44px;
+    font-size:16px;
+  }
+  body.sas-messenger-page #page-messenger .messenger-compose button{
+    flex:0 0 44px;
+    height:44px;
+    width:44px;
+  }
+  body.sas-messenger-page #page-messenger .messenger-shell.is-locked .messenger-compose{
+    display:none;
+  }
+  body.sas-messenger-page #page-messenger .messenger-alliance-lock{
+    inset:66px 0 0;
+    overflow-y:auto;
+  }
+  body.sas-messenger-page #page-messenger .messenger-error:not([hidden]){
+    flex:0 0 auto;
+  }
+  /* When typing, keep the actual chat visible above the software keyboard. */
+  body.sas-messenger-page.sas-messenger-keyboard .site-header,
+  body.sas-messenger-page.sas-messenger-keyboard #site-layout>.right-sidebar{
+    display:none;
+  }
+}
+@supports not (height:100dvh){
+  @media(max-width:750px){
+    body.sas-messenger-page,
+    body.sas-messenger-page #website{
+      height:var(--sas-messenger-viewport-height,100vh);
+    }
+  }
+}
