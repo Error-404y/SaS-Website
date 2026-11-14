@@ -112,6 +112,31 @@ class MessengerTests(unittest.TestCase):
             self.assertEqual(self.call("/api/messenger/messages","POST",
                 {"peer":"alliance","body":"hi"},cookie,csrf)[0],401)
 
+    def test_presence_heartbeat_is_authenticated_and_expires(self):
+        import time
+        a, ac, aid = self.login("Alpha")
+        b, bc, bid = self.login("Bravo")
+        self.assertEqual(self.call("/api/messenger/presence", "POST", {})[0], 401)
+        self.assertEqual(self.call("/api/messenger/presence", "POST", {}, a)[0], 403)
+        self.assertEqual(self.call("/api/messenger/presence", "POST", {}, a, ac)[0], 200)
+        status, data = self.call("/api/messenger", cookie=b)
+        self.assertEqual(status, 200)
+        alpha = next(item for item in data["contacts"] if item["id"] == aid)
+        self.assertTrue(alpha["online"])
+        self.assertIsInstance(alpha["last_seen_at"], int)
+        self.assertNotIn("online", next(item for item in data["contacts"] if item["group"]))
+        with server.connect() as db:
+            db.execute("UPDATE chat_presence SET last_seen_at=? WHERE member_key=?",
+                       (int(time.time()) - messenger.PRESENCE_ONLINE_SECONDS - 10, aid))
+        status, data = self.call("/api/messenger", cookie=b)
+        alpha = next(item for item in data["contacts"] if item["id"] == aid)
+        self.assertFalse(alpha["online"])
+        self.assertIsInstance(alpha["last_seen_at"], int)
+        self.assertEqual(self.call("/api/messenger/presence", "POST", {}, b, bc)[0], 200)
+        self.assertEqual(self.call("/api/messenger/presence", "POST", {}, a, ac)[0], 200)
+        self.assertTrue(next(item for item in self.call("/api/messenger", cookie=b)[1]["contacts"]
+                             if item["id"] == aid)["online"])
+
     def test_private_messages_are_isolated_and_unread_clear_only_when_read(self):
         a,ac,aid=self.login("Alpha")
         b,bc,bid=self.login("Bravo")
