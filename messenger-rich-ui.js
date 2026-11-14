@@ -239,7 +239,7 @@
     const suffix=input.value.slice(input.selectionStart);
     const match=prefix.match(/(?:^|\s)@([A-Za-z0-9_.-]*)$/);
     if(!match)return;
-    input.value=prefix.slice(0,prefix.length-match[1].length)+' '+username+' '+suffix;
+    input.value=prefix.slice(0,prefix.length-match[1].length)+username+' '+suffix;
     // We retained the leading @ from the typed token.
     const pos=prefix.length-match[1].length+username.length+1;
     input.focus();input.setSelectionRange(pos,pos);
