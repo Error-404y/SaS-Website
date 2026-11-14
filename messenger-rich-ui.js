@@ -85,12 +85,7 @@
       }
       const actions = !gone ?
         '<span class="rich-message-actions"><button type="button" class="rich-menu-trigger" data-rich-menu="'+id+
-        '" aria-label="Message options" aria-expanded="false">⋯</button>'+
-        '<span class="rich-message-menu" hidden>'+
-        '<button type="button" data-rich-reply="'+id+'">Reply</button>'+
-        (mine && msg.kind==='text'?'<button type="button" data-rich-edit="'+id+'">Edit</button>':'')+
-        (mine?'<button type="button" data-rich-delete="'+id+'">Delete</button>':'')+
-        '</span></span>' : '';
+        '" aria-label="Message options" aria-haspopup="dialog">⋯</button></span>' : '';
       return '<div class="messenger-line'+(mine?' mine':'')+(msg.mentioned_me?' rich-mentioned':'')+
         '" data-rich-message="'+id+'"><div class="messenger-bubble">'+
         ((state.peer==='alliance'||state.peer.startsWith('group:')) ?
@@ -102,8 +97,8 @@
     }).join('');
   }
   const disableMenu = () => {
-    document.querySelectorAll('.rich-message-menu').forEach(node=>{ node.hidden=true; });
-    document.querySelectorAll('.rich-menu-trigger').forEach(node=>node.setAttribute('aria-expanded','false'));
+    const dialog=$('rich-actions-dialog');
+    if(dialog?.open)dialog.close();
   };
   function replyTo(id) {
     const msg=latest.get(Number(id));
@@ -131,6 +126,7 @@
     $('messenger-message').placeholder='Write a message...';
   }
   function onPeer(nextPeer, contact) {
+    disableMenu();
     if (peer && typingActive) typing(false,peer);
     peer=nextPeer;
     me=context().me||me;
@@ -150,6 +146,7 @@
     }
   }
   function onClose(){
+    disableMenu();
     if (typingActive) typing(false,peer);
     clearReply();
     clearPhoto();
@@ -258,21 +255,15 @@
     const target=event.target;
     const menu=target.closest('[data-rich-menu]');
     if(menu){
-      const panel=menu.nextElementSibling;
-      const open=panel.hidden;
-      disableMenu();
-      if(open){
-        panel.hidden=false;
-        const history=$('messenger-history').getBoundingClientRect();
-        const trigger=menu.getBoundingClientRect();
-        // Keep the menu inside the independently scrollable mobile chat:
-        // near the top open down; near the bottom open up.
-        panel.classList.toggle('opens-up',trigger.top-history.top>150 &&
-          (history.bottom-trigger.bottom<165 || trigger.top-history.top>history.bottom-trigger.bottom));
-        // Incoming short bubbles near the left edge need the menu to open right.
-        panel.classList.toggle('opens-right',trigger.right-history.left<155);
-      }
-      menu.setAttribute('aria-expanded',String(open));
+      const msg=latest.get(Number(menu.dataset.richMenu));
+      if(!msg || msg.kind==='deleted')return;
+      const dialog=$('rich-actions-dialog');
+      $('rich-action-reply').dataset.richReply=String(msg.id);
+      $('rich-action-edit').dataset.richEdit=String(msg.id);
+      $('rich-action-delete').dataset.richDelete=String(msg.id);
+      $('rich-action-edit').hidden=!(msg.sender_key===me && msg.kind==='text');
+      $('rich-action-delete').hidden=!(msg.sender_key===me);
+      if(!dialog.open)dialog.showModal();
       return;
     }
     const mention=target.closest('[data-rich-mention]');
@@ -361,8 +352,14 @@
   function init(config) {
     adapter=config;
     $('messenger-history').addEventListener('click',handleAction);
-    document.addEventListener('click',event=>{
-      if (!event.target.closest('.rich-message-actions')) disableMenu();
+    // A dedicated action sheet stays above the independently scrolling history.
+    // It cannot be clipped or replaced by background message refreshes.
+    $('rich-actions-dialog').addEventListener('click',event=>{
+      if (event.target.closest('[data-rich-cancel]')){disableMenu();return;}
+      if (event.target.closest('[data-rich-reply],[data-rich-edit],[data-rich-delete]')){
+        disableMenu();
+        handleAction(event);
+      }
     });
     $('rich-mention-picker').addEventListener('click',handleAction);
     $('messenger-history').addEventListener('touchstart',event=>{
