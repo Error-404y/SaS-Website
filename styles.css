@@ -1536,10 +1536,12 @@ html,body{max-width:100%;overflow-x:clip}
 .rich-menu-trigger{width:24px;height:19px;display:grid;place-items:center;border:0;background:transparent;
   color:#756580;font-size:22px;line-height:1;border-radius:8px;padding:0}
 .rich-menu-trigger:hover,.rich-menu-trigger:focus-visible{background:#e6dbee}
-.rich-message-menu{position:absolute;right:0;bottom:calc(100% + 2px);top:auto;display:flex;flex-direction:column;gap:1px;min-width:128px;
+.rich-message-menu{position:absolute;right:0;bottom:auto;top:calc(100% + 2px);display:flex;flex-direction:column;gap:1px;min-width:128px;
   z-index:8;border:1px solid #e8dbf1;background:#fff;border-radius:10px;padding:5px;
   box-shadow:0 8px 20px rgba(31,20,55,.15)}
 .rich-message-menu[hidden]{display:none!important}
+.rich-message-menu.opens-up{bottom:calc(100% + 2px);top:auto}
+.rich-message-menu.opens-right{left:0;right:auto}
 .rich-message-menu button{border:0;text-align:left;padding:10px 12px;white-space:nowrap;border-radius:7px;
   color:#352a47;font-size:13px;background:transparent}
 .rich-message-menu button:hover,.rich-message-menu button:focus-visible{background:#f0e9f9}
