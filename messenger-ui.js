@@ -62,7 +62,7 @@
     const viewport=window.visualViewport;
     const height=viewport ? viewport.height : window.innerHeight;
     root.style.setProperty('--sas-messenger-viewport-height',
-      Math.max(160,Math.round(height))+'px');
+      Math.max(1,Math.round(height))+'px');
   }
   const totalUnread = () => contacts.reduce((sum, c) => sum + (Number(c.unread)||0),0);
   async function api(path, options={}) {
