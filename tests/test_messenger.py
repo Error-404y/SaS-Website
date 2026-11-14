@@ -190,8 +190,15 @@ class MessengerTests(unittest.TestCase):
         # Self notes and alliance messages must not claim to have recipients.
         self.call("/api/messenger/messages", "POST", {"peer": aid, "body": "Note"}, a, ac)
         self.assertNotIn("read", self.call("/api/messenger/messages?peer="+aid, cookie=a)[1]["messages"][0])
-        self.call("/api/messenger/messages", "POST", {"peer": "alliance", "body": "Hi"}, a, ac)
-        self.assertNotIn("read", self.call("/api/messenger/messages?peer=alliance", cookie=a)[1]["messages"][-1])
+        # Newly approved accounts must explicitly join the alliance chat first.
+        # Never bypass the membership gate just to inspect read receipts.
+        self.assertEqual(self.call("/api/messenger/messages?peer=alliance", cookie=a)[0], 404)
+        self.assertEqual(self.call("/api/messenger/alliance/join", "POST", {}, a, ac)[0], 200)
+        self.assertEqual(self.call("/api/messenger/messages", "POST",
+                                   {"peer": "alliance", "body": "Hi"}, a, ac)[0], 201)
+        status, alliance = self.call("/api/messenger/messages?peer=alliance", cookie=a)
+        self.assertEqual(status, 200)
+        self.assertNotIn("read", alliance["messages"][-1])
 
     def test_self_notes_are_private_to_owner_and_survive_new_login(self):
         a,ac,aid=self.login("Alpha")
