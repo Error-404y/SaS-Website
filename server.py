@@ -626,7 +626,8 @@ def reminder_refresh_once(now_epoch=None):
             reminder_cards.edit_card(WEBHOOK,row["message_id"],row["current_title"],
                                      row["event_start_utc"],row["stage"],now_epoch=now_epoch)
             with LOCK, connect() as db:
-                db.execute("""UPDATE reminder_messages SET refresh_at=?
+                db.execute("""UPDATE reminder_messages
+                    SET refresh_at=?,refresh_attempt_at=0
                     WHERE event_id=? AND stage=? AND event_start_utc=?
                     AND message_id=? AND deleted_at=0""",
                     (now_epoch,row["event_id"],row["stage"],row["event_start_utc"],
