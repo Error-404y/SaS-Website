@@ -77,7 +77,12 @@ class RichMessengerBrowserTests(unittest.TestCase):
                 data={"ok":True,"message":{"id":50},"poll":{"total_votes":1}}
             route.fulfill(status=200,content_type="application/json",body=json.dumps(data))
         page.route("**/api/**",api)
-        page.set_content(self.html,wait_until="load")
+        # Serve the test document from a real same-origin URL; set_content() uses
+        # about:blank, where cross-origin credentialed fetches can be blocked
+        # before Playwright's mocked Messenger API receives them.
+        page.route("http://sas-test.local/",lambda route: route.fulfill(
+            status=200,content_type="text/html",body=self.html))
+        page.goto("http://sas-test.local/",wait_until="load")
         page.evaluate("""()=>{
           document.querySelector('#auth-gate')?.remove();
           document.querySelector('#entrance')?.remove();
