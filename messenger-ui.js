@@ -7,7 +7,8 @@
   let csrf = '', identity = '', contacts = [], activePeer = '', shownIds = '',
     currentPage = false, running = false, busy = false, loadingPeer = '', listFlight = false,
     lastNotify = 0, selectedGroupPlayers = new Set(), sessionGeneration = 0,
-    olderMessages = [], historyHasMore = false, oldestBefore = null, loadingOlder = false;
+    olderMessages = [], historyHasMore = false, oldestBefore = null, loadingOlder = false,
+    lastPresencePing = 0, presenceFlight = false;
   const avatar = item => item.group ? (item.id==='alliance'?'SaS':'GR') :
     String(item.username || '??').slice(0, 2).toUpperCase();
   const showTime = time => {
@@ -16,6 +17,34 @@
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',timeZone:'UTC'}) + ' UTC';
   };
+  const presenceText = item => {
+    if (!item || item.group || item.self) return '';
+    if (item.online) return 'Online';
+    if (!item.last_seen_at) return 'Last seen unavailable';
+    const when = new Date(Number(item.last_seen_at) * 1000);
+    if (Number.isNaN(when.getTime())) return 'Last seen unavailable';
+    const utc = date => date.toISOString().slice(0,10);
+    const now = new Date();
+    const yesterday = new Date(now.getTime()-86400000);
+    const clock = when.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
+    if (utc(when)===utc(now)) return 'Last seen today at '+clock+' UTC';
+    if (utc(when)===utc(yesterday)) return 'Last seen yesterday at '+clock+' UTC';
+    return 'Last seen '+when.toLocaleDateString([], {day:'numeric',month:'short',year:'numeric',timeZone:'UTC'})+' at '+clock+' UTC';
+  };
+  function updateActivePresence() {
+    const item=contacts.find(c=>c.id===activePeer);
+    if (!item || item.group || item.self) return;
+    $('messenger-active-detail').textContent=presenceText(item);
+    $('messenger-active-avatar').classList.toggle('is-online',Boolean(item.online));
+  }
+  async function pingPresence() {
+    if (!running || document.hidden || presenceFlight) return;
+    presenceFlight=true;
+    lastPresencePing=Date.now();
+    try { await api('/api/messenger/presence',{method:'POST',body:'{}'}); }
+    catch (e) { /* Presence is optional; Messenger must remain usable. */ }
+    finally { presenceFlight=false; }
+  }
   const totalUnread = () => contacts.reduce((sum, c) => sum + (Number(c.unread)||0),0);
   async function api(path, options={}) {
     const makeRequest = async () => {
@@ -68,7 +97,7 @@
       ((item.id==='alliance' && !item.joined)||item.invitation?' is-new-group':'')+
       (item.self?' messenger-own-profile':'')+
       '" data-messenger-peer="'+escape(item.id)+'" role="listitem">'+
-      '<span class="messenger-avatar'+(item.group?' is-group':'')+'">'+escape(avatar(item))+'</span>'+
+      '<span class="messenger-avatar'+(item.group?' is-group':'')+(item.online && !item.self?' is-online':'')+'">'+escape(avatar(item))+'</span>'+
       '<span class="messenger-contact-details"><strong>'+escape(item.self?'Your Profile':item.username)+
       (item.id==='alliance'?' <span class="messenger-group-pin'+(!item.joined?' is-new':'')+'">'+(!item.joined?'NEW · JOIN':'PINNED')+'</span>':
       (item.invitation?' <span class="messenger-group-pin is-new">INVITED</span>':''))+'</strong>'+
@@ -108,6 +137,7 @@
         $('messenger-shell').classList.remove('chat-open');
       }
       renderContacts();
+      updateActivePresence();
     } catch (e) {
       if (currentPage) {
         error('Unable to load players: '+e.message);
@@ -139,6 +169,8 @@
       $('messenger-join-alliance').textContent=contact.invitation?'Join Group':'Join SaS Group';
     }
     $('messenger-active-avatar').textContent=avatar(contact);
+    $('messenger-active-avatar').classList.toggle('is-online',Boolean(contact.online && !contact.group && !contact.self));
+    updateActivePresence();
     $('messenger-history').innerHTML='<p class="messenger-loading">Loading conversation…</p>';
     $('messenger-message').disabled=locked;
     $('messenger-send').disabled=locked;
@@ -323,12 +355,15 @@
   function start(token){
     if (!token) return;
     csrf=token;running=true;
+    pingPresence();
     loadList();
   }
   function stop(){
     sessionGeneration++;
     running=false;csrf='';identity='';activePeer='';contacts=[];shownIds='';loadingPeer='';
     olderMessages=[];historyHasMore=false;oldestBefore=null;
+    lastPresencePing=0;
+    $('messenger-active-avatar').classList.remove('is-online');
     $('messenger-shell').classList.remove('chat-open');
     $('messenger-message').disabled=true;
     $('messenger-send').disabled=true;
@@ -372,12 +407,14 @@
     });
     document.addEventListener('visibilitychange',()=>{
       if (!document.hidden && running) {
+        pingPresence();
         loadList();
         if (currentPage) loadMessages();
       }
     });
     setInterval(()=>{
       if (!running || document.hidden) return;
+      if (Date.now()-lastPresencePing>=25000) pingPresence();
       if (currentPage) loadMessages();
       if (Date.now()-lastNotify>=10000) {
         lastNotify=Date.now();loadList();
