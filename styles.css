@@ -1532,11 +1532,11 @@ html,body{max-width:100%;overflow-x:clip}
 .rich-mention{background:rgba(155,119,204,.21);color:#513678;border-radius:4px;padding:0 2px}
 .rich-image-link{display:block;min-width:0;max-width:100%;overflow:hidden;border-radius:10px}
 .rich-image-link img{display:block;max-height:290px;max-width:100%;width:auto;height:auto;object-fit:contain}
-.rich-message-actions{position:relative;display:flex;justify-content:flex-end;min-height:19px}
-.rich-menu-trigger{width:27px;height:24px;display:grid;place-items:center;border:0;background:transparent;
+.rich-message-actions{position:relative;display:inline-flex;align-items:center;justify-content:center;min-height:0;flex:0 0 24px}
+.rich-menu-trigger{width:24px;height:19px;display:grid;place-items:center;border:0;background:transparent;
   color:#756580;font-size:22px;line-height:1;border-radius:8px;padding:0}
 .rich-menu-trigger:hover,.rich-menu-trigger:focus-visible{background:#e6dbee}
-.rich-message-menu{position:absolute;right:0;top:23px;display:flex;flex-direction:column;gap:1px;min-width:128px;
+.rich-message-menu{position:absolute;right:0;bottom:calc(100% + 2px);top:auto;display:flex;flex-direction:column;gap:1px;min-width:128px;
   z-index:8;border:1px solid #e8dbf1;background:#fff;border-radius:10px;padding:5px;
   box-shadow:0 8px 20px rgba(31,20,55,.15)}
 .rich-message-menu[hidden]{display:none!important}
