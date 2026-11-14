@@ -64,18 +64,20 @@ def message_in_thread(db, actor, peer, message_id, own=False):
         raise ValueError("Invalid message.")
     row = db.execute("SELECT * FROM chat_messages WHERE id=? AND thread_key=?",
                      (message_id, thread)).fetchone()
-    if row is None:
+    if row is None or message_id<=core().group_history_floor(db,actor,thread):
         raise ValueError("Message not found in this conversation.")
     if own and (row["sender_key"] != actor or actor == "system"):
         raise PermissionError("You can only modify your own messages.")
     return thread, row
 
 
-def validate_reply(db, thread, reply_id):
+def validate_reply(db, thread, reply_id, actor=None):
     if reply_id is None:
         return None
     if type(reply_id) is not int or reply_id < 1:
         raise ValueError("Invalid reply.")
+    if actor is not None and reply_id<=core().group_history_floor(db,actor,thread):
+        raise ValueError("Reply is not available to this member.")
     row = db.execute("""SELECT deleted_at,sender_key FROM chat_messages
         WHERE id=? AND thread_key=?""", (reply_id, thread)).fetchone()
     if row is None or row["deleted_at"] or row["sender_key"] == "system":
@@ -139,9 +141,10 @@ def mention_unread(db, actor, thread, after_id):
       (thread, after_id, actor)).fetchone()[0]
 
 
-def message_details(db, actor, thread, messages):
+def message_details(db, actor, thread, messages, history_floor=0):
     # Only messages from the already-authorized conversation are considered.
-    reply_ids = {m.get("reply_to_id") for m in messages if m.get("reply_to_id")}
+    reply_ids = {m.get("reply_to_id") for m in messages
+                 if m.get("reply_to_id") and m["reply_to_id"]>history_floor}
     replies = {}
     if reply_ids:
         query = ",".join("?" for _ in reply_ids)
@@ -154,7 +157,10 @@ def message_details(db, actor, thread, messages):
             item["kind"] = "deleted"
             item["body"] = ""
         reply = replies.get(item.get("reply_to_id"))
-        if reply:
+        if item.get("reply_to_id") and item["reply_to_id"]<=history_floor:
+            item["reply"] = {"id":0,"sender_key":"system",
+                             "body":"Earlier message not available"}
+        elif reply:
             label = ("Message deleted" if reply["deleted_at"] else
                      "Photo" if reply["kind"]=="image" else
                      "Poll" if reply["kind"]=="poll" else reply["body"][:110])
