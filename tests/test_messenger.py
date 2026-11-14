@@ -216,7 +216,7 @@ class MessengerTests(unittest.TestCase):
         history = self.call("/api/messenger/messages?peer="+aid,cookie=b)[1]["messages"]
         self.assertEqual(history[-1]["reply"]["body"],"Original")
         self.assertEqual(self.call("/api/messenger/messages/edit", "POST",
-            {"peer": bid, "id": msg, "body": "Unauthorized"}, b, bc)[0],403)
+            {"peer": aid, "id": msg, "body": "Unauthorized"}, b, bc)[0],403)
         self.assertEqual(self.call("/api/messenger/messages/edit", "POST",
             {"peer": bid, "id": msg, "body": "Changed"}, a, ac)[0],200)
         history = self.call("/api/messenger/messages?peer="+aid,cookie=b)[1]["messages"]
