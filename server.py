@@ -587,8 +587,9 @@ def reminder_refresh_once(now_epoch=None):
         rows = db.execute("""SELECT r.*,e.title AS current_title,
                 e.start_utc AS current_start,e.kind AS current_kind
             FROM reminder_messages r LEFT JOIN entries e ON r.event_id=e.id
-            WHERE r.message_id!='' AND r.sent_at>0 AND r.deleted_at=0
-            ORDER BY r.refresh_at ASC,r.sent_at ASC LIMIT 300""").fetchall()
+            WHERE r.message_id!='' AND r.sent_at>=? AND r.deleted_at=0
+            ORDER BY r.refresh_at ASC,r.sent_at ASC""",
+            (now_epoch - 24*3600,)).fetchall()
         due=[]
         for row in rows:
             # Cancellation, rescheduling and expiry are handled by cleanup,
@@ -724,8 +725,10 @@ def reminder_loop():
     while True:
         try:
             reminder_cleanup_once()
-            reminder_refresh_once()
+            # Deliver new one-hour/two-hour alerts before doing potentially
+            # slower image edits on many existing reminders.
             reminder_send_once()
+            reminder_refresh_once()
         except Exception:
             logging.exception("Reminder scheduler error")
         # Short polling avoids long gaps even when many events start together;
