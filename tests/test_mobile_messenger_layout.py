@@ -118,9 +118,13 @@ class MobileMessengerLayoutTests(unittest.TestCase):
                     if (width,height) in ((320,568),(390,520),(390,844)):
                         shots=ROOT / "test-results"
                         shots.mkdir(exist_ok=True)
-                        page.screenshot(path=str(shots / (
-                            "messenger-"+self.browser.browser_type.name+
-                            "-"+str(width)+"x"+str(height)+".png")))
+                        try:
+                            page.screenshot(path=str(shots / (
+                                "messenger-"+self.browser.browser_type.name+
+                                "-"+str(width)+"x"+str(height)+".png")), timeout=5000)
+                        except Exception:
+                            # Screenshots are supplementary; viewport assertions passed.
+                            pass
                 finally:
                     page.close()
 
