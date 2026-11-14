@@ -238,20 +238,86 @@ class MessengerTests(unittest.TestCase):
             self.assertEqual(status,200)
             self.assertEqual(any(c["id"]==group_id for c in payload["contacts"]),expected)
             self.assertEqual(payload["contacts"][0]["username"],"SaS - Group Chat")
+        invite=next(c for c in self.call("/api/messenger",cookie=bravo)[1]["contacts"]
+                    if c["id"]==group_id)
+        self.assertTrue(invite["invitation"])
+        self.assertFalse(invite["joined"])
+        self.assertEqual(invite["invited_by"],"Alpha Game")
+        self.assertEqual(invite["unread"],1)
+        self.assertEqual(invite["last_message"],"Alpha Game has invited you to join a Group")
+        self.assertNotIn("Top secret",json.dumps(invite))
         self.assertEqual(self.call("/api/messenger/messages","POST",{
             "peer": group_id,"body": "Top secret"},charlie,charlie_csrf)[0],400)
         self.assertEqual(self.call("/api/messenger/messages?peer="+group_id,cookie=charlie)[0],404)
         self.assertEqual(self.call("/api/messenger/messages?peer="+group_id,cookie=admin)[0],404)
+        self.assertEqual(self.call("/api/messenger/messages?peer="+group_id,cookie=bravo)[0],404)
         self.assertEqual(self.call("/api/messenger/read","POST",{
-            "peer":group_id},charlie,charlie_csrf)[0],400)
+            "peer":group_id},bravo,bravo_csrf)[0],400)
+        self.assertEqual(self.call("/api/messenger/messages","POST",{
+            "peer":group_id,"body":"Top secret"},bravo,bravo_csrf)[0],400)
         self.assertEqual(self.call("/api/messenger/messages","POST",{
             "peer":group_id,"body":"Top secret"},alpha,alpha_csrf)[0],201)
         self.assertEqual(self.call("/api/messenger",cookie=bravo)[1]["unread"],1)
         self.assertEqual(self.call("/api/messenger",cookie=charlie)[1]["unread"],0)
-        self.assertEqual(self.call("/api/messenger/messages?peer="+group_id,cookie=bravo)[1]["messages"][0]["body"],"Top secret")
+        self.assertEqual(self.call("/api/messenger/groups/join","POST",
+            {"peer":group_id},bravo)[0],403)
+        joined=self.call("/api/messenger/groups/join","POST",
+            {"peer":group_id},bravo,bravo_csrf)
+        self.assertEqual(joined,(200,{"joined":True}))
+        self.assertEqual(self.call("/api/messenger/groups/join","POST",
+            {"peer":group_id},bravo,bravo_csrf),(200,{"joined":False}))
+        history=self.call("/api/messenger/messages?peer="+group_id,cookie=bravo)[1]["messages"]
+        self.assertEqual(history[0]["body"],"Top secret")
+        self.assertEqual(history[1]["body"],"Bravo Game joined the Group !")
+        self.assertEqual(history[1]["sender_key"],"system")
+        updated=next(c for c in self.call("/api/messenger",cookie=bravo)[1]["contacts"]
+                    if c["id"]==group_id)
+        self.assertFalse(updated.get("invitation",False))
+        self.assertEqual(updated["unread"],0)
+        self.assertEqual(self.call("/api/messenger/messages","POST",{
+            "peer":group_id,"body":"After joining"},bravo,bravo_csrf)[0],201)
+        self.assertEqual(self.call("/api/messenger",cookie=alpha)[1]["unread"],2)
         self.assertEqual(self.call("/api/messenger/read","POST",{
             "peer":group_id},bravo,bravo_csrf)[0],200)
         self.assertEqual(self.call("/api/messenger",cookie=bravo)[1]["unread"],0)
+
+    def test_private_group_invite_cannot_be_accessed_by_nonmember(self):
+        alpha, ac, aid=self.login("Alpha")
+        bravo, bc, bid=self.login("Bravo")
+        charlie, cc, cid=self.login("Charlie")
+        status,data=self.call("/api/messenger/groups","POST",{
+            "name":"Only Selected", "members":[bid]},alpha,ac)
+        self.assertEqual(status,201,data)
+        group=data["id"]
+        for cookie, token in [(charlie,cc)]:
+            self.assertEqual(self.call("/api/messenger/groups/join","POST",{
+                "peer":group},cookie,token)[0],400)
+            self.assertEqual(self.call("/api/messenger/messages?peer="+group,
+                cookie=cookie)[0],404)
+            self.assertFalse(any(c["id"]==group for c in
+                self.call("/api/messenger",cookie=cookie)[1]["contacts"]))
+        self.assertEqual(self.call("/api/messenger/groups/join","POST",{
+            "peer":"alliance"},bravo,bc)[0],400)
+        self.assertEqual(self.call("/api/messenger/groups/join","POST",{
+            "peer":"group:999999"},bravo,bc)[0],400)
+
+    def test_existing_group_memberships_remain_joined_after_schema_upgrade(self):
+        a,ac,aid=self.login("Alpha")
+        b,bc,bid=self.login("Bravo")
+        status,data=self.call("/api/messenger/groups","POST",
+            {"name":"Already Joined","members":[]},a,ac)
+        self.assertEqual(status,201,data)
+        group=data["id"]
+        with server.connect() as db:
+            gid=int(group.split(":")[1])
+            db.execute("INSERT INTO chat_group_members(group_id,member_key) VALUES(?,?)",
+                       (gid,bid))
+            messenger.setup(db)
+        member=next(c for c in self.call("/api/messenger",cookie=b)[1]["contacts"]
+                    if c["id"]==group)
+        self.assertFalse(member.get("invitation",False))
+        self.assertEqual(self.call("/api/messenger/messages?peer="+group,
+                              cookie=b)[0],200)
 
     def test_group_with_only_its_creator_is_visible_to_no_other_player(self):
         alpha, csrf, alpha_id = self.login("Alpha")
