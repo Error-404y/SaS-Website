@@ -21,7 +21,7 @@ def html_fixture():
     html=(ROOT/"index.html").read_text(encoding="utf-8")
     css=(ROOT/"styles.css").read_text(encoding="utf-8")
     html=re.sub(r'<script\b[^>]*\bsrc="/[^"]+"[^>]*></script>',"",html)
-    return html.replace("</head>","<style>"+css+"</style></head>",1)
+    return html.replace("</head>","<base href=\"http://sas-test.local/\"><style>"+css+"</style></head>",1)
 
 
 @unittest.skipIf(sync_playwright is None, 'Playwright not installed')
