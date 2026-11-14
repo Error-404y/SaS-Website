@@ -204,6 +204,18 @@
       else node.removeAttribute('aria-current');
     });
     one('#header-section').textContent = labels[name];
+    // Center the active item within the horizontal Explore/Tools scroller on mobile.
+    // Move only the navigation strip; do not jump the whole page.
+    if (window.matchMedia('(max-width: 750px)').matches) {
+      for (const nav of [one('.sidebar-nav'), one('.tools-nav')]) {
+        if (!nav || nav.offsetParent === null) continue;
+        const selected = nav.querySelector('button.selected');
+        if (!selected) continue;
+        const target = selected.offsetLeft - nav.offsetLeft
+          - (nav.clientWidth - selected.offsetWidth) / 2;
+        nav.scrollTo({left: Math.max(0,target),behavior:'smooth'});
+      }
+    }
     acknowledgePage(name);
     history.replaceState({}, '', '#' + name);
     render();
