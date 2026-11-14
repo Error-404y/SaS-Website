@@ -189,5 +189,16 @@ class MobileMessengerLayoutTests(unittest.TestCase):
         self.assertNotEqual(data["buttonVisibility"],"hidden",data)
 
 
+@unittest.skipIf(sync_playwright is None, "Playwright not installed")
+class MobileMessengerWebKitLayoutTests(MobileMessengerLayoutTests):
+    """Run identical layout/scroll checks in Safari's WebKit engine."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.playwright = sync_playwright().start()
+        cls.browser = cls.playwright.webkit.launch(headless=True)
+        cls.html = fixture()
+
+
 if __name__ == "__main__":
     unittest.main()
