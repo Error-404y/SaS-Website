@@ -255,7 +255,9 @@
     }).join('');
   }
   async function loadMessages(force=false) {
-    if (!running || !activePeer || !currentPage ||
+    // A hidden conversation must not mark newly arrived messages as read.
+    if (!running || !activePeer || !currentPage || document.hidden ||
+        !$('messenger-shell').classList.contains('chat-open') ||
         contacts.some(c=>c.id===activePeer && (c.invitation || (c.id==='alliance' && !c.joined)))) return;
     const targetPeer=activePeer;
     if (loadingPeer===targetPeer) return;
@@ -263,8 +265,9 @@
     loadingPeer=targetPeer;
     try {
       const result=await api('/api/messenger/messages?peer='+encodeURIComponent(targetPeer));
-      if (!running || generation!==sessionGeneration ||
-          activePeer!==targetPeer || !currentPage) return;
+      if (!running || generation!==sessionGeneration || document.hidden ||
+          activePeer!==targetPeer || !currentPage ||
+          !$('messenger-shell').classList.contains('chat-open')) return;
       const messages=result.messages||[];
       // Include receipt state so a read acknowledgement updates existing bubbles
       // even if no new messages arrived.
