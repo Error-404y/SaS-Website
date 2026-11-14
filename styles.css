@@ -923,6 +923,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .messenger-bubble strong{font-size:10px;color:#704e95}
 .messenger-bubble-text{font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
 .messenger-bubble time{font-size:9px;text-align:right;color:#8991a0}
+.messenger-bubble-footer{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-height:15px}
+.messenger-read-receipt{display:inline-flex;align-items:center;justify-content:center;color:#8691a2;line-height:1;flex:none}
+.messenger-read-receipt.is-read{color:#2494e8}
+.messenger-read-receipt svg{display:block}
+
 .messenger-compose{display:flex;align-items:center;gap:9px;border-top:1px solid #ede7f2;padding:12px 15px;background:#fff;flex:none}
 .messenger-compose input{min-width:0;flex:1;background:#faf9fc;border:1px solid #e3dfea;border-radius:13px;font-size:13px;color:#2e3b53;height:43px;padding:0 13px;outline:none}
 .messenger-compose input:focus{border-color:#aa86c8;box-shadow:0 0 0 2px rgba(145,105,177,.1)}
