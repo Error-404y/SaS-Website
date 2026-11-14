@@ -65,15 +65,17 @@
   function contactMarkup(item) {
     return '<button type="button" class="messenger-contact'+(item.id===activePeer?' is-active':'')+
       (item.id==='alliance'?' messenger-alliance-pinned':'')+
-      (item.id==='alliance' && !item.joined?' is-new-group':'')+
+      ((item.id==='alliance' && !item.joined)||item.invitation?' is-new-group':'')+
       (item.self?' messenger-own-profile':'')+
       '" data-messenger-peer="'+escape(item.id)+'" role="listitem">'+
       '<span class="messenger-avatar'+(item.group?' is-group':'')+'">'+escape(avatar(item))+'</span>'+
       '<span class="messenger-contact-details"><strong>'+escape(item.self?'Your Profile':item.username)+
-      (item.id==='alliance'?' <span class="messenger-group-pin'+(!item.joined?' is-new':'')+'">'+(!item.joined?'NEW · JOIN':'PINNED')+'</span>':'')+'</strong>'+
+      (item.id==='alliance'?' <span class="messenger-group-pin'+(!item.joined?' is-new':'')+'">'+(!item.joined?'NEW · JOIN':'PINNED')+'</span>':
+      (item.invitation?' <span class="messenger-group-pin is-new">INVITED</span>':''))+'</strong>'+
       '<small>'+escape(item.self ? (item.last_message || (item.username+' · Private notes to yourself')) :
+        (item.invitation ? item.invited_by+' has invited you to join a Group' :
         (item.id==='alliance' && !item.joined ? 'Join to see all messages' :
-          (item.last_message || (item.group ? 'Group chat' : (item.player_name||'Say hello')))))+'</small></span>'+
+          (item.last_message || (item.group ? 'Group chat' : (item.player_name||'Say hello'))))))+'</small></span>'+
       '<span class="messenger-contact-meta"><small>'+escape(showTime(item.last_at))+'</small>'+
       (item.unread ? '<span class="messenger-contact-badge">'+Math.min(item.unread,99)+(item.unread>99?'+':'')+'</span>':'')+
       '</span></button>';
@@ -127,8 +129,15 @@
     $('messenger-active-detail').textContent=contact.self ? 'Notes to self · Private' :
       (contact.group ? (contact.id==='alliance'?'All joined SaS members':'Private group · '+contact.player_name) :
       (contact.player_name || 'Private conversation'));
-    const locked=peer==='alliance' && !contact.joined;
+    const locked=(peer==='alliance' && !contact.joined) || !!contact.invitation;
     $('messenger-alliance-lock').hidden=!locked;
+    if (locked) {
+      $('messenger-join-title').textContent=contact.username;
+      $('messenger-join-description').textContent=contact.invitation
+        ? contact.invited_by+' has invited you to join a Group. Join to see the messages.'
+        : 'Join the group to read its messages and take part in the conversation.';
+      $('messenger-join-alliance').textContent=contact.invitation?'Join Group':'Join SaS Group';
+    }
     $('messenger-active-avatar').textContent=avatar(contact);
     $('messenger-history').innerHTML='<p class="messenger-loading">Loading conversation…</p>';
     $('messenger-message').disabled=locked;
@@ -136,7 +145,7 @@
     $('messenger-shell').classList.add('chat-open');
     renderContacts();
     if (locked) {
-      $('messenger-history').innerHTML='<div class="messenger-empty">Join SaS Group to unlock the conversation.</div>';
+      $('messenger-history').innerHTML='<div class="messenger-empty">Join to unlock the conversation.</div>';
     } else {
       await loadMessages(true);
     }
@@ -185,7 +194,7 @@
   }
   async function loadMessages(force=false) {
     if (!running || !activePeer || !currentPage ||
-        (activePeer==='alliance' && contacts.some(c=>c.id==='alliance' && !c.joined))) return;
+        contacts.some(c=>c.id===activePeer && (c.invitation || (c.id==='alliance' && !c.joined)))) return;
     const targetPeer=activePeer;
     if (loadingPeer===targetPeer) return;
     const generation=sessionGeneration;
@@ -245,17 +254,25 @@
     finally{busy=false;$('messenger-send').disabled=false;}
   }
   async function joinAlliance() {
-    if (!running || activePeer!=='alliance') return;
+    if (!running || !activePeer) return;
+    const current=contacts.find(c=>c.id===activePeer);
+    if (!current || (activePeer!=='alliance' && !current.invitation)) return;
+    const peer=activePeer;
     const button=$('messenger-join-alliance');
     button.disabled=true;
     error();
     try {
-      await api('/api/messenger/alliance/join',{method:'POST',body:'{}'});
+      if (peer==='alliance') {
+        await api('/api/messenger/alliance/join',{method:'POST',body:'{}'});
+      } else {
+        await api('/api/messenger/groups/join',{method:'POST',
+          body:JSON.stringify({peer})});
+      }
       const result=await api('/api/messenger');
       identity=result.me;
       contacts=Array.isArray(result.contacts)?result.contacts:[];
       renderContacts();
-      await openPeer('alliance');
+      if (activePeer===peer) await openPeer(peer);
     } catch(e){error(e.message);}
     finally{button.disabled=false;}
   }
@@ -325,7 +342,7 @@
       loadList();
       if (activePeer) {
         const contact=contacts.find(c=>c.id===activePeer);
-        if (activePeer!=='alliance' || contact?.joined) loadMessages();
+        if (contact && !contact.invitation && (activePeer!=='alliance' || contact.joined)) loadMessages();
       }
     }
   }
