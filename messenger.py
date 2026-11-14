@@ -49,6 +49,11 @@ def setup(db):
         member_key TEXT NOT NULL,
         PRIMARY KEY(group_id,member_key)
     )""")
+    member_columns={row["name"] for row in db.execute("PRAGMA table_info(chat_group_members)")}
+    if "history_after_id" not in member_columns:
+        # Current members must retain the history they already had access to.
+        db.execute("""ALTER TABLE chat_group_members ADD COLUMN history_after_id
+            INTEGER NOT NULL DEFAULT 0""")
     db.execute("""CREATE INDEX IF NOT EXISTS chat_groups_by_member
         ON chat_group_members(member_key,group_id)""")
     db.execute("""CREATE TABLE IF NOT EXISTS chat_group_invites (
@@ -59,6 +64,11 @@ def setup(db):
         joined_at TEXT,
         PRIMARY KEY(group_id,member_key)
     )""")
+    invite_columns={row["name"] for row in db.execute("PRAGMA table_info(chat_group_invites)")}
+    if "allow_history" not in invite_columns:
+        # Old invitations previously included chat history; preserve that choice.
+        db.execute("""ALTER TABLE chat_group_invites ADD COLUMN allow_history
+            INTEGER NOT NULL DEFAULT 1""")
     db.execute("""CREATE INDEX IF NOT EXISTS chat_group_invites_member
         ON chat_group_invites(member_key,joined_at)""")
     # Older groups already have accepted memberships in chat_group_members.
@@ -158,13 +168,71 @@ def group_details(db, actor, target):
     return group
 
 
+def group_history_floor(db, actor, thread):
+    """Lowest visible message ID for a member of this private group."""
+    if not isinstance(thread,str) or not thread.startswith("group:"):
+        return 0
+    group=group_details(db,actor,thread)
+    row=db.execute("""SELECT history_after_id FROM chat_group_members
+        WHERE group_id=? AND member_key=?""",(group["id"],actor)).fetchone()
+    return int(row["history_after_id"]) if row else 0
+
+
+def group_invite_status(db,actor,target):
+    """Only group creators can view who is already a member or invited."""
+    try:
+        group=group_details(db,actor,target)
+    except ValueError as exc:
+        raise PermissionError("Only the group creator can invite players.") from exc
+    if group is None or group["creator_key"]!=actor:
+        raise PermissionError("Only the group creator can invite players.")
+    group_id=group["id"]
+    members={row["member_key"] for row in db.execute(
+        "SELECT member_key FROM chat_group_members WHERE group_id=?",(group_id,))}
+    pending={row["member_key"] for row in db.execute(
+        """SELECT member_key FROM chat_group_invites WHERE group_id=?
+           AND joined_at IS NULL""",(group_id,))}
+    return {"members":sorted(members),"pending":sorted(pending),
+            "remaining":max(0,25-len(members|pending))}
+
+
+def invite_to_group(db,actor,target,participants,allow_history):
+    """Send new invitations to an existing private group; no silent joins."""
+    status=group_invite_status(db,actor,target)
+    if type(allow_history) is not bool:
+        raise ValueError("Choose Yes or No for chat history.")
+    if (not isinstance(participants,list) or not participants or
+        len(participants)>24 or any(not isinstance(p,str) or not p for p in participants)):
+        raise ValueError("Select 1 to 24 approved players to invite.")
+    keys=set(participants)
+    if len(keys)!=len(participants) or actor in keys:
+        raise ValueError("Select each eligible player only once.")
+    if keys.intersection(status["members"]) or keys.intersection(status["pending"]):
+        raise ValueError("A selected player is already a member or has an invitation.")
+    if len(keys)>status["remaining"]:
+        raise ValueError("This group can have at most 25 players, including pending invitations.")
+    if any(not valid_actor(db,p) or p==ADMIN for p in keys):
+        raise ValueError("Only approved player accounts can be invited.")
+    gid=int(target[6:])
+    stamp=now_utc()
+    for member in keys:
+        db.execute("""INSERT INTO chat_group_invites
+            (group_id,member_key,invited_by,invited_at,joined_at,allow_history)
+            VALUES(?,?,?,?,NULL,?)
+            ON CONFLICT(group_id,member_key) DO UPDATE SET
+              invited_by=excluded.invited_by,invited_at=excluded.invited_at,
+              joined_at=NULL,allow_history=excluded.allow_history""",
+            (gid,member,actor,stamp,int(allow_history)))
+    return {"invited":len(keys),"allow_history":allow_history}
+
+
 def pending_group_invitation(db, actor, target):
     if not isinstance(target, str) or not target.startswith("group:"):
         return None
     suffix=target[6:]
     if not suffix.isdecimal() or len(suffix)>14:
         return None
-    return db.execute("""SELECT i.group_id,i.invited_by,g.name
+    return db.execute("""SELECT i.group_id,i.invited_by,i.allow_history,g.name
         FROM chat_group_invites i JOIN chat_groups g ON g.id=i.group_id
         WHERE i.group_id=? AND i.member_key=? AND i.joined_at IS NULL
         AND NOT EXISTS (
@@ -197,8 +265,13 @@ def join_group(db, actor, target):
         (stamp,invitation["group_id"],actor))
     if not updated.rowcount:
         return False
-    db.execute("""INSERT OR IGNORE INTO chat_group_members(group_id,member_key)
-        VALUES(?,?)""",(invitation["group_id"],actor))
+    floor=0
+    if not invitation["allow_history"]:
+        floor=db.execute("""SELECT COALESCE(MAX(id),0) FROM chat_messages
+            WHERE thread_key=?""",(target,)).fetchone()[0]
+    db.execute("""INSERT OR IGNORE INTO chat_group_members
+        (group_id,member_key,history_after_id) VALUES(?,?,?)""",
+        (invitation["group_id"],actor,floor))
     body=actor_name(db,actor)+" joined the Group !"
     cur=db.execute("""INSERT INTO chat_messages(thread_key,sender_key,body,created_at)
         VALUES(?,?,?,?)""",(target,"system",body,stamp))
@@ -274,8 +347,9 @@ def contact_list(db, actor):
         contacts.append({"id": "group:"+str(group["id"]), "username": group["name"],
                          "player_name": str(group["participants"])+" participants",
                          "group": True, "pinned": False,
+                         "can_invite": actor==group["creator_key"],
                          "can_mention_everyone": actor in (ADMIN,group["creator_key"])})
-    for invitation in db.execute("""SELECT g.id,g.name,i.invited_by
+    for invitation in db.execute("""SELECT g.id,g.name,i.invited_by,i.allow_history
         FROM chat_group_invites i JOIN chat_groups g ON g.id=i.group_id
         WHERE i.member_key=? AND i.joined_at IS NULL
           AND NOT EXISTS (SELECT 1 FROM chat_group_members gm
@@ -286,7 +360,8 @@ def contact_list(db, actor):
             "username":invitation["name"],
             "player_name":"Private group invitation",
             "group":True,"pinned":False,"joined":False,
-            "invited_by":sender,"invitation":True})
+            "invited_by":sender,"invitation":True,
+            "allow_history":bool(invitation["allow_history"])})
     if actor != ADMIN:
         contacts.append({"id": ADMIN, "username": "SaS Admin", "player_name": "Administrator", "group": False})
         own = approved_member(db, actor)
@@ -325,16 +400,17 @@ def summaries(db, actor):
                 "unread":1})
             continue
         thread = thread_for(db, actor, target)
+        floor=group_history_floor(db,actor,thread)
         latest = db.execute("""SELECT id,sender_key,body,created_at,kind,deleted_at
-            FROM chat_messages WHERE thread_key=? ORDER BY id DESC LIMIT 1""",
-            (thread,)).fetchone()
+            FROM chat_messages WHERE thread_key=? AND id>? ORDER BY id DESC LIMIT 1""",
+            (thread,floor)).fetchone()
         seen = db.execute("""SELECT last_read_id FROM chat_reads
             WHERE member_key=? AND thread_key=?""", (actor, thread)).fetchone()
         last_id = seen["last_read_id"] if seen else 0
         unread = db.execute("""SELECT COUNT(*) AS total FROM chat_messages
             WHERE thread_key=? AND id>? AND sender_key!=?""",
-            (thread, last_id, actor)).fetchone()["total"]
-        mentions=rich.mention_unread(db,actor,thread,last_id) if contact["group"] else 0
+            (thread, max(last_id,floor), actor)).fetchone()["total"]
+        mentions=rich.mention_unread(db,actor,thread,max(last_id,floor)) if contact["group"] else 0
         summaries_out.append({**contact,
             "last_message": ("Message deleted" if latest and latest["deleted_at"] else
                 "Photo" if latest and latest["kind"]=="image" else
@@ -354,19 +430,20 @@ def history_page(db, actor, target, before=None):
     if not valid_actor(db, actor):
         raise PermissionError("Approved account required.")
     thread = thread_for(db, actor, target)
+    floor=group_history_floor(db,actor,thread)
     if before is not None:
         if not isinstance(before,int) or before<=0:
             raise ValueError("Invalid message cursor.")
         rows = db.execute("""SELECT id,sender_key,body,created_at,reply_to_id,edited_at,deleted_at,kind FROM chat_messages
-            WHERE thread_key=? AND id<? ORDER BY id DESC LIMIT ?""",
-            (thread, before, MAX_HISTORY+1)).fetchall()
+            WHERE thread_key=? AND id<? AND id>? ORDER BY id DESC LIMIT ?""",
+            (thread, before, floor, MAX_HISTORY+1)).fetchall()
     else:
         rows = db.execute("""SELECT id,sender_key,body,created_at,reply_to_id,edited_at,deleted_at,kind FROM chat_messages
-            WHERE thread_key=? ORDER BY id DESC LIMIT ?""",
-            (thread, MAX_HISTORY+1)).fetchall()
+            WHERE thread_key=? AND id>? ORDER BY id DESC LIMIT ?""",
+            (thread, floor, MAX_HISTORY+1)).fetchall()
     has_more=len(rows)>MAX_HISTORY
     messages=[dict(row) for row in reversed(rows[:MAX_HISTORY])]
-    rich.message_details(db,actor,thread,messages)
+    rich.message_details(db,actor,thread,messages,history_floor=floor)
     # The existing read cursor belongs to the *recipient*, not to the sender.
     # Reveal it only for the sender's own messages in a private 1:1 chat.
     # Self-notes, alliance chats and custom groups are intentionally excluded.
@@ -397,7 +474,7 @@ def send(db, actor, target, body, reply_to=None):
         raise ValueError(f"Messages must be {MAX_MESSAGE} characters or fewer.")
     if any(ord(char) < 32 and char not in "\n\t" for char in message):
         raise ValueError("Invalid message characters.")
-    reply_id=rich.validate_reply(db,thread,reply_to)
+    reply_id=rich.validate_reply(db,thread,reply_to,actor=actor)
     created = now_utc()
     since = (datetime.now(timezone.utc) - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
     recent = db.execute("""SELECT COUNT(*) FROM chat_messages

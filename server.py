@@ -534,9 +534,14 @@ def reminder_stage_due(start_epoch, now_epoch, stage):
             return lower <= remaining <= upper
     return False
 
-def reminder_expiry(stage, sent_at):
-    # Yellow disappears 50 minutes after its actual send. Red disappears after 24h.
-    return sent_at + (50 * 60 if stage == "yellow" else 24 * 3600)
+def reminder_expiry(stage, sent_at, event_end=None):
+    # Yellow expires after 50m. Red remains until the event's end when known;
+    # the original 24h retention is only a fallback for legacy missing end dates.
+    if stage == "yellow":
+        return sent_at + 50 * 60
+    if event_end:
+        return event_end
+    return sent_at + 24 * 3600
 
 def reminder_cleanup_once(now_epoch=None):
     """Delete outdated cards, with the Discord ID persisted for restart recovery."""
@@ -545,14 +550,20 @@ def reminder_cleanup_once(now_epoch=None):
     now_epoch = int(time.time()) if now_epoch is None else int(now_epoch)
     with LOCK, connect() as db:
         rows = db.execute("""SELECT r.*,
-            e.start_utc AS current_start
+            e.start_utc AS current_start,e.end_utc AS current_end
             FROM reminder_messages r LEFT JOIN entries e ON r.event_id=e.id
             WHERE r.message_id != '' AND r.deleted_at=0 AND r.attempt_at<?
             ORDER BY r.sent_at LIMIT 35""", (now_epoch - 60,)).fetchall()
     for row in rows:
         # Edits and removals must not leave stale reminders visible.
         stale = row["current_start"] is None or row["current_start"] != row["event_start_utc"]
-        if not stale and now_epoch < reminder_expiry(row["stage"], row["sent_at"]):
+        try:
+            end_epoch=parse_utc(row["current_end"]) if row["current_end"] else None
+        except ValueError:
+            end_epoch=None
+        # Delete red reminder when the event's END countdown reaches zero,
+        # not a fixed 24 hours after the pre-event reminder was sent.
+        if not stale and now_epoch < reminder_expiry(row["stage"],row["sent_at"],end_epoch):
             continue
         with LOCK, connect() as db:
             db.execute("""UPDATE reminder_messages SET attempt_at=?
@@ -585,7 +596,8 @@ def reminder_refresh_once(now_epoch=None):
     now_epoch = int(time.time()) if now_epoch is None else int(now_epoch)
     with LOCK, connect() as db:
         rows = db.execute("""SELECT r.*,e.title AS current_title,
-                e.start_utc AS current_start,e.kind AS current_kind
+                e.start_utc AS current_start,e.end_utc AS current_end,
+                e.kind AS current_kind
             FROM reminder_messages r LEFT JOIN entries e ON r.event_id=e.id
             WHERE r.message_id!='' AND r.sent_at>=? AND r.deleted_at=0
             ORDER BY r.refresh_at ASC,r.sent_at ASC""",
@@ -595,12 +607,14 @@ def reminder_refresh_once(now_epoch=None):
             # Cancellation, rescheduling and expiry are handled by cleanup,
             # never overwrite an obsolete event reminder here.
             if (row["current_start"] != row["event_start_utc"] or
-                row["current_kind"] not in ("events","alliance") or
-                now_epoch >= reminder_expiry(row["stage"],row["sent_at"])):
+                row["current_kind"] not in ("events","alliance")):
                 continue
             try:
                 start_epoch = parse_utc(row["event_start_utc"])
+                end_epoch=parse_utc(row["current_end"]) if row["current_end"] else None
             except ValueError:
+                continue
+            if now_epoch >= reminder_expiry(row["stage"],row["sent_at"],end_epoch):
                 continue
             last_display = max(row["sent_at"],row["refresh_at"])
             if now_epoch < start_epoch:
@@ -878,10 +892,19 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             return
         if path in ("/api/messenger", "/api/messenger/messages",
-                    "/api/messenger/mentionables"):
+                    "/api/messenger/mentionables", "/api/messenger/groups/invite"):
             actor, csrf = self.messenger_actor()
             if actor is None:
                 return self.respond(401, {"error": "An approved account is required."})
+            if path == "/api/messenger/groups/invite":
+                from urllib.parse import parse_qs
+                peer=parse_qs(urlsplit(self.path).query).get("peer",[""])[0]
+                with LOCK, connect() as db:
+                    try:
+                        status=messenger.group_invite_status(db,actor,peer)
+                    except (ValueError,PermissionError):
+                        return self.respond(403,{"error":"Only the group creator may invite players."})
+                return self.respond(200,status)
             if path == "/api/messenger/mentionables":
                 from urllib.parse import parse_qs
                 peer = parse_qs(urlsplit(self.path).query).get("peer", [""])[0]
@@ -1086,6 +1109,17 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK, connect() as db:
                     joined = messenger.join_group(db, actor, data.get("peer"))
                 return self.respond(200, {"joined": joined})
+            if path == "/api/messenger/groups/invite" and method == "POST":
+                actor, csrf = self.messenger_actor()
+                if actor is None:
+                    return self.respond(401, {"error": "An approved account is required."})
+                if not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), csrf):
+                    return self.respond(403, {"error": "Invalid CSRF token."})
+                data=self.read_json()
+                with LOCK, connect() as db:
+                    result=messenger.invite_to_group(db,actor,data.get("peer"),
+                        data.get("members"),data.get("allow_history"))
+                return self.respond(201,result)
             if path == "/api/messenger/groups" and method == "POST":
                 actor, csrf = self.messenger_actor()
                 if actor is None:

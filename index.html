@@ -482,6 +482,9 @@
                   <span id="messenger-active-detail">Select a conversation to get started.</span>
                   <span id="rich-typing" role="status" aria-live="polite"></span>
                 </div>
+                <button type="button" id="messenger-add-players"
+                  class="messenger-add-players" aria-label="Invite players to this group"
+                  title="Add players" hidden>+</button>
               </div>
               <div class="messenger-history" id="messenger-history" role="log" aria-live="polite" aria-relevant="additions text">
                 <div class="messenger-empty">No Conversation has been Made</div>
@@ -635,6 +638,41 @@
       <div class="dialog-actions">
         <button type="button" class="small-button" data-close="messenger-group-dialog">Cancel</button>
         <button type="submit" class="primary-button">Create Group</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="messenger-invite-dialog" class="dialog messenger-group-dialog messenger-invite-dialog"
+    aria-labelledby="messenger-invite-title">
+    <form id="messenger-invite-form">
+      <div class="dialog-top">
+        <div>
+          <span class="section-kicker">SAS MESSENGER</span>
+          <h2 id="messenger-invite-title">Add players to group</h2>
+        </div>
+        <button type="button" class="close-button" data-close="messenger-invite-dialog"
+          aria-label="Close invitation popup">×</button>
+      </div>
+      <p class="accounts-muted">Select approved players to invite. They must accept the invitation before joining.</p>
+      <label for="messenger-invite-search">Find players</label>
+      <input id="messenger-invite-search" type="search" autocomplete="off"
+        placeholder="Search username or in-game name">
+      <div id="messenger-invite-players" class="messenger-player-picker"
+        role="group" aria-label="Select players to invite"></div>
+      <p id="messenger-invite-selected" class="accounts-muted">0 players selected</p>
+      <label class="messenger-history-choice" for="messenger-invite-history">
+        <span>
+          <strong>See Chat History</strong>
+          <small>Allow invited players to read messages sent before they joined.</small>
+        </span>
+        <input id="messenger-invite-history" type="checkbox" role="switch"
+          aria-label="See Chat History" aria-describedby="messenger-invite-history-state">
+        <span class="messenger-switch-track" aria-hidden="true"></span>
+        <b id="messenger-invite-history-state">No</b>
+      </label>
+      <p id="messenger-invite-error" class="form-error" role="alert" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" class="small-button" data-close="messenger-invite-dialog">Cancel</button>
+        <button type="submit" id="messenger-invite-send" class="primary-button">Send Request to Join</button>
       </div>
     </form>
   </dialog>

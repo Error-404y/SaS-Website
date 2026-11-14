@@ -475,6 +475,123 @@ class MessengerTests(unittest.TestCase):
             "peer":group_id},bravo,bravo_csrf)[0],200)
         self.assertEqual(self.call("/api/messenger",cookie=bravo)[1]["unread"],0)
 
+    def test_new_group_invitations_can_grant_or_hide_existing_history(self):
+        import base64, io
+        from PIL import Image
+        alpha, ac, aid=self.login("Alpha")
+        bravo, bc, bid=self.login("Bravo")
+        charlie, cc, cid=self.login("Charlie")
+        with server.connect() as db:
+            pending=db.execute("SELECT id FROM members WHERE username='Pending'").fetchone()["id"]
+        status,data=self.call("/api/messenger/groups","POST",
+            {"name":"Strategy Team","members":[]},alpha,ac)
+        self.assertEqual(status,201,data)
+        group=data["id"]
+        self.assertFalse(any(c["id"]==group for c in
+            self.call("/api/messenger",cookie=bravo)[1]["contacts"]))
+        older=self.call("/api/messenger/messages","POST",
+            {"peer":group,"body":"Previous private strategy"},alpha,ac)[1]["message"]["id"]
+        image=Image.new("RGB",(8,8),(30,55,96))
+        img=io.BytesIO()
+        image.save(img,format="PNG")
+        image_response=self.call("/api/messenger/images","POST",
+            {"peer":group,"image":base64.b64encode(img.getvalue()).decode()},alpha,ac)
+        self.assertEqual(image_response[0],201,image_response)
+        image_id=image_response[1]["message"]["id"]
+        poll_response=self.call("/api/messenger/polls","POST",
+            {"peer":group,"question":"Old poll?","options":["Yes","No"]},alpha,ac)
+        self.assertEqual(poll_response[0],201,poll_response)
+        poll_id=poll_response[1]["message"]["id"]
+
+        self.assertEqual(self.call("/api/messenger/groups/invite?peer="+group,cookie=bravo)[0],403)
+        self.assertEqual(self.call("/api/messenger/groups/invite?peer="+group,cookie=alpha)[0],200)
+        self.assertEqual(self.call("/api/messenger/groups/invite","POST",
+            {"peer":group,"members":[bid],"allow_history":False},alpha)[0],403)
+        self.assertEqual(self.call("/api/messenger/groups/invite","POST",
+            {"peer":group,"members":[bid],"allow_history":False},bravo,bc)[0],403)
+        for invalid in ([bid,bid],[aid],["member:"+str(pending)],["member:999999"]):
+            self.assertEqual(self.call("/api/messenger/groups/invite","POST",
+                {"peer":group,"members":invalid,"allow_history":False},alpha,ac)[0],400)
+        self.assertEqual(self.call("/api/messenger/groups/invite","POST",
+            {"peer":group,"members":[bid],"allow_history":"false"},alpha,ac)[0],400)
+        invited=self.call("/api/messenger/groups/invite","POST",
+            {"peer":group,"members":[bid],"allow_history":False},alpha,ac)
+        self.assertEqual(invited,(201,{"invited":1,"allow_history":False}))
+        self.assertEqual(self.call("/api/messenger/groups/invite","POST",
+            {"peer":group,"members":[bid],"allow_history":True},alpha,ac)[0],400)
+        invited_again=self.call("/api/messenger/groups/invite","POST",
+            {"peer":group,"members":[cid],"allow_history":True},alpha,ac)
+        self.assertEqual(invited_again[0],201,invited_again)
+        status=self.call("/api/messenger/groups/invite?peer="+group,cookie=alpha)[1]
+        self.assertIn(bid,status["pending"])
+        self.assertIn(cid,status["pending"])
+        self.assertIn(aid,status["members"])
+        self.assertEqual(status["remaining"],22)
+
+        pending_b=next(c for c in self.call("/api/messenger",cookie=bravo)[1]["contacts"]
+                       if c["id"]==group)
+        self.assertTrue(pending_b["invitation"])
+        self.assertFalse(pending_b["allow_history"])
+        self.assertEqual(self.call("/api/messenger/messages?peer="+group,cookie=bravo)[0],404)
+        self.assertEqual(self.call("/api/messenger/groups/join","POST",
+            {"peer":group},bravo,bc)[0],200)
+        b_history=self.call("/api/messenger/messages?peer="+group,cookie=bravo)[1]
+        self.assertEqual(len(b_history["messages"]),1)
+        self.assertFalse(b_history["has_more"])
+        self.assertIn("Bravo Game joined",b_history["messages"][0]["body"])
+        self.assertEqual(self.call("/api/messenger/messages?peer="+group+"&before="+
+            str(poll_id+1),cookie=bravo)[1]["messages"],[])
+        self.assertEqual(self.call("/api/messenger/messages","POST",
+            {"peer":group,"body":"Leak","reply_to":older},bravo,bc)[0],400)
+        self.assertEqual(self.call("/api/messenger/polls/vote","POST",
+            {"peer":group,"id":poll_id,"position":0},bravo,bc)[0],400)
+        try:
+            urlopen(Request(self.base+"/api/messenger/images/"+str(image_id)+"?peer="+group,
+                            headers={"Cookie":bravo}),timeout=5)
+            self.fail("No-history invitee accessed old private photo.")
+        except HTTPError as error:
+            self.assertEqual(error.code,404)
+
+        # A newly posted reply may quote an older message; its contents must
+        # never leak through the quoted preview shown to a restricted member.
+        new_reply=self.call("/api/messenger/messages","POST",
+            {"peer":group,"body":"New update","reply_to":older},alpha,ac)
+        self.assertEqual(new_reply[0],201,new_reply)
+        visible=self.call("/api/messenger/messages?peer="+group,cookie=bravo)[1]["messages"]
+        self.assertNotIn("Previous private strategy",json.dumps(visible))
+        self.assertEqual(visible[-1]["reply"]["body"],"Earlier message not available")
+        self.assertEqual(visible[-1]["reply"]["id"],0)
+
+        # A separate invitation that opts in to history preserves original access.
+        pending_c=next(c for c in self.call("/api/messenger",cookie=charlie)[1]["contacts"]
+                       if c["id"]==group)
+        self.assertTrue(pending_c["allow_history"])
+        self.assertEqual(self.call("/api/messenger/groups/join","POST",
+            {"peer":group},charlie,cc)[0],200)
+        allowed=self.call("/api/messenger/messages?peer="+group,cookie=charlie)[1]["messages"]
+        self.assertIn("Previous private strategy",json.dumps(allowed))
+        self.assertTrue(any(m["id"]==image_id for m in allowed))
+        self.assertTrue(any(m["id"]==poll_id for m in allowed))
+
+    def test_group_invite_status_requires_creator_and_has_no_history_leaks(self):
+        alpha, ac, aid=self.login("Alpha")
+        bravo, bc, bid=self.login("Bravo")
+        charlie, cc, cid=self.login("Charlie")
+        status,data=self.call("/api/messenger/groups","POST",
+            {"name":"Private Ops","members":[bid]},alpha,ac)
+        self.assertEqual(status,201,data)
+        group=data["id"]
+        self.assertEqual(self.call("/api/messenger/groups/invite?peer="+group,cookie=bravo)[0],403)
+        self.assertEqual(self.call("/api/messenger/groups/invite?peer="+group,cookie=charlie)[0],403)
+        self.assertEqual(self.call("/api/messenger/groups/invite","POST",
+            {"peer":group,"members":[cid],"allow_history":False},bravo,bc)[0],403)
+        state=self.call("/api/messenger/groups/invite?peer="+group,cookie=alpha)[1]
+        self.assertIn(bid,state["pending"])
+        self.assertEqual(state["remaining"],23)
+        self.assertEqual(self.call("/api/messenger/groups/invite","POST",
+            {"peer":group,"members":[cid],"allow_history":False},alpha,ac)[0],201)
+        self.assertEqual(self.call("/api/messenger/groups/invite?peer="+group,cookie=alpha)[1]["remaining"],22)
+
     def test_private_group_invite_cannot_be_accessed_by_nonmember(self):
         alpha, ac, aid=self.login("Alpha")
         bravo, bc, bid=self.login("Bravo")

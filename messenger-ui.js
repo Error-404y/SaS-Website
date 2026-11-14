@@ -6,7 +6,8 @@
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let csrf = '', identity = '', contacts = [], activePeer = '', shownIds = '',
     currentPage = false, running = false, busy = false, loadingPeer = '', listFlight = false,
-    lastNotify = 0, selectedGroupPlayers = new Set(), sessionGeneration = 0,
+    lastNotify = 0, selectedGroupPlayers = new Set(), selectedInvitePlayers = new Set(),
+    inviteStatus = null, invitePeer = '', sessionGeneration = 0,
     olderMessages = [], historyHasMore = false, oldestBefore = null, loadingOlder = false,
     lastPresencePing = 0, presenceFlight = false, keyboardBaseline = 0;
   let messageLoadDone = Promise.resolve();
@@ -206,12 +207,16 @@
       (contact.group ? (contact.id==='alliance'?'All joined SaS members':'Private group · '+contact.player_name) :
       (contact.player_name || 'Private conversation'));
     const locked=(peer==='alliance' && !contact.joined) || !!contact.invitation;
+    $('messenger-add-players').hidden=locked || !contact.can_invite;
     $('messenger-alliance-lock').hidden=!locked;
     $('messenger-shell').classList.toggle('is-locked',locked);
     if (locked) {
       $('messenger-join-title').textContent=contact.username;
       $('messenger-join-description').textContent=contact.invitation
-        ? contact.invited_by+' has invited you to join a Group. Join to see the messages.'
+        ? contact.invited_by+' has invited you to join a Group. '+
+          (contact.allow_history===false
+            ? 'After joining, you will only see new messages.'
+            : 'After joining, you can see earlier messages.')
         : 'Join the group to read its messages and take part in the conversation.';
       $('messenger-join-alliance').textContent=contact.invitation?'Join Group':'Join SaS Group';
     }
@@ -420,6 +425,71 @@
     }catch(e){$('messenger-group-error').textContent=e.message;}
     finally{button.disabled=false;}
   }
+  function renderInvitePicker(){
+    const query=$('messenger-invite-search').value.trim().toLowerCase();
+    const reserved=new Set([...(inviteStatus?.members||[]),...(inviteStatus?.pending||[])]);
+    const eligible=approvedPlayers().filter(player=>!reserved.has(player.id) &&
+      (player.username.toLowerCase().includes(query) ||
+       (player.player_name||'').toLowerCase().includes(query)));
+    const picker=$('messenger-invite-players');
+    picker.innerHTML=eligible.length?eligible.map(player=>
+      '<label class="messenger-player-option"><input type="checkbox" data-invite-player="'+escape(player.id)+'"'+
+      (selectedInvitePlayers.has(player.id)?' checked':'')+'>'+
+      '<span class="messenger-avatar">'+escape(avatar(player))+'</span>'+
+      '<span><strong>'+escape(player.username)+'</strong><small>'+
+      escape(player.player_name||'')+'</small></span></label>'
+    ).join(''):'<p class="messenger-loading">No eligible players found. Already invited or joined players are excluded.</p>';
+    const remaining=inviteStatus?.remaining??0;
+    $('messenger-invite-selected').textContent=selectedInvitePlayers.size+
+      ' selected · '+remaining+' invitation slot(s) available';
+  }
+  async function openInviteDialog(){
+    const group=contacts.find(c=>c.id===activePeer);
+    if(!group?.can_invite || !activePeer.startsWith('group:'))return;
+    const requested=activePeer;
+    const button=$('messenger-add-players');
+    button.disabled=true;
+    error();
+    try{
+      const result=await api('/api/messenger/groups/invite?peer='+encodeURIComponent(requested));
+      if(activePeer!==requested)return;
+      invitePeer=requested;
+      inviteStatus=result;
+      selectedInvitePlayers=new Set();
+      $('messenger-invite-form').reset();
+      $('messenger-invite-error').textContent='';
+      $('messenger-invite-title').textContent='Add players · '+group.username;
+      $('messenger-invite-history-state').textContent='No';
+      renderInvitePicker();
+      $('messenger-invite-dialog').showModal();
+    }catch(e){error(e.message);}
+    finally{button.disabled=false;}
+  }
+  async function sendGroupInvitations(event){
+    event.preventDefault();
+    const button=$('messenger-invite-send');
+    const remaining=inviteStatus?.remaining??0;
+    if(!invitePeer || !selectedInvitePlayers.size || selectedInvitePlayers.size>remaining){
+      $('messenger-invite-error').textContent='Select 1 to '+remaining+' eligible player(s).';
+      return;
+    }
+    button.disabled=true;
+    $('messenger-invite-error').textContent='';
+    try{
+      await api('/api/messenger/groups/invite',{method:'POST',body:JSON.stringify({
+        peer:invitePeer,
+        members:[...selectedInvitePlayers],
+        allow_history:$('messenger-invite-history').checked
+      })});
+      $('messenger-invite-dialog').close();
+      selectedInvitePlayers=new Set();
+      invitePeer='';
+      inviteStatus=null;
+      // The join-request notification appears in each invitee's player list.
+      await loadList();
+    }catch(e){$('messenger-invite-error').textContent=e.message;}
+    finally{button.disabled=false;}
+  }
   function start(token){
     if (!token) return;
     csrf=token;running=true;
@@ -431,6 +501,9 @@
     sessionGeneration++;
     running=false;csrf='';identity='';activePeer='';contacts=[];shownIds='';loadingPeer='';
     olderMessages=[];historyHasMore=false;oldestBefore=null;
+    invitePeer='';inviteStatus=null;selectedInvitePlayers=new Set();
+    $('messenger-add-players').hidden=true;
+    if($('messenger-invite-dialog').open)$('messenger-invite-dialog').close();
     lastPresencePing=0;
     $('messenger-active-avatar').classList.remove('is-online');
     $('messenger-shell').classList.remove('chat-open','is-locked');
@@ -480,6 +553,19 @@
     $('messenger-search').addEventListener('input',renderContacts);
     $('messenger-join-alliance').addEventListener('click',joinAlliance);
     $('messenger-create-group').addEventListener('click',openGroupDialog);
+    $('messenger-add-players').addEventListener('click',openInviteDialog);
+    $('messenger-invite-search').addEventListener('input',renderInvitePicker);
+    $('messenger-invite-players').addEventListener('change',event=>{
+      const checkbox=event.target.closest('[data-invite-player]');
+      if(!checkbox)return;
+      if(checkbox.checked)selectedInvitePlayers.add(checkbox.dataset.invitePlayer);
+      else selectedInvitePlayers.delete(checkbox.dataset.invitePlayer);
+      renderInvitePicker();
+    });
+    $('messenger-invite-history').addEventListener('change',event=>{
+      $('messenger-invite-history-state').textContent=event.target.checked?'Yes':'No';
+    });
+    $('messenger-invite-form').addEventListener('submit',sendGroupInvitations);
     $('messenger-group-player-search').addEventListener('input',renderGroupPicker);
     $('messenger-group-players').addEventListener('change', event=>{
       const checkbox=event.target.closest('[data-group-player]');
