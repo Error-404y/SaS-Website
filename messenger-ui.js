@@ -62,7 +62,7 @@
     const viewport=window.visualViewport;
     const height=viewport ? viewport.height : window.innerHeight;
     root.style.setProperty('--sas-messenger-viewport-height',
-      Math.max(280,Math.round(height))+'px');
+      Math.max(160,Math.round(height))+'px');
   }
   const totalUnread = () => contacts.reduce((sum, c) => sum + (Number(c.unread)||0),0);
   async function api(path, options={}) {
@@ -399,7 +399,8 @@
     lastPresencePing=0;
     $('messenger-active-avatar').classList.remove('is-online');
     $('messenger-shell').classList.remove('chat-open','is-locked');
-    document.body.classList.remove('messenger-mobile-chat-open','sas-messenger-page');
+    document.body.classList.remove('messenger-mobile-chat-open','sas-messenger-page','sas-messenger-keyboard');
+    document.documentElement.classList.remove('sas-messenger-root');
     syncChatViewport();
     $('messenger-message').disabled=true;
     $('messenger-send').disabled=true;
@@ -414,7 +415,9 @@
     if (entering && !currentPage && window.innerWidth<=750) window.scrollTo(0,0);
     currentPage=entering;
     document.body.classList.toggle('sas-messenger-page',currentPage);
+    document.documentElement.classList.toggle('sas-messenger-root',currentPage);
     if (!currentPage) {
+      document.body.classList.remove('sas-messenger-keyboard');
       $('messenger-shell').classList.remove('chat-open');
       document.body.classList.remove('messenger-mobile-chat-open');
     }
@@ -449,6 +452,12 @@
     $('messenger-group-form').addEventListener('submit',createGroup);
     $('messenger-compose').addEventListener('submit',send);
     $('messenger-message').addEventListener('focus',()=>{
+      // Give the keyboard maximum room while keeping the chat header and input.
+      document.body.classList.add('sas-messenger-keyboard');
+      requestAnimationFrame(syncChatViewport);
+    });
+    $('messenger-message').addEventListener('blur',()=>{
+      document.body.classList.remove('sas-messenger-keyboard');
       requestAnimationFrame(syncChatViewport);
     });
     window.addEventListener('resize',syncChatViewport,{passive:true});
