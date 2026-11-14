@@ -70,12 +70,12 @@ class ReminderCardTests(unittest.TestCase):
             self.assertIn(b"attachment://reminder-",request.data)
             self.assertIn(b"files[0]",request.data)
             self.assertIn(b"payload_json",request.data)
-            self.assertIn(b"\\x89PNG\\r\\n\\x1a\\n",request.data)
+            self.assertIn(b"\x89PNG\r\n\x1a\n",request.data)
             self.assertNotIn(b"@everyone",request.data)
             # Discord must discard old PNG attachments, not grow the message
             # by one more attachment every single minute.
-            payload=json.loads(request.data.split(b"\\r\\n\\r\\n",1)[1].split(
-                b"\\r\\n--",1)[0])
+            payload=json.loads(request.data.split(b"\r\n\r\n",1)[1].split(
+                b"\r\n--",1)[0])
             self.assertEqual(payload["allowed_mentions"],{"parse":[]})
             self.assertEqual(payload["attachments"][0]["id"],0)
             self.assertEqual(len(payload["attachments"]),1)
@@ -138,8 +138,8 @@ class ReminderScheduleTests(unittest.TestCase):
                 VALUES('alliance','Mafia Attack','Events','2030-01-01 18:00:00',
                 '2030-01-01 20:00:00','2030-01-01T00:00:00+00:00')""")
         ids=iter(["111111","222222","333333","444444"])
-        with patch.object(server.reminder_cards,"send_card",side_effect=lambda *_:next(ids)), \\
-             patch.object(server.reminder_cards,"edit_card",return_value=True) as edit, \\
+        with patch.object(server.reminder_cards,"send_card",side_effect=lambda *_:next(ids)),\
+             patch.object(server.reminder_cards,"edit_card",return_value=True) as edit,\
              patch.object(server.time,"sleep") as sleep:
             t0=self.start-7200
             self.assertTrue(server.reminder_send_once(t0))
@@ -214,7 +214,7 @@ class ReminderScheduleTests(unittest.TestCase):
         with server.connect() as db:
             db.execute("UPDATE entries SET start_utc=? WHERE id=?",
                        ("2030-01-01 21:00:00",self.event_id))
-        with patch.object(server.reminder_cards,"edit_card") as edit, \\
+        with patch.object(server.reminder_cards,"edit_card") as edit,\
              patch.object(server.reminder_cards,"delete_card",return_value=True) as delete:
             self.assertEqual(server.reminder_refresh_once(t0+70),0)
             edit.assert_not_called()
