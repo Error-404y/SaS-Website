@@ -407,7 +407,6 @@ def purge_member(db, member_id):
             db.execute("DELETE FROM chat_reads WHERE thread_key=?",(group_key,))
             db.execute("DELETE FROM chat_group_invites WHERE group_id=?",(group_id,))
             db.execute("DELETE FROM chat_groups WHERE id=?",(group_id,))
-    db.execute("DELETE FROM chat_group_invites WHERE invited_by=?",(key,))
     db.execute("UPDATE chat_groups SET creator_key='deleted' WHERE creator_key=?",(key,))
     db.execute("UPDATE chat_messages SET sender_key='deleted' WHERE sender_key=? AND thread_key LIKE 'group:%'",(key,))
     db.execute("DELETE FROM chat_messages WHERE thread_key=?", ("notes:"+key,))
