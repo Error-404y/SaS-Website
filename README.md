@@ -33,6 +33,15 @@ Const-Web=false
 - When no conversation is open, the placeholder reads **No Conversation has been Made**.
 - Admin account-detail emails are concealed by default and revealed only with an accessible eye toggle; hiding or closing the dialog conceals them again. Account-list rows no longer display unmasked emails. Passwords remain protected and cannot be viewed.
 
+## Mobile layout corrections (phone-first)
+
+- Messenger conversations open in a full-screen phone-sized view with an independently scrollable message history; the message composer stays at the bottom, above the mobile safe area.
+- Removed the unintended visible accessibility label beside the input. It remains accessible to screen readers.
+- Locked group invitation conversations hide the disabled composer and make the join panel scrollable.
+- Horizontal swipe scrolling with a slim visible scrollbar is enabled for Explore and the calculator sub-navigation. Switching sections scrolls the selected tab into view.
+- Short website sections such as HR Announcements no longer inherit the reversed desktop-height arrangement that created large empty bands.
+- Narrow phone headers and content cards handle overflow without pushing the page sideways.
+
 ## SaS Messenger
 
 The approved-member website includes a dedicated **SaS Messenger** page with the same purple glass-style UI used elsewhere:
@@ -44,6 +53,8 @@ The approved-member website includes a dedicated **SaS Messenger** page with the
 - **Account contacts:** usernames and in-game names of approved players appear in the searchable sidebar. Member emails, passwords and reset requests are **not** exposed.
 - **Unread notifications:** server-persisted unread counts appear beside each chat and on the website's Messenger tab. Opening a conversation marks that conversation as read without affecting other conversations.
 - **Live refresh:** the visible conversation refreshes approximately every 5 seconds, while the unread/contact list refreshes approximately every 15 seconds. No third-party real-time chat provider is required.
+- **Online / last seen:** approved members and admins send an authenticated, CSRF-protected presence heartbeat while the site tab is visible (approximately every 25 seconds). Individual player avatars show a green dot and **Online** when the most recent heartbeat was within 75 seconds; otherwise the Messenger contact row and direct-message header show the last recorded activity in UTC. Presence is stored in SQLite under `chat_presence`, survives refreshes, and expires automatically without requiring browser unload events. Groups and notes-to-self do not advertise a status. Initial last-seen information is unavailable until the account first sends a heartbeat. No IP address, email, or other private account data is exposed by this feature.
+- **Read receipts (direct messages):** a single grey check means the private message was sent but the recipient has not marked the conversation read; two blue checks appear once the recipient opens the chat and its server-side `chat_reads` cursor includes the message. Reading the contact list or seeing the sender online does not count. Existing messages update their ticks during regular live refresh. Group chats and private notes deliberately omit ticks rather than misleadingly reporting them as read.
 - **Message history:** stored in existing SQLite under `chat_messages`; the most recent 80 messages load first and **Load older messages** fetches prior pages from the server, subject to membership checks. Messages persist after refreshes and logouts.
 - **Mobile UI:** conversations list and individual chat open in separate phone-sized views with a back arrow.
 - **Training points target and two distinct times:** Troop Training takes desired **Phase 3 Officer Training points** and computes required Tier IX/X troops (IX = 1,485 pts; X = 1,960 pts). **Origin Time** is always calculated from the screenshot's original 722-troop time (IX = 1d 02:16:22; X = 1d 06:29:04), scaled proportionally. **Actual Time** is a separate estimate calculated only from a player's observed actual time for **722 troops** of the selected tier/type (enter `HH:MM:SS` or `1d HH:MM:SS`). The actual reference is saved per logged-in username and troop type in browser local storage. No assumed research/buff reduction is displayed or silently applied. Until a valid actual-time sample is provided, the UI shows `Enter actual time above` and the shortcut to speedups is disabled to avoid overstating requirements. The capacity toggle now triples the **full troop batch required by the selected point target**, including earned points, resources and both Origin/Actual Time (722 troops become 2,166, not 722 again). It does not silently divide the batch by three. The event-points shortcut remains functional. Training costs are still approximate because the screenshots have rounded totals.

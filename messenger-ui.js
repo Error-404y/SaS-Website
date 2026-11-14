@@ -7,7 +7,8 @@
   let csrf = '', identity = '', contacts = [], activePeer = '', shownIds = '',
     currentPage = false, running = false, busy = false, loadingPeer = '', listFlight = false,
     lastNotify = 0, selectedGroupPlayers = new Set(), sessionGeneration = 0,
-    olderMessages = [], historyHasMore = false, oldestBefore = null, loadingOlder = false;
+    olderMessages = [], historyHasMore = false, oldestBefore = null, loadingOlder = false,
+    lastPresencePing = 0, presenceFlight = false;
   const avatar = item => item.group ? (item.id==='alliance'?'SaS':'GR') :
     String(item.username || '??').slice(0, 2).toUpperCase();
   const showTime = time => {
@@ -16,6 +17,34 @@
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',timeZone:'UTC'}) + ' UTC';
   };
+  const presenceText = item => {
+    if (!item || item.group || item.self) return '';
+    if (item.online) return 'Online';
+    if (!item.last_seen_at) return 'Last seen unavailable';
+    const when = new Date(Number(item.last_seen_at) * 1000);
+    if (Number.isNaN(when.getTime())) return 'Last seen unavailable';
+    const utc = date => date.toISOString().slice(0,10);
+    const now = new Date();
+    const yesterday = new Date(now.getTime()-86400000);
+    const clock = when.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
+    if (utc(when)===utc(now)) return 'Last seen today at '+clock+' UTC';
+    if (utc(when)===utc(yesterday)) return 'Last seen yesterday at '+clock+' UTC';
+    return 'Last seen '+when.toLocaleDateString([], {day:'numeric',month:'short',year:'numeric',timeZone:'UTC'})+' at '+clock+' UTC';
+  };
+  function updateActivePresence() {
+    const item=contacts.find(c=>c.id===activePeer);
+    if (!item || item.group || item.self) return;
+    $('messenger-active-detail').textContent=presenceText(item);
+    $('messenger-active-avatar').classList.toggle('is-online',Boolean(item.online));
+  }
+  async function pingPresence() {
+    if (!running || document.hidden || presenceFlight) return;
+    presenceFlight=true;
+    lastPresencePing=Date.now();
+    try { await api('/api/messenger/presence',{method:'POST',body:'{}'}); }
+    catch (e) { /* Presence is optional; Messenger must remain usable. */ }
+    finally { presenceFlight=false; }
+  }
   const totalUnread = () => contacts.reduce((sum, c) => sum + (Number(c.unread)||0),0);
   async function api(path, options={}) {
     const makeRequest = async () => {
@@ -68,14 +97,16 @@
       ((item.id==='alliance' && !item.joined)||item.invitation?' is-new-group':'')+
       (item.self?' messenger-own-profile':'')+
       '" data-messenger-peer="'+escape(item.id)+'" role="listitem">'+
-      '<span class="messenger-avatar'+(item.group?' is-group':'')+'">'+escape(avatar(item))+'</span>'+
+      '<span class="messenger-avatar'+(item.group?' is-group':'')+(item.online && !item.self?' is-online':'')+'">'+escape(avatar(item))+'</span>'+
       '<span class="messenger-contact-details"><strong>'+escape(item.self?'Your Profile':item.username)+
       (item.id==='alliance'?' <span class="messenger-group-pin'+(!item.joined?' is-new':'')+'">'+(!item.joined?'NEW · JOIN':'PINNED')+'</span>':
       (item.invitation?' <span class="messenger-group-pin is-new">INVITED</span>':''))+'</strong>'+
       '<small>'+escape(item.self ? (item.last_message || (item.username+' · Private notes to yourself')) :
         (item.invitation ? item.invited_by+' has invited you to join a Group' :
         (item.id==='alliance' && !item.joined ? 'Join to see all messages' :
-          (item.last_message || (item.group ? 'Group chat' : (item.player_name||'Say hello'))))))+'</small></span>'+
+          (item.last_message || (item.group ? 'Group chat' : (item.player_name||'Say hello'))))))+'</small>'+
+      (!item.group && !item.self && (item.online || item.last_seen_at) ?
+        '<small class="messenger-presence-line'+(item.online?' online':'')+'">'+escape(presenceText(item))+'</small>' : '')+'</span>'+
       '<span class="messenger-contact-meta"><small>'+escape(showTime(item.last_at))+'</small>'+
       (item.unread ? '<span class="messenger-contact-badge">'+Math.min(item.unread,99)+(item.unread>99?'+':'')+'</span>':'')+
       '</span></button>';
@@ -108,6 +139,7 @@
         $('messenger-shell').classList.remove('chat-open');
       }
       renderContacts();
+      updateActivePresence();
     } catch (e) {
       if (currentPage) {
         error('Unable to load players: '+e.message);
@@ -131,6 +163,7 @@
       (contact.player_name || 'Private conversation'));
     const locked=(peer==='alliance' && !contact.joined) || !!contact.invitation;
     $('messenger-alliance-lock').hidden=!locked;
+    $('messenger-shell').classList.toggle('is-locked',locked);
     if (locked) {
       $('messenger-join-title').textContent=contact.username;
       $('messenger-join-description').textContent=contact.invitation
@@ -139,10 +172,13 @@
       $('messenger-join-alliance').textContent=contact.invitation?'Join Group':'Join SaS Group';
     }
     $('messenger-active-avatar').textContent=avatar(contact);
+    $('messenger-active-avatar').classList.toggle('is-online',Boolean(contact.online && !contact.group && !contact.self));
+    updateActivePresence();
     $('messenger-history').innerHTML='<p class="messenger-loading">Loading conversation…</p>';
     $('messenger-message').disabled=locked;
     $('messenger-send').disabled=locked;
     $('messenger-shell').classList.add('chat-open');
+    document.body.classList.add('messenger-mobile-chat-open');
     renderContacts();
     if (locked) {
       $('messenger-history').innerHTML='<div class="messenger-empty">Join to unlock the conversation.</div>';
@@ -189,7 +225,12 @@
         '<div class="messenger-bubble">'+
         ((activePeer==='alliance'||activePeer.startsWith('group:')) ? '<strong>'+escape(mine?'You':sender)+'</strong>' : '')+
         '<span class="messenger-bubble-text">'+escape(msg.body)+'</span>'+
-        '<time>'+escape(showTime(msg.created_at))+'</time></div></div>';
+        '<span class="messenger-bubble-footer"><time>'+escape(showTime(msg.created_at))+'</time>'+
+        (mine && typeof msg.read==='boolean' ?
+          '<span class="messenger-read-receipt'+(msg.read?' is-read':'')+'" aria-label="'+(msg.read?'Read':'Sent, not yet read')+'" title="'+(msg.read?'Read':'Sent, not yet read')+'">'+
+          (msg.read ? '<svg viewBox="0 0 26 18" width="22" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l5 5L17 3"/><path d="M10 9l5 5L25 3"/></svg>' :
+          '<svg viewBox="0 0 18 18" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l5 5L16 3"/></svg>')+'</span>' : '')+
+        '</span></div></div>';
     }).join('');
   }
   async function loadMessages(force=false) {
@@ -204,7 +245,9 @@
       if (!running || generation!==sessionGeneration ||
           activePeer!==targetPeer || !currentPage) return;
       const messages=result.messages||[];
-      const key=messages.map(m=>m.id).join(',');
+      // Include receipt state so a read acknowledgement updates existing bubbles
+      // even if no new messages arrived.
+      const key=messages.map(m=>m.id+':'+(m.read===true?'r':m.read===false?'s':'-')).join(',');
       if (force || key!==shownIds) {
         const holder=$('messenger-history');
         const stickToBottom=force || holder.scrollHeight-holder.scrollTop-holder.clientHeight<90;
@@ -323,13 +366,17 @@
   function start(token){
     if (!token) return;
     csrf=token;running=true;
+    pingPresence();
     loadList();
   }
   function stop(){
     sessionGeneration++;
     running=false;csrf='';identity='';activePeer='';contacts=[];shownIds='';loadingPeer='';
     olderMessages=[];historyHasMore=false;oldestBefore=null;
-    $('messenger-shell').classList.remove('chat-open');
+    lastPresencePing=0;
+    $('messenger-active-avatar').classList.remove('is-online');
+    $('messenger-shell').classList.remove('chat-open','is-locked');
+    document.body.classList.remove('messenger-mobile-chat-open');
     $('messenger-message').disabled=true;
     $('messenger-send').disabled=true;
     $('messenger-history').innerHTML='<div class="messenger-empty">No Conversation has been Made</div>';
@@ -338,6 +385,10 @@
   }
   function onPage(name){
     currentPage=name==='messenger';
+    if (!currentPage) {
+      $('messenger-shell').classList.remove('chat-open');
+      document.body.classList.remove('messenger-mobile-chat-open');
+    }
     if (currentPage && running) {
       loadList();
       if (activePeer) {
@@ -369,15 +420,18 @@
     $('messenger-compose').addEventListener('submit',send);
     $('messenger-back').addEventListener('click',()=>{
       $('messenger-shell').classList.remove('chat-open');
+      document.body.classList.remove('messenger-mobile-chat-open');
     });
     document.addEventListener('visibilitychange',()=>{
       if (!document.hidden && running) {
+        pingPresence();
         loadList();
         if (currentPage) loadMessages();
       }
     });
     setInterval(()=>{
       if (!running || document.hidden) return;
+      if (Date.now()-lastPresencePing>=25000) pingPresence();
       if (currentPage) loadMessages();
       if (Date.now()-lastNotify>=10000) {
         lastNotify=Date.now();loadList();
