@@ -157,3 +157,19 @@ test('Messenger self-notes and pinned group opt-in have visible controls',()=>{
   assert.match(ui,/data-load-older/);
   assert.doesNotMatch(ui,/disabled aria-label="Your profile"/);
 });
+
+test('Troop Training distinguishes screenshot Origin Time from actual in-game time',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+  const ui=fs.readFileSync(path.join(__dirname,'../planner-ui.js'),'utf8');
+  assert.match(html,/id="planner-actual-sample"/);
+  assert.doesNotMatch(html,/id="planner-training-reduction"/);
+  assert.match(ui,/stat\('Origin Time'/);
+  assert.match(ui,/stat\('Actual Time'/);
+  assert.match(ui,/result\.actualSeconds/);
+  assert.match(ui,/result\.actualSeconds === null/);
+  assert.match(ui,/data\.actualSeconds === null/);
+  assert.match(ui,/trainingStorageKey/);
+  assert.match(ui,/el\('planner-send-speedups'\)\.disabled = data\.actualSeconds === null/);
+  assert.doesNotMatch(ui,/Training time reduction/);
+});

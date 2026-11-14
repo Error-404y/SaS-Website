@@ -102,3 +102,37 @@ test('Phase 3 training calculates required troops from points instead of input t
   assert.equal(p.troopsForTargetPoints('guard-9', 0).quantity, 0);
   assert.equal(p.troopsForTargetPoints('biker-10', 1000), null);
 });
+
+test('Origin Time is never mistaken for reduced actual training time', () => {
+  const origin = 109744; // Royal Marksman X, 722 troops: 1d 06:29:04
+  const unknown = p.troopsForTargetPoints('marksman-10', 722 * 1960);
+  assert.equal(unknown.requiredTroops, 722);
+  assert.equal(unknown.originSeconds, origin);
+  assert.equal(unknown.actualSeconds, null); // No invented research/speed time
+
+  const observed722 = 40000; // Example actual time supplied by a player, not screenshot data
+  const known = p.troopsForTargetPoints('marksman-10', 722 * 1960, false, observed722);
+  assert.equal(known.originSeconds, origin);
+  assert.equal(known.actualSeconds, observed722);
+  assert.equal(known.seconds, origin); // legacy origin record remains unchanged
+
+  const boosted = p.troopsForTargetPoints('marksman-10', 2166 * 1960, true, observed722);
+  assert.equal(boosted.quantity, 2166);
+  assert.equal(boosted.originSeconds, 3 * origin);
+  assert.equal(boosted.actualSeconds, 3 * observed722);
+  assert.equal(boosted.extraPoints, 0);
+  assert.equal(p.troopsForTargetPoints('guard-9', 1000, false, 0).actualSeconds, null);
+  assert.equal(p.troopsForTargetPoints('guard-9', 1000, false, 999999).actualSeconds, null);
+  assert.equal(p.troopsForTargetPoints('guard-9', 0, false, 40000).actualSeconds, 0);
+});
+
+test('Actual time input accepts the game duration notation and rejects invalid values', () => {
+  assert.equal(p.parseGameDuration('1d 06:29:04'), 109744);
+  assert.equal(p.parseGameDuration('06:29:04'), 23344);
+  assert.equal(p.parseGameDuration('1d 6h 29m 4s'), 109744);
+  assert.equal(p.parseGameDuration('30m'), 1800);
+  assert.equal(p.parseGameDuration('00:00:00'), 0);
+  for (const entry of ['', 'not available', '24:00:00', '1d 19:60:00', '2d -1:00:00']) {
+    assert.equal(p.parseGameDuration(entry), null, entry);
+  }
+});

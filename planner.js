@@ -87,7 +87,29 @@
     return { key, baseQuantity: qty, quantity: qty * boost, costs, seconds: t.seconds * factor * boost * (1 - reduction / 100),
       originalSeconds: t.seconds * factor * boost, capacityMultiplier: boost, snapshot: SAMPLE_SIZE };
   }
-  function troopsForTargetPoints(key, targetPoints, capacityBoost = false, timeReduction = 0) {
+  // Game screenshot reference times are ORIGINAL times. Actual time is player-specific
+  // and must only be computed from a separately recorded actual 722-troop sample.
+  function parseGameDuration(value) {
+    const text = String(value ?? '').trim().toLowerCase();
+    if (!text) return null;
+    // Common in-game display: 1d 06:29:04 or 06:29:04.
+    const match = text.match(/^(?:(\d+)\s*d(?:ays?)?\s*)?(\d{1,2}):(\d{2}):(\d{2})$/);
+    if (match) {
+      const days = Number(match[1] || 0);
+      const [hours, minutes, seconds] = match.slice(2).map(Number);
+      if (hours > 23 || minutes > 59 || seconds > 59 || days > 36500) return null;
+      return days * 86400 + hours * 3600 + minutes * 60 + seconds;
+    }
+    // Also accept the calculator's readable "1d 6h 29m 4s" format.
+    const readable = text.match(/^(?:(\d+)d\s*)?(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s\s*)?$/);
+    if (readable && text && /\d+[dhms]/.test(text)) {
+      const [days, hours, minutes, seconds] = readable.slice(1).map(x => Number(x || 0));
+      if (days > 36500 || hours > 23 || minutes > 59 || seconds > 59) return null;
+      return days * 86400 + hours * 3600 + minutes * 60 + seconds;
+    }
+    return null;
+  }
+  function troopsForTargetPoints(key, targetPoints, capacityBoost = false, actualSampleSeconds = null) {
     const troop = TROOPS[key];
     if (!troop) return null;
     const rate = OFFICERS[troop.tier];
@@ -96,9 +118,17 @@
     const needed = Math.ceil(goal / rate);
     const multiplier = capacityBoost ? 3 : 1;
     const baseQuantity = Math.ceil(needed / multiplier);
-    const result = troops(key, baseQuantity, capacityBoost, timeReduction);
+    // The baseline per-722 screenshot time is already Origin Time. Do not treat
+    // it as the actual sped-up training time or apply a made-up reduction.
+    const result = troops(key, baseQuantity, capacityBoost);
+    const validSample = typeof actualSampleSeconds === 'number' &&
+      Number.isFinite(actualSampleSeconds) && actualSampleSeconds > 0 &&
+      actualSampleSeconds <= troop.seconds;
+    const actualSeconds = validSample
+      ? actualSampleSeconds * result.quantity / SAMPLE_SIZE : null;
     return {...result, rate, targetPoints:goal, requiredTroops:needed,
-      actualPoints:result.quantity * rate, extraPoints:result.quantity * rate - goal};
+      actualPoints:result.quantity * rate, extraPoints:result.quantity * rate - goal,
+      originSeconds: result.originalSeconds, actualSeconds};
   }
   function build(level) { return BUILDINGS[String(level)] || null; }
   function eventPoints(phase, inputs = {}, rules = PHASE_RULES) {
@@ -157,7 +187,7 @@
   }
   const api = { RESOURCES, SPEEDUPS, GATHERING, TROOPS, SAMPLE_SIZE, BUILDINGS, OFFICERS, troopsForTargetPoints,
     FACE_OFF, PHASE4, PHASE_RULES, numeric, whole, fmt, parseAmount, duration,
-    gathering, troops, build, eventPoints, faceoffPoints, speedupSingles, speedupMix };
+    gathering, troops, parseGameDuration, build, eventPoints, faceoffPoints, speedupSingles, speedupMix };
   root.SasPlanner = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
