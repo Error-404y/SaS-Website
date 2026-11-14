@@ -10,7 +10,10 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from PIL import Image
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,6 +25,7 @@ def html_fixture():
     return html.replace("</head>","<style>"+css+"</style></head>",1)
 
 
+@unittest.skipIf(sync_playwright is None, 'Playwright not installed')
 class RichMessengerBrowserTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
