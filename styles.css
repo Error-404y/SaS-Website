@@ -1122,3 +1122,92 @@ html,body{max-width:100%;overflow-x:clip}
   .page-title{min-width:0}
   .page-title h1{overflow-wrap:anywhere}
 }
+
+
+/* Mobile Messenger: prevent message rows from shrinking into the viewport.
+   An overflowing history must be scrollable without moving the composer. */
+.messenger-history{
+  overflow-y:auto;
+  overflow-x:hidden;
+  min-height:0;
+  min-width:0;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+  touch-action:pan-y;
+  scrollbar-gutter:stable;
+}
+.messenger-history>.messenger-line,
+.messenger-history>.messenger-system-message,
+.messenger-history>.messenger-load-older{
+  flex-shrink:0;
+}
+.messenger-line{min-width:0;flex-shrink:0}
+.messenger-bubble{min-width:0;max-width:min(83%,460px)}
+.messenger-bubble-footer{gap:3px}
+.messenger-read-receipt{width:13px;height:12px;flex:0 0 13px}
+.messenger-read-receipt svg{width:13px;height:10px;display:block}
+.messenger-bubble time{font-size:9px;line-height:1.2}
+@media(max-width:620px){
+  .messenger-shell.chat-open{
+    top:var(--sas-visual-top,0px);
+    bottom:auto;
+    height:var(--sas-visual-height,100dvh);
+    max-height:var(--sas-visual-height,100dvh);
+    isolation:isolate;
+  }
+  .messenger-shell.chat-open .messenger-chat{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    max-height:100%;
+    overflow:hidden;
+  }
+  .messenger-shell.chat-open .messenger-history{
+    flex:1 1 0;
+    min-height:0;
+    overflow-y:auto;
+    overflow-x:hidden;
+    overscroll-behavior:contain;
+    touch-action:pan-y;
+    padding:13px 12px;
+    scroll-behavior:auto;
+  }
+  .messenger-shell.chat-open .messenger-line{flex:none}
+  .messenger-shell.chat-open .messenger-system-message{flex:none}
+  .messenger-shell.chat-open .messenger-compose{
+    position:relative;
+    z-index:2;
+    flex:0 0 auto;
+    width:100%;
+    margin-top:auto;
+    padding:9px 10px max(9px,env(safe-area-inset-bottom,0px));
+  }
+  .messenger-shell.chat-open .messenger-bubble{max-width:min(87%,370px)}
+  .messenger-shell.chat-open .messenger-read-receipt{width:12px;flex-basis:12px}
+  .messenger-shell.chat-open .messenger-read-receipt svg{width:12px;height:10px}
+}
+
+/* Prevent calculator cards from widening the whole mobile page. */
+@media(max-width:750px){
+  #page-tool-chief,#page-tool-svs,#ref-chief-content,#ref-svs-content,
+  .tool-panel,.reference-intro,.ref-day-header,.ref-chests,.ref-milestone,
+  .ref-controls,.ref-speed-chart{min-width:0;max-width:100%}
+  .ref-chests{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ref-milestone{overflow-wrap:anywhere}
+  .reference-days{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;touch-action:pan-x;-webkit-overflow-scrolling:touch}
+  .reference-days button{flex:0 0 135px}
+  .ref-speed-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ref-result,.ref-day-header{min-width:0}
+  .ref-table{min-width:550px}
+  .table-container{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
+
+/* The page entrance animation uses transform with fill-mode:both.
+   That makes fixed-position chats relative to the page rather than viewport. */
+#page-messenger.page-animate{animation:none!important;transform:none!important}
+@media(max-width:620px){
+  #page-messenger{transform:none!important;filter:none!important;contain:none!important}
+  #page-messenger .messenger-shell.chat-open{position:fixed!important;left:0;right:0;top:var(--sas-visual-top,0px);bottom:auto;z-index:999}
+}

@@ -45,6 +45,21 @@
     catch (e) { /* Presence is optional; Messenger must remain usable. */ }
     finally { presenceFlight=false; }
   }
+  // Keep a mobile chat within the *visible* viewport when Chrome's URL bar or
+  // the on-screen keyboard changes size. CSS uses dvh as a safe fallback.
+  function syncChatViewport(){
+    const shell=$('messenger-shell');
+    if (!shell) return;
+    if (window.innerWidth>620 || !shell.classList.contains('chat-open')) {
+      shell.style.removeProperty('--sas-visual-height');
+      shell.style.removeProperty('--sas-visual-top');
+      return;
+    }
+    const viewport=window.visualViewport;
+    const height=viewport ? viewport.height : window.innerHeight;
+    shell.style.setProperty('--sas-visual-height',Math.max(240,Math.round(height))+'px');
+    shell.style.setProperty('--sas-visual-top',Math.round(viewport?.offsetTop||0)+'px');
+  }
   const totalUnread = () => contacts.reduce((sum, c) => sum + (Number(c.unread)||0),0);
   async function api(path, options={}) {
     const makeRequest = async () => {
@@ -179,6 +194,7 @@
     $('messenger-send').disabled=locked;
     $('messenger-shell').classList.add('chat-open');
     document.body.classList.add('messenger-mobile-chat-open');
+    syncChatViewport();
     renderContacts();
     if (locked) {
       $('messenger-history').innerHTML='<div class="messenger-empty">Join to unlock the conversation.</div>';
@@ -228,8 +244,8 @@
         '<span class="messenger-bubble-footer"><time>'+escape(showTime(msg.created_at))+'</time>'+
         (mine && typeof msg.read==='boolean' ?
           '<span class="messenger-read-receipt'+(msg.read?' is-read':'')+'" aria-label="'+(msg.read?'Read':'Sent, not yet read')+'" title="'+(msg.read?'Read':'Sent, not yet read')+'">'+
-          (msg.read ? '<svg viewBox="0 0 26 18" width="22" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l5 5L17 3"/><path d="M10 9l5 5L25 3"/></svg>' :
-          '<svg viewBox="0 0 18 18" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l5 5L16 3"/></svg>')+'</span>' : '')+
+          (msg.read ? '<svg viewBox="0 0 26 18" width="13" height="10" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l5 5L17 3"/><path d="M10 9l5 5L25 3"/></svg>' :
+          '<svg viewBox="0 0 18 18" width="12" height="10" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l5 5L16 3"/></svg>')+'</span>' : '')+
         '</span></div></div>';
     }).join('');
   }
@@ -250,6 +266,7 @@
       const key=messages.map(m=>m.id+':'+(m.read===true?'r':m.read===false?'s':'-')).join(',');
       if (force || key!==shownIds) {
         const holder=$('messenger-history');
+        const previousScrollTop=holder.scrollTop;
         const stickToBottom=force || holder.scrollHeight-holder.scrollTop-holder.clientHeight<90;
         if (!shownIds) {
           historyHasMore=Boolean(result.has_more);
@@ -258,6 +275,7 @@
         renderHistory(messages);
         shownIds=key;
         if (stickToBottom) holder.scrollTop=holder.scrollHeight;
+        else holder.scrollTop=previousScrollTop;
       }
       const contact=contacts.find(c=>c.id===targetPeer);
       if (contact?.unread>0 || force) {
@@ -377,6 +395,7 @@
     $('messenger-active-avatar').classList.remove('is-online');
     $('messenger-shell').classList.remove('chat-open','is-locked');
     document.body.classList.remove('messenger-mobile-chat-open');
+    syncChatViewport();
     $('messenger-message').disabled=true;
     $('messenger-send').disabled=true;
     $('messenger-history').innerHTML='<div class="messenger-empty">No Conversation has been Made</div>';
@@ -388,6 +407,7 @@
     if (!currentPage) {
       $('messenger-shell').classList.remove('chat-open');
       document.body.classList.remove('messenger-mobile-chat-open');
+      syncChatViewport();
     }
     if (currentPage && running) {
       loadList();
@@ -418,9 +438,15 @@
     });
     $('messenger-group-form').addEventListener('submit',createGroup);
     $('messenger-compose').addEventListener('submit',send);
+    window.addEventListener('resize',syncChatViewport,{passive:true});
+    if (window.visualViewport){
+      window.visualViewport.addEventListener('resize',syncChatViewport,{passive:true});
+      window.visualViewport.addEventListener('scroll',syncChatViewport,{passive:true});
+    }
     $('messenger-back').addEventListener('click',()=>{
       $('messenger-shell').classList.remove('chat-open');
       document.body.classList.remove('messenger-mobile-chat-open');
+      syncChatViewport();
     });
     document.addEventListener('visibilitychange',()=>{
       if (!document.hidden && running) {
