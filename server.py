@@ -933,6 +933,16 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK, connect() as db:
                     joined = messenger.join_alliance(db, actor)
                 return self.respond(200, {"joined": joined, "member": True})
+            if path == "/api/messenger/groups/join" and method == "POST":
+                actor, csrf = self.messenger_actor()
+                if actor is None:
+                    return self.respond(401, {"error": "An approved account is required."})
+                if not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), csrf):
+                    return self.respond(403, {"error": "Invalid CSRF token."})
+                data = self.read_json()
+                with LOCK, connect() as db:
+                    joined = messenger.join_group(db, actor, data.get("peer"))
+                return self.respond(200, {"joined": joined})
             if path == "/api/messenger/groups" and method == "POST":
                 actor, csrf = self.messenger_actor()
                 if actor is None:
