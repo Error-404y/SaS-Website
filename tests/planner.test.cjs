@@ -119,11 +119,11 @@ test('Origin Time is never mistaken for reduced actual training time', () => {
   assert.equal(known.actualSeconds, observed722);
   assert.equal(known.seconds, origin); // legacy origin record remains unchanged
 
-  const boosted = p.troopsForTargetPoints('marksman-10', 2166 * 1960, true, observed722);
+  const boosted = p.troopsForTargetPoints('marksman-10', 722 * 1960, true, observed722);
   assert.equal(boosted.quantity, 2166);
   assert.equal(boosted.originSeconds, 3 * origin);
   assert.equal(boosted.actualSeconds, 3 * observed722);
-  assert.equal(boosted.extraPoints, 0);
+  assert.equal(boosted.extraPoints, 2 * 722 * 1960);
   assert.equal(p.troopsForTargetPoints('guard-9', 1000, false, 0).actualSeconds, null);
   assert.equal(p.troopsForTargetPoints('guard-9', 1000, false, 999999).actualSeconds, null);
   assert.equal(p.troopsForTargetPoints('guard-9', 0, false, 40000).actualSeconds, 0);
