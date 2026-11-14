@@ -13,6 +13,7 @@
   let adapter = null, peer = '', me = '', contacts = [], latest = new Map();
   let reply = null, imagePayload = '', mentionables = [], lastTyping = 0, typingActive = false;
   let swiped = null, editingId = null, imageBusy = false;
+  let pendingConfirm = null;
   const context = () => adapter ? adapter.context() : {};
   const contextPeer = () => context().peer || '';
   const api = (path,data) => adapter.api(path,{method:'POST',body:JSON.stringify(data)});
@@ -100,6 +101,56 @@
     const dialog=$('rich-actions-dialog');
     if(dialog?.open)dialog.close();
   };
+  function closeRichConfirm() {
+    const dialog=$('rich-confirm-dialog');
+    if(dialog?.open)dialog.close();
+    pendingConfirm=null;
+  }
+  function openRichConfirm(kind,id) {
+    const messageId=idNumber(id);
+    const currentPeer=contextPeer();
+    if(!messageId || !currentPeer)return;
+    closeRichConfirm();
+    pendingConfirm={kind,id:messageId,peer:currentPeer};
+    const removing=kind==='delete';
+    $('rich-confirm-title').textContent=removing?'Delete message?':'Close this poll?';
+    $('rich-confirm-message').textContent=removing
+      ? 'Delete this message for everyone? This cannot be undone. Other players will see that the message was deleted.'
+      : 'Players will no longer be able to vote. Existing poll results will remain visible.';
+    $('rich-confirm-error').textContent='';
+    const submit=$('rich-confirm-submit');
+    submit.textContent=removing?'Delete for everyone':'Close poll';
+    submit.classList.toggle('rich-confirm-danger',removing);
+    submit.disabled=false;
+    document.querySelectorAll('[data-rich-confirm-cancel]').forEach(button=>button.disabled=false);
+    $('rich-confirm-dialog').showModal();
+    $('rich-confirm-cancel').focus();
+  }
+  async function submitRichConfirm(event) {
+    event.preventDefault();
+    if(!pendingConfirm)return;
+    const {kind,id,peer:requestedPeer}=pendingConfirm;
+    const submit=$('rich-confirm-submit');
+    if(submit.disabled)return;
+    if(contextPeer()!==requestedPeer) {
+      $('rich-confirm-error').textContent='This conversation has changed. Please try again.';
+      return;
+    }
+    submit.disabled=true;
+    document.querySelectorAll('[data-rich-confirm-cancel]').forEach(button=>button.disabled=true);
+    $('rich-confirm-error').textContent='';
+    try{
+      const path=kind==='delete'?'/api/messenger/messages/delete':'/api/messenger/polls/close';
+      await api(path,{peer:requestedPeer,id});
+      closeRichConfirm();
+      if(contextPeer()===requestedPeer)await adapter.reload();
+    }catch(error) {
+      $('rich-confirm-error').textContent=error.message||'Could not complete the action.';
+    }finally {
+      submit.disabled=false;
+      document.querySelectorAll('[data-rich-confirm-cancel]').forEach(button=>button.disabled=false);
+    }
+  }
   function replyTo(id) {
     const msg=latest.get(Number(id));
     if (!msg || msg.kind==='deleted' || msg.sender_key==='system') return;
@@ -126,6 +177,7 @@
     $('messenger-message').placeholder='Write a message...';
   }
   function onPeer(nextPeer, contact) {
+    closeRichConfirm();
     disableMenu();
     if (peer && typingActive) typing(false,peer);
     peer=nextPeer;
@@ -146,6 +198,7 @@
     }
   }
   function onClose(){
+    closeRichConfirm();
     disableMenu();
     if (typingActive) typing(false,peer);
     clearReply();
@@ -283,10 +336,7 @@
       disableMenu();return;
     }
     if(action.dataset.richDelete){
-      const id=idNumber(action.dataset.richDelete);
-      if (!id || !window.confirm('Delete this message for everyone?'))return;
-      try{await api('/api/messenger/messages/delete',{peer:contextPeer(),id});disableMenu();await adapter.reload();}
-      catch(e){say(e);}
+      openRichConfirm('delete',action.dataset.richDelete);
       return;
     }
     if(action.dataset.richVote){
@@ -297,10 +347,7 @@
       return;
     }
     if(action.dataset.richClosePoll){
-      if(!window.confirm('Close this poll? Players will no longer be able to vote.'))return;
-      try{await api('/api/messenger/polls/close',{peer:contextPeer(),
-        id:Number(action.dataset.richClosePoll)});await adapter.reload();}
-      catch(e){say(e);}
+      openRichConfirm('poll',action.dataset.richClosePoll);
     }
   }
   async function saveEdit(event) {
@@ -393,6 +440,14 @@
     $('rich-poll-add-option').addEventListener('click',addPollOption);
     $('rich-poll-form').addEventListener('submit',savePoll);
     $('rich-edit-form').addEventListener('submit',saveEdit);
+    $('rich-confirm-form').addEventListener('submit',submitRichConfirm);
+    document.querySelectorAll('[data-rich-confirm-cancel]').forEach(button=>
+      button.addEventListener('click',closeRichConfirm));
+    $('rich-confirm-dialog').addEventListener('cancel',event=>{
+      if($('rich-confirm-submit').disabled){event.preventDefault();return;}
+      pendingConfirm=null;
+    });
+    $('rich-confirm-dialog').addEventListener('close',()=>{pendingConfirm=null;});
     document.querySelectorAll('[data-rich-close]').forEach(button=>button.addEventListener(
       'click',()=>$('rich-'+button.dataset.richClose+'-dialog').close()));
   }
