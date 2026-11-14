@@ -358,6 +358,16 @@ def history_page(db, actor, target, before=None):
             (thread, MAX_HISTORY+1)).fetchall()
     has_more=len(rows)>MAX_HISTORY
     messages=[dict(row) for row in reversed(rows[:MAX_HISTORY])]
+    # The existing read cursor belongs to the *recipient*, not to the sender.
+    # Reveal it only for the sender's own messages in a private 1:1 chat.
+    # Self-notes, alliance chats and custom groups are intentionally excluded.
+    if thread.startswith("dm:") and target != actor:
+        read_row = db.execute("""SELECT last_read_id FROM chat_reads
+            WHERE member_key=? AND thread_key=?""", (target, thread)).fetchone()
+        recipient_read_id = read_row["last_read_id"] if read_row else 0
+        for message in messages:
+            if message["sender_key"] == actor:
+                message["read"] = message["id"] <= recipient_read_id
     return messages, has_more
 
 
