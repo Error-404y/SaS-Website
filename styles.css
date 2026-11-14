@@ -1036,3 +1036,69 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .messenger-own-profile{opacity:1;cursor:pointer!important;border-style:solid!important;background:#f9f5ff!important}
 .messenger-own-profile:hover{background:#eee5f7!important}
 @media(max-width:620px){.messenger-alliance-lock{inset:66px 0 66px}.messenger-join-content{margin:12px}}
+
+
+/* Mobile fixes: predictable document flow, accessible labels, and touch scrolling. */
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+html,body{max-width:100%;overflow-x:clip}
+.messenger-chat{position:relative}
+.messenger-alliance-lock{overflow-y:auto;overscroll-behavior:contain}
+.messenger-contact-list,.messenger-history{-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;touch-action:pan-y}
+.messenger-shell.is-locked .messenger-compose{display:none}
+.messenger-shell.is-locked .messenger-alliance-lock{bottom:0}
+.messenger-compose{min-width:0}
+.messenger-compose input{font-size:16px}
+@media(max-width:750px){
+  /* Remove the tall blank strip caused by reversing a min-height desktop layout. */
+  .layout,.layout.tools-open{display:flex;flex-direction:column;min-height:0}
+  .layout>.right-sidebar,.layout.tools-open>.right-sidebar{order:0}
+  .layout>.tools-sidebar,.layout.tools-open>.tools-sidebar{order:1}
+  .layout>.content,.layout.tools-open>.content{order:2}
+  .right-sidebar{position:relative;top:auto;z-index:2;flex:none}
+  .content{flex:0 0 auto;min-width:0;padding-bottom:32px}
+  .page,.post-list{min-width:0}
+  .empty-content{padding:35px 18px}
+  .empty-content p{line-height:1.55;margin-bottom:0}
+  /* Explore and calculator navigation must support sideways finger swipes. */
+  .sidebar-nav,.tools-nav{
+    display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;
+    touch-action:pan-x;scrollbar-width:thin;scroll-snap-type:x proximity;
+    padding-bottom:9px
+  }
+  .sidebar-nav button,.tools-nav button{flex:0 0 auto;scroll-snap-align:start}
+  .sidebar-nav::-webkit-scrollbar,.tools-nav::-webkit-scrollbar{display:block;height:3px}
+  .sidebar-nav::-webkit-scrollbar-thumb,.tools-nav::-webkit-scrollbar-thumb{background:#bda6d3;border-radius:8px}
+  .sidebar-nav::-webkit-scrollbar-track,.tools-nav::-webkit-scrollbar-track{background:#eeeaf4}
+  .tools-sidebar{position:relative;top:auto}
+}
+@media(max-width:620px){
+  #page-messenger{min-width:0}
+  #page-messenger .messenger-titlebar{margin-bottom:12px}
+  .messenger-shell{
+    position:relative;display:block;width:100%;height:min(74dvh,700px);
+    min-height:350px;max-height:none;overflow:hidden;border-radius:15px
+  }
+  .messenger-list,.messenger-chat{position:absolute;inset:0;min-height:0}
+  .messenger-list{overflow:hidden}
+  .messenger-contact-list{flex:1;min-height:0;overflow-y:auto;touch-action:pan-y}
+  /* A conversation acts like a standalone mobile chat instead of a short page widget. */
+  .messenger-shell.chat-open{
+    position:fixed;inset:0;z-index:90;width:100vw;height:100dvh;min-height:0;
+    max-height:none;border:0;border-radius:0;margin:0;box-shadow:none
+  }
+  .messenger-shell.chat-open .messenger-chat{display:flex;flex-direction:column}
+  .messenger-chat-header{height:66px;flex:none}
+  .messenger-history{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+  .messenger-compose{flex:none;padding:9px 11px calc(9px + env(safe-area-inset-bottom,0px));gap:8px}
+  .messenger-compose input{flex:1;min-width:0;width:0;height:44px}
+  .messenger-compose button{width:44px;height:44px;flex:none}
+  .messenger-alliance-lock{inset:66px 0 0}
+  .messenger-shell.is-locked .messenger-alliance-lock{bottom:0}
+  .messenger-shell.chat-open .messenger-error:not([hidden]){flex:none}
+  .messenger-join-content{max-width:min(340px,calc(100% - 24px));margin:12px;padding:22px 18px}
+  .messenger-join-content p{overflow-wrap:anywhere}
+}
+@supports not (height:100dvh){
+  @media(max-width:620px){.messenger-shell.chat-open{height:100vh}}
+}
