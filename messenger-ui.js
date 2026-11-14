@@ -8,7 +8,7 @@
     currentPage = false, running = false, busy = false, loadingPeer = '', listFlight = false,
     lastNotify = 0, selectedGroupPlayers = new Set(), sessionGeneration = 0,
     olderMessages = [], historyHasMore = false, oldestBefore = null, loadingOlder = false,
-    lastPresencePing = 0, presenceFlight = false;
+    lastPresencePing = 0, presenceFlight = false, keyboardBaseline = 0;
   let messageLoadDone = Promise.resolve();
   const avatar = item => item.group ? (item.id==='alliance'?'SaS':'GR') :
     String(item.username || '??').slice(0, 2).toUpperCase();
@@ -58,17 +58,25 @@
     }
     if (!currentPage || window.innerWidth>750) {
       root.style.removeProperty('--sas-messenger-viewport-height');
+      document.body.classList.remove('sas-messenger-keyboard');
+      keyboardBaseline=0;
       return;
     }
     const viewport=window.visualViewport;
     const height=viewport ? viewport.height : window.innerHeight;
+    // Detect the actual on-screen keyboard, not mere input focus. The old
+    // focus/blur class toggle could shift every message tap before its click
+    // event fired. Keep compact mode until the viewport really expands again.
+    keyboardBaseline=Math.max(keyboardBaseline,height);
+    const keyboardOpen=Boolean(viewport && keyboardBaseline-height>125);
+    document.body.classList.toggle('sas-messenger-keyboard',keyboardOpen);
     // iOS Safari can pan the *visual* viewport down when an input receives
     // focus, even though the document itself remains scroll-locked. Using
     // visualViewport.height alone would shorten the Messenger from document
     // y=0, leaving a large blank band between the composer and the keyboard.
     // The bottom of the actually visible area is pageTop + height in document
     // coordinates, so extend the page to that bottom only while typing.
-    const typing=document.body.classList.contains('sas-messenger-keyboard');
+    const typing=keyboardOpen;
     const pageTop=viewport ? (Number.isFinite(viewport.pageTop) ?
       viewport.pageTop : (window.scrollY || 0)+(viewport.offsetTop || 0)) : 0;
     const bottom=height+(typing ? Math.max(0,pageTop) : 0);
@@ -479,12 +487,12 @@
     $('messenger-group-form').addEventListener('submit',createGroup);
     $('messenger-compose').addEventListener('submit',send);
     $('messenger-message').addEventListener('focus',()=>{
-      // Give the keyboard maximum room while keeping the chat header and input.
-      document.body.classList.add('sas-messenger-keyboard');
+      // Wait for visualViewport resize instead of moving the screen on focus.
       requestAnimationFrame(syncChatViewport);
     });
     $('messenger-message').addEventListener('blur',()=>{
-      document.body.classList.remove('sas-messenger-keyboard');
+      // A blur occurs before the keyboard's closing animation finishes.
+      // Keep the layout stable until the real viewport expands.
       requestAnimationFrame(syncChatViewport);
     });
     window.addEventListener('resize',syncChatViewport,{passive:true});
