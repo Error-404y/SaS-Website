@@ -435,6 +435,8 @@ def purge_member(db, member_id):
     for thread in threads:
         people = thread[3:].split("|")
         if key in people:
+            rich.purge_messages(db,[row["id"] for row in db.execute(
+                "SELECT id FROM chat_messages WHERE thread_key=?",(thread,))])
             db.execute("DELETE FROM chat_messages WHERE thread_key=?", (thread,))
             db.execute("DELETE FROM chat_reads WHERE thread_key=?", (thread,))
     # Alliance messages no longer belong to the deleted account, but remain as
@@ -449,13 +451,29 @@ def purge_member(db, member_id):
         if db.execute("SELECT 1 FROM chat_group_members WHERE group_id=?",
                       (group_id,)).fetchone() is None:
             group_key="group:"+str(group_id)
+            rich.purge_messages(db,[row["id"] for row in db.execute(
+                "SELECT id FROM chat_messages WHERE thread_key=?",(group_key,))])
             db.execute("DELETE FROM chat_messages WHERE thread_key=?",(group_key,))
             db.execute("DELETE FROM chat_reads WHERE thread_key=?",(group_key,))
             db.execute("DELETE FROM chat_group_invites WHERE group_id=?",(group_id,))
             db.execute("DELETE FROM chat_groups WHERE id=?",(group_id,))
     db.execute("UPDATE chat_groups SET creator_key='deleted' WHERE creator_key=?",(key,))
     db.execute("UPDATE chat_messages SET sender_key='deleted' WHERE sender_key=? AND thread_key LIKE 'group:%'",(key,))
+    rich.purge_messages(db,[row["id"] for row in db.execute(
+        "SELECT id FROM chat_messages WHERE thread_key=?",("notes:"+key,))])
     db.execute("DELETE FROM chat_messages WHERE thread_key=?", ("notes:"+key,))
     db.execute("DELETE FROM chat_reads WHERE thread_key=?", ("notes:"+key,))
     db.execute("DELETE FROM chat_alliance_members WHERE member_key=?", (key,))
     db.execute("DELETE FROM chat_reads WHERE member_key=?", (key,))
+    # The removed account must leave no stored activity or poll-vote identity.
+    db.execute("DELETE FROM chat_presence WHERE member_key=?", (key,))
+    db.execute("DELETE FROM chat_typing WHERE member_key=?", (key,))
+    db.execute("DELETE FROM chat_poll_votes WHERE member_key=?", (key,))
+    db.execute("DELETE FROM chat_mentions WHERE member_key=?", (key,))
+    # Historical group messages stay anonymized; attached images do not.
+    photos=[row["id"] for row in db.execute("""SELECT id FROM chat_messages
+        WHERE sender_key='deleted' AND kind='image' AND deleted_at IS NULL""")]
+    rich.purge_messages(db,photos)
+    for message_id in photos:
+        db.execute("""UPDATE chat_messages SET body='',kind='deleted',deleted_at=?
+            WHERE id=?""",(now_utc(),message_id))
