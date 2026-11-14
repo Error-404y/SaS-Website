@@ -426,6 +426,11 @@ def mark_read(db, actor, target):
 def purge_member(db, member_id):
     """Destroy private messages when an account is permanently deleted."""
     key = member_key(member_id)
+    # Capture this account's group photos *before* anonymizing sender_key.
+    # Do not erase photos belonging to other previously deleted accounts.
+    photos=[row["id"] for row in db.execute("""SELECT id FROM chat_messages
+        WHERE sender_key=? AND kind='image' AND deleted_at IS NULL
+        AND (thread_key='alliance' OR thread_key LIKE 'group:%')""",(key,))]
     rows = db.execute("""SELECT thread_key FROM chat_messages
         WHERE thread_key LIKE 'dm:%' AND
         (sender_key=? OR thread_key LIKE ? OR thread_key LIKE ?)""",
@@ -471,8 +476,6 @@ def purge_member(db, member_id):
     db.execute("DELETE FROM chat_poll_votes WHERE member_key=?", (key,))
     db.execute("DELETE FROM chat_mentions WHERE member_key=?", (key,))
     # Historical group messages stay anonymized; attached images do not.
-    photos=[row["id"] for row in db.execute("""SELECT id FROM chat_messages
-        WHERE sender_key='deleted' AND kind='image' AND deleted_at IS NULL""")]
     rich.purge_messages(db,photos)
     for message_id in photos:
         db.execute("""UPDATE chat_messages SET body='',kind='deleted',deleted_at=?
