@@ -266,6 +266,7 @@
       const key=messages.map(m=>m.id+':'+(m.read===true?'r':m.read===false?'s':'-')).join(',');
       if (force || key!==shownIds) {
         const holder=$('messenger-history');
+        const previousScrollTop=holder.scrollTop;
         const stickToBottom=force || holder.scrollHeight-holder.scrollTop-holder.clientHeight<90;
         if (!shownIds) {
           historyHasMore=Boolean(result.has_more);
@@ -274,6 +275,7 @@
         renderHistory(messages);
         shownIds=key;
         if (stickToBottom) holder.scrollTop=holder.scrollHeight;
+        else holder.scrollTop=previousScrollTop;
       }
       const contact=contacts.find(c=>c.id===targetPeer);
       if (contact?.unread>0 || force) {
