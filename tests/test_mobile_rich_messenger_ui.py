@@ -51,10 +51,20 @@ class RichMessengerBrowserTests(unittest.TestCase):
                     {"id":"alliance","username":"SaS - Group Chat",
                      "player_name":"Everyone","group":True,"joined":True,
                      "can_mention_everyone":False,"unread":0,"last_id":3,"last_message":"Raid?"},
+                    {"id":"group:12","username":"SvS Team","player_name":"1 participant",
+                     "group":True,"can_invite":True,"joined":True,
+                     "unread":0,"last_id":3,"last_message":"Raid?"},
+                    {"id":"member:3","username":"Charlie","player_name":"Charlie Game",
+                     "group":False,"unread":0,"last_id":0,"last_message":""},
                     {"id":"member:2","username":"Bravo","player_name":"Bravo Game",
                      "group":False,"unread":0,"last_id":0,"last_message":""},
                     {"id":"member:1","username":"Alpha","player_name":"Alpha Game",
                      "group":False,"self":True,"unread":0,"last_id":0,"last_message":""}]}
+            elif u.path=="/api/messenger/groups/invite" and method=="GET":
+                data={"members":["member:1"],"pending":["member:2"],"remaining":23}
+            elif u.path=="/api/messenger/groups/invite" and method=="POST":
+                data={"invited":len(body.get("members",[])),
+                      "allow_history":body.get("allow_history")}
             elif u.path=="/api/messenger/mentionables":
                 data={"members":[{"id":"member:2","username":"Bravo","player_name":"Bravo Game"}]}
             elif u.path=="/api/messenger/messages" and method=="GET":
@@ -100,6 +110,51 @@ class RichMessengerBrowserTests(unittest.TestCase):
         page.locator('[data-messenger-peer="alliance"]').click(timeout=8000)
         page.locator('[data-rich-message="3"]').wait_for(state="visible",timeout=8000)
         return page,captures
+
+    def test_group_plus_invite_popup_history_toggle_and_mobile_fit(self):
+        page,captured=self.open_chat()
+        try:
+            # The alliance group has no creator-owned invite button.
+            self.assertFalse(page.locator("#messenger-add-players").is_visible())
+            page.locator("#messenger-back").click()
+            page.locator('[data-messenger-peer="group:12"]').click()
+            plus=page.locator("#messenger-add-players")
+            self.assertTrue(plus.is_visible())
+            plus.click()
+            dialog=page.locator("#messenger-invite-dialog")
+            self.assertTrue(dialog.evaluate("(x)=>x.open"))
+            self.assertIn("SvS Team",page.locator("#messenger-invite-title").inner_text())
+            # Existing and already-invited members must not be offered.
+            self.assertEqual(page.locator('[data-invite-player="member:2"]').count(),0)
+            self.assertEqual(page.locator('[data-invite-player="member:3"]').count(),1)
+            self.assertFalse(page.locator("#messenger-invite-history").is_checked())
+            self.assertEqual(page.locator("#messenger-invite-history-state").inner_text(),"No")
+            page.locator('[data-invite-player="member:3"]').check()
+            page.locator("#messenger-invite-send").click()
+            page.wait_for_function("""()=>!document.querySelector('#messenger-invite-dialog').open""")
+            sent=[x for x in captured if x[0]=="/api/messenger/groups/invite" and x[1]=="POST"]
+            self.assertEqual(len(sent),1,sent)
+            self.assertEqual(sent[0][2],{
+                "peer":"group:12","members":["member:3"],"allow_history":False})
+            plus.click()
+            page.locator("#messenger-invite-history").check()
+            self.assertEqual(page.locator("#messenger-invite-history-state").inner_text(),"Yes")
+            page.locator('[data-invite-player="member:3"]').check()
+            page.set_viewport_size({"width":320,"height":568})
+            bounds=dialog.bounding_box()
+            self.assertIsNotNone(bounds)
+            self.assertGreaterEqual(bounds["x"],-1,bounds)
+            self.assertLessEqual(bounds["x"]+bounds["width"],321,bounds)
+            self.assertGreaterEqual(bounds["y"],-1,bounds)
+            self.assertLessEqual(bounds["y"]+bounds["height"],569,bounds)
+            page.locator("#messenger-invite-send").click()
+            page.wait_for_function("""()=>!document.querySelector('#messenger-invite-dialog').open""")
+            sent=[x for x in captured if x[0]=="/api/messenger/groups/invite" and x[1]=="POST"]
+            self.assertEqual(len(sent),2,sent)
+            self.assertTrue(sent[1][2]["allow_history"])
+            self.assertEqual(sent[1][2]["members"],["member:3"])
+        finally:
+            page.close()
 
     def test_reply_mentions_edit_and_vote(self):
         page,captured=self.open_chat()
