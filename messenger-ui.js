@@ -163,6 +163,7 @@
       (contact.player_name || 'Private conversation'));
     const locked=(peer==='alliance' && !contact.joined) || !!contact.invitation;
     $('messenger-alliance-lock').hidden=!locked;
+    $('messenger-shell').classList.toggle('is-locked',locked);
     if (locked) {
       $('messenger-join-title').textContent=contact.username;
       $('messenger-join-description').textContent=contact.invitation
@@ -177,6 +178,7 @@
     $('messenger-message').disabled=locked;
     $('messenger-send').disabled=locked;
     $('messenger-shell').classList.add('chat-open');
+    document.body.classList.add('messenger-mobile-chat-open');
     renderContacts();
     if (locked) {
       $('messenger-history').innerHTML='<div class="messenger-empty">Join to unlock the conversation.</div>';
@@ -373,7 +375,8 @@
     olderMessages=[];historyHasMore=false;oldestBefore=null;
     lastPresencePing=0;
     $('messenger-active-avatar').classList.remove('is-online');
-    $('messenger-shell').classList.remove('chat-open');
+    $('messenger-shell').classList.remove('chat-open','is-locked');
+    document.body.classList.remove('messenger-mobile-chat-open');
     $('messenger-message').disabled=true;
     $('messenger-send').disabled=true;
     $('messenger-history').innerHTML='<div class="messenger-empty">No Conversation has been Made</div>';
@@ -382,6 +385,10 @@
   }
   function onPage(name){
     currentPage=name==='messenger';
+    if (!currentPage) {
+      $('messenger-shell').classList.remove('chat-open');
+      document.body.classList.remove('messenger-mobile-chat-open');
+    }
     if (currentPage && running) {
       loadList();
       if (activePeer) {
@@ -413,6 +420,7 @@
     $('messenger-compose').addEventListener('submit',send);
     $('messenger-back').addEventListener('click',()=>{
       $('messenger-shell').classList.remove('chat-open');
+      document.body.classList.remove('messenger-mobile-chat-open');
     });
     document.addEventListener('visibilitychange',()=>{
       if (!document.hidden && running) {
