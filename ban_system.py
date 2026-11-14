@@ -1,6 +1,6 @@
-"""Delayed, reversible account and network restrictions for SaS.
+"""Immediate, reversible account and network restrictions for SaS.
 
-Bans become effective only after a two-hour admin review period. All checks
+Bans are enforced from the moment an admin confirms them. All requests
 consult persistent SQLite state, not background jobs or CSS. Admins are
 intentionally exempt so a shared-address ban cannot lock out moderation.
 """
@@ -9,7 +9,7 @@ import json
 import re
 import time
 
-WAIT_SECONDS = 2 * 3600
+WAIT_SECONDS = 0  # Keep response compatibility: all new bans are immediate.
 KINDS = ("ip", "email", "name", "everything")
 
 
@@ -32,6 +32,11 @@ def setup(db):
         last_ip TEXT NOT NULL,
         seen_at INTEGER NOT NULL
     )""")
+    # Migrate previously queued two-hour bans to the new immediate policy.
+    # Do not reactivate bans which have been cancelled or revoked.
+    db.execute("""UPDATE moderation_bans SET effective_at=?
+        WHERE effective_at>? AND cancelled_at IS NULL AND revoked_at IS NULL""",
+        (int(time.time()),int(time.time())))
 
 
 def normalize_ip(raw):
@@ -81,15 +86,15 @@ def queue(db, member_id, kind, reason="", now=None):
     if not isinstance(reason,str) or len(reason)>500:
         raise ValueError("Reason must be 500 characters or less.")
     selectors = member_selectors(db,member_id,kind)
-    # Prevent rapidly queuing the same type for the same account.
+    # Avoid duplicate active bans of the same type for one account.
     existing = db.execute("""SELECT id FROM moderation_bans WHERE member_id=? AND kind=?
         AND cancelled_at IS NULL AND revoked_at IS NULL""",(member_id,kind)).fetchone()
     if existing:
-        raise ValueError("An active or pending ban of this type already exists.")
+        raise ValueError("An active ban of this type already exists.")
     cur=db.execute("""INSERT INTO moderation_bans(
         member_id,kind,selectors_json,reason,created_at,effective_at)
         VALUES(?,?,?,?,?,?)""",(member_id,kind,json.dumps(selectors,sort_keys=True),reason.strip(),
-                                now,now+WAIT_SECONDS))
+                                now,now))
     return cur.lastrowid
 
 
@@ -104,8 +109,7 @@ def list_bans(db, now=None):
         item.pop("selectors_json",None)  # admin UI does not need sensitive ban IPs
         item["username"]=item["username"] or "(deleted account)"
         item["status"]=("cancelled" if item["cancelled_at"] is not None else
-                        "revoked" if item["revoked_at"] is not None else
-                        "active" if item["effective_at"] <= now else "pending")
+                        "revoked" if item["revoked_at"] is not None else "active")
         results.append(item)
     return results
 
@@ -117,9 +121,8 @@ def stop(db, ban_id, now=None):
         raise LookupError("Ban not found.")
     if row["cancelled_at"] is not None or row["revoked_at"] is not None:
         raise ValueError("This ban has already been cancelled or removed.")
-    column="cancelled_at" if row["effective_at"]>now else "revoked_at"
-    db.execute("UPDATE moderation_bans SET "+column+"=? WHERE id=?",(now,ban_id))
-    return column=="cancelled_at"
+    db.execute("UPDATE moderation_bans SET revoked_at=? WHERE id=?",(now,ban_id))
+    return False
 
 
 def is_banned(db, *, ip="", email="", username="", player_name="", now=None):
