@@ -1188,3 +1188,18 @@ html,body{max-width:100%;overflow-x:clip}
   .messenger-shell.chat-open .messenger-read-receipt{width:12px;flex-basis:12px}
   .messenger-shell.chat-open .messenger-read-receipt svg{width:12px;height:10px}
 }
+
+/* Prevent calculator cards from widening the whole mobile page. */
+@media(max-width:750px){
+  #page-tool-chief,#page-tool-svs,#ref-chief-content,#ref-svs-content,
+  .tool-panel,.reference-intro,.ref-day-header,.ref-chests,.ref-milestone,
+  .ref-controls,.ref-speed-chart{min-width:0;max-width:100%}
+  .ref-chests{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ref-milestone{overflow-wrap:anywhere}
+  .reference-days{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;touch-action:pan-x;-webkit-overflow-scrolling:touch}
+  .reference-days button{flex:0 0 135px}
+  .ref-speed-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ref-result,.ref-day-header{min-width:0}
+  .ref-table{min-width:550px}
+  .table-container{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
