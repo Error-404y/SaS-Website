@@ -1,0 +1,156 @@
+"""End-to-end browser tests for the real SaS Messenger DOM and rich UI scripts.
+
+Uses fake authenticated API responses, never production accounts or networks.
+"""
+import io
+import json
+import re
+import unittest
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from PIL import Image
+from playwright.sync_api import sync_playwright
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def html_fixture():
+    html=(ROOT/"index.html").read_text(encoding="utf-8")
+    css=(ROOT/"styles.css").read_text(encoding="utf-8")
+    html=re.sub(r'<script\b[^>]*\bsrc="/[^"]+"[^>]*></script>',"",html)
+    return html.replace("</head>","<style>"+css+"</style></head>",1)
+
+
+class RichMessengerBrowserTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.playwright=sync_playwright().start()
+        cls.browser=cls.playwright.chromium.launch(headless=True)
+        cls.html=html_fixture()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.playwright.stop()
+
+    def open_chat(self):
+        page=self.browser.new_page(viewport={"width":390,"height":844},
+                                   is_mobile=True,has_touch=True)
+        captures=[]
+        def api(route):
+            u=urlsplit(route.request.url)
+            method=route.request.method
+            body=json.loads(route.request.post_data) if route.request.post_data else {}
+            captures.append((u.path,method,body))
+            if u.path=="/api/messenger":
+                data={"me":"member:1","contacts":[
+                    {"id":"alliance","username":"SaS - Group Chat",
+                     "player_name":"Everyone","group":True,"joined":True,
+                     "can_mention_everyone":False,"unread":0,"last_id":3,"last_message":"Raid?"},
+                    {"id":"member:2","username":"Bravo","player_name":"Bravo Game",
+                     "group":False,"unread":0,"last_id":0,"last_message":""},
+                    {"id":"member:1","username":"Alpha","player_name":"Alpha Game",
+                     "group":False,"self":True,"unread":0,"last_id":0,"last_message":""}]}
+            elif u.path=="/api/messenger/mentionables":
+                data={"members":[{"id":"member:2","username":"Bravo","player_name":"Bravo Game"}]}
+            elif u.path=="/api/messenger/messages" and method=="GET":
+                data={"peer":"alliance","me":"member:1","has_more":False,
+                  "typing":["Bravo Game"],
+                  "messages":[
+                    {"id":1,"sender_key":"member:2","body":"Original",
+                     "kind":"text","created_at":"2026-11-14 05:00:00",
+                     "reply_to_id":None,"edited_at":None,"deleted_at":None},
+                    {"id":2,"sender_key":"member:1","body":"My message",
+                     "kind":"text","created_at":"2026-11-14 05:01:00",
+                     "reply_to_id":None,"edited_at":None,"deleted_at":None},
+                    {"id":3,"sender_key":"member:2","body":"Raid?",
+                     "kind":"poll","created_at":"2026-11-14 05:02:00",
+                     "poll":{"question":"Raid?", "options":[
+                       {"position":0,"label":"Yes","votes":0},
+                       {"position":1,"label":"No","votes":0}],
+                       "total_votes":0,"my_vote":None,"closed":False}}]}
+            else:
+                data={"ok":True,"message":{"id":50},"poll":{"total_votes":1}}
+            route.fulfill(status=200,content_type="application/json",body=json.dumps(data))
+        page.route("**/api/**",api)
+        page.set_content(self.html,wait_until="load")
+        page.evaluate("""()=>{
+          document.querySelector('#auth-gate')?.remove();
+          document.querySelector('#entrance')?.remove();
+          document.querySelector('#website').classList.remove('hidden');
+          document.querySelector('#page-messenger').classList.remove('hidden');
+          document.querySelectorAll('.page:not(#page-messenger)').forEach(x=>x.classList.add('hidden'));
+        }""")
+        page.add_script_tag(content=(ROOT/"messenger-rich-ui.js").read_text(encoding="utf-8"))
+        page.add_script_tag(content=(ROOT/"messenger-ui.js").read_text(encoding="utf-8"))
+        page.evaluate("""()=>{
+          window.SasMessenger.init();
+          window.SasMessenger.onPage('messenger');
+          window.SasMessenger.start('test-token');
+        }""")
+        page.locator('[data-messenger-peer="alliance"]').click(timeout=8000)
+        page.locator('[data-rich-message="3"]').wait_for(state="visible",timeout=8000)
+        return page,captures
+
+    def test_reply_mentions_edit_and_vote(self):
+        page,captured=self.open_chat()
+        try:
+            self.assertIn("Bravo Game is typing",page.locator("#rich-typing").inner_text())
+            page.locator('[data-rich-message="1"] [data-rich-menu]').click()
+            page.locator('[data-rich-reply="1"]').click()
+            self.assertTrue(page.locator("#rich-reply-preview").is_visible())
+            page.locator("#messenger-message").fill("Answer @Br")
+            page.locator('[data-rich-mention="Bravo"]').click()
+            self.assertIn("@Bravo ",page.locator("#messenger-message").input_value())
+            page.locator("#messenger-send").click()
+            send=[x for x in captured if x[0]=="/api/messenger/messages" and x[1]=="POST"]
+            self.assertTrue(send, captured)
+            self.assertEqual(send[-1][2]["reply_to"],1)
+            self.assertIn("@Bravo",send[-1][2]["body"])
+            page.locator('[data-rich-message="2"] [data-rich-menu]').click()
+            page.locator('[data-rich-edit="2"]').click()
+            page.locator("#rich-edit-body").fill("Updated text")
+            page.locator("#rich-edit-submit").click()
+            edits=[x for x in captured if x[0]=="/api/messenger/messages/edit"]
+            self.assertTrue(edits)
+            self.assertEqual(edits[-1][2]["body"],"Updated text")
+            page.locator('[data-rich-vote="3"][data-rich-position="0"]').click()
+            votes=[x for x in captured if x[0]=="/api/messenger/polls/vote"]
+            self.assertTrue(votes)
+            self.assertEqual(votes[-1][2]["position"],0)
+        finally:
+            page.close()
+
+    def test_poll_creation_and_image_attachment(self):
+        page,captured=self.open_chat()
+        try:
+            page.locator("#rich-poll-trigger").click()
+            page.locator("#rich-poll-question").fill("Which event?")
+            options=page.locator("#rich-poll-options input")
+            options.nth(0).fill("Training")
+            options.nth(1).fill("Raid")
+            page.locator("#rich-poll-submit").click()
+            polls=[x for x in captured if x[0]=="/api/messenger/polls"]
+            self.assertTrue(polls)
+            self.assertEqual(polls[-1][2]["options"],["Training","Raid"])
+            image=Image.new("RGB",(24,24),(35,75,105))
+            output=io.BytesIO()
+            image.save(output,format="PNG")
+            page.locator("#rich-image-file").set_input_files({
+                "name":"game-screenshot.png","mimeType":"image/png",
+                "buffer":output.getvalue()})
+            page.locator("#rich-photo-preview").wait_for(state="visible",timeout=8000)
+            page.locator("#messenger-message").fill("My screenshot")
+            page.locator("#messenger-send").click()
+            page.wait_for_timeout(500)
+            images=[x for x in captured if x[0]=="/api/messenger/images"]
+            self.assertTrue(images)
+            self.assertGreater(len(images[-1][2]["image"]),100)
+            self.assertEqual(images[-1][2]["caption"],"My screenshot")
+        finally:
+            page.close()
+
+
+if __name__=="__main__":
+    unittest.main()
