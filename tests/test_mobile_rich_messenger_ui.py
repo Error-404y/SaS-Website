@@ -111,6 +111,14 @@ class RichMessengerBrowserTests(unittest.TestCase):
             self.assertTrue(send, captured)
             self.assertEqual(send[-1][2]["reply_to"],1)
             self.assertIn("@Bravo",send[-1][2]["body"])
+            # Wait for the async Send handler to finish its history refresh.
+            # Otherwise that refresh can replace the message menu mid-click.
+            page.wait_for_function("""()=>{
+              const send=document.querySelector('#messenger-send');
+              return !send.disabled &&
+                document.querySelector('#messenger-message').value==='' &&
+                document.querySelector('#rich-reply-preview').hidden;
+            }""", timeout=8000)
             page.locator('[data-rich-message="2"] [data-rich-menu]').click()
             page.locator('[data-rich-edit="2"]').click()
             page.locator("#rich-edit-body").fill("Updated text")
