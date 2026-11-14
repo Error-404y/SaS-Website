@@ -124,39 +124,9 @@ class RichMessengerBrowserTests(unittest.TestCase):
                 document.querySelector('#messenger-message').value==='' &&
                 document.querySelector('#rich-reply-preview').hidden;
             }""", timeout=8000)
-            page.evaluate("""()=>{
-              window.__menuTrace=[];
-              const history=document.querySelector('#messenger-history');
-              const detail=e=>{
-                const button=e.target.closest('[data-rich-menu]');
-                const item=document.querySelector('[data-rich-message="2"] .rich-message-menu');
-                window.__menuTrace.push({target:e.target.tagName,
-                  text:e.target.textContent.slice(0,25),
-                  menuClick:!!button,
-                  panelHidden:item?.hidden,
-                  expanded:document.querySelector('[data-rich-message="2"] [data-rich-menu]')
-                    ?.getAttribute('aria-expanded'),
-                  count:document.querySelectorAll('[data-rich-message="2"]').length});
-              };
-              history.addEventListener('click',detail);
-              document.addEventListener('click',detail);
-            }""")
             page.locator('[data-rich-message="2"] [data-rich-menu]').click()
-            menu_state=page.evaluate("""()=>{
-              const box=document.querySelector('[data-rich-message="2"] .rich-message-menu');
-              const trigger=document.querySelector('[data-rich-message="2"] [data-rich-menu]');
-              return {
-                hidden:box.hidden,
-                trace:window.__menuTrace,
-                html:box.outerHTML.slice(0,400),
-                display:getComputedStyle(box).display,
-                visibility:getComputedStyle(box).visibility,
-                expanded:trigger.getAttribute('aria-expanded'),
-                box:box.getBoundingClientRect().toJSON(),
-                history:document.querySelector('#messenger-history').getBoundingClientRect().toJSON()
-              };
-            }""")
-            self.assertFalse(menu_state['hidden'], menu_state)
+            self.assertTrue(page.locator("#rich-actions-dialog").evaluate("(d)=>d.open"))
+            self.assertTrue(page.locator('[data-rich-edit="2"]').is_visible())
             page.locator('[data-rich-edit="2"]').click(timeout=5000)
             page.locator("#rich-edit-body").fill("Updated text")
             page.locator("#rich-edit-submit").click()
