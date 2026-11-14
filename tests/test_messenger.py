@@ -200,6 +200,140 @@ class MessengerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertNotIn("read", alliance["messages"][-1])
 
+
+    def test_rich_replies_edit_delete_and_authorization(self):
+        a, ac, aid = self.login("Alpha")
+        b, bc, bid = self.login("Bravo")
+        c, cc, cid = self.login("Charlie")
+        sent = self.call("/api/messenger/messages", "POST",
+                         {"peer": bid, "body": "Original"}, a, ac)
+        self.assertEqual(sent[0], 201, sent)
+        msg = sent[1]["message"]["id"]
+        self.assertEqual(self.call("/api/messenger/messages", "POST",
+            {"peer": cid, "body": "Leaking reply", "reply_to": msg}, a, ac)[0],400)
+        self.assertEqual(self.call("/api/messenger/messages", "POST",
+            {"peer": aid, "body": "Reply", "reply_to": msg}, b, bc)[0],201)
+        history = self.call("/api/messenger/messages?peer="+aid,cookie=b)[1]["messages"]
+        self.assertEqual(history[-1]["reply"]["body"],"Original")
+        self.assertEqual(self.call("/api/messenger/messages/edit", "POST",
+            {"peer": bid, "id": msg, "body": "Unauthorized"}, b, bc)[0],403)
+        self.assertEqual(self.call("/api/messenger/messages/edit", "POST",
+            {"peer": bid, "id": msg, "body": "Changed"}, a, ac)[0],200)
+        history = self.call("/api/messenger/messages?peer="+aid,cookie=b)[1]["messages"]
+        self.assertEqual(history[0]["body"],"Changed")
+        self.assertTrue(history[0]["edited_at"])
+        self.assertEqual(self.call("/api/messenger/messages/delete", "POST",
+            {"peer": bid, "id": msg}, a, ac)[0],200)
+        history = self.call("/api/messenger/messages?peer="+aid,cookie=b)[1]["messages"]
+        self.assertEqual(history[0]["kind"],"deleted")
+        self.assertEqual(history[0]["body"],"")
+        self.assertEqual(history[-1]["reply"]["body"],"Message deleted")
+        self.assertEqual(self.call("/api/messenger/messages/edit", "POST",
+            {"peer": bid, "id": msg, "body":"Restore"}, a, ac)[0],400)
+        self.assertEqual(self.call("/api/messenger/messages/edit", "POST",
+            {"peer": bid, "id": msg, "body":"X"}, a)[0],403)
+
+    def test_rich_typing_indicator_scoped_by_conversation(self):
+        a,ac,aid = self.login("Alpha")
+        b,bc,bid = self.login("Bravo")
+        c,cc,cid = self.login("Charlie")
+        self.assertEqual(self.call("/api/messenger/typing","POST",
+            {"peer":bid,"active":True},a)[0],403)
+        self.assertEqual(self.call("/api/messenger/typing","POST",
+            {"peer":bid,"active":True},a,ac)[0],200)
+        self.assertEqual(self.call("/api/messenger/messages?peer="+aid,cookie=b)[1]["typing"],
+                         ["Alpha Game"])
+        self.assertEqual(self.call("/api/messenger/messages?peer="+aid,cookie=c)[1]["typing"],[])
+        self.assertEqual(self.call("/api/messenger/typing","POST",
+            {"peer":bid,"active":False},a,ac)[0],200)
+        self.assertEqual(self.call("/api/messenger/messages?peer="+aid,cookie=b)[1]["typing"],[])
+        self.assertEqual(self.call("/api/messenger/typing","POST",
+            {"peer":"alliance","active":True},a,ac)[0],400)
+
+    def test_rich_photo_is_private_and_deleted_media_unavailable(self):
+        import base64, io
+        from PIL import Image
+        a,ac,aid = self.login("Alpha")
+        b,bc,bid = self.login("Bravo")
+        c,cc,cid = self.login("Charlie")
+        im=Image.new("RGB",(12,12),(50,100,175))
+        out=io.BytesIO()
+        im.save(out,format="PNG")
+        encoded=base64.b64encode(out.getvalue()).decode()
+        self.assertEqual(self.call("/api/messenger/images","POST",
+            {"peer":bid,"image":encoded,"caption":"Battle report"},a)[0],403)
+        result=self.call("/api/messenger/images","POST",
+            {"peer":bid,"image":encoded,"caption":"Battle report"},a,ac)
+        self.assertEqual(result[0],201,result)
+        mid=result[1]["message"]["id"]
+        msg=self.call("/api/messenger/messages?peer="+aid,cookie=b)[1]["messages"][0]
+        self.assertEqual(msg["kind"],"image")
+        self.assertEqual(msg["body"],"Battle report")
+        with urlopen(Request(self.base+"/api/messenger/images/"+str(mid)+"?peer="+aid,
+                             headers={"Cookie":b}), timeout=6) as response:
+            self.assertEqual(response.headers["Content-Type"],"image/webp")
+            self.assertTrue(response.read().startswith(b"RIFF"))
+        for cookie,peer in ((None,aid),(c,aid),(b,cid)):
+            try:
+                urlopen(Request(self.base+"/api/messenger/images/"+str(mid)+"?peer="+peer,
+                                headers={"Cookie":cookie} if cookie else {}),timeout=6)
+                self.fail("Image exposed outside authorized chat.")
+            except HTTPError as exc:
+                self.assertIn(exc.code,(401,404))
+        self.assertEqual(self.call("/api/messenger/images","POST",
+            {"peer":bid,"image":"not-base64"},a,ac)[0],400)
+        self.assertEqual(self.call("/api/messenger/messages/delete","POST",
+            {"peer":bid,"id":mid},a,ac)[0],200)
+        try:
+            urlopen(Request(self.base+"/api/messenger/images/"+str(mid)+"?peer="+aid,
+                            headers={"Cookie":b}),timeout=6)
+            self.fail("Deleted image still accessible.")
+        except HTTPError as exc:
+            self.assertEqual(exc.code,404)
+
+    def test_rich_poll_voting_and_mention_notifications(self):
+        a,ac,aid = self.login("Alpha")
+        b,bc,bid = self.login("Bravo")
+        c,cc,cid = self.login("Charlie")
+        for cookie,csrf in ((a,ac),(b,bc)):
+            self.assertEqual(self.call("/api/messenger/alliance/join",
+                                      "POST",{},cookie,csrf)[0],200)
+        self.assertEqual(self.call("/api/messenger/mentionables?peer=alliance",
+                                   cookie=c)[0],404)
+        self.assertEqual(self.call("/api/messenger/polls","POST",
+            {"peer":bid,"question":"Private poll?","options":["Yes","No"]},a,ac)[0],400)
+        status,created=self.call("/api/messenger/polls","POST",
+            {"peer":"alliance","question":"Raid tonight?","options":["Yes","No"]},a,ac)
+        self.assertEqual(status,201,created)
+        poll_id=created["message"]["id"]
+        self.assertEqual(self.call("/api/messenger/polls/vote","POST",
+            {"peer":"alliance","id":poll_id,"position":1},c,cc)[0],400)
+        self.assertEqual(self.call("/api/messenger/polls/vote","POST",
+            {"peer":"alliance","id":poll_id,"position":1},b,bc)[0],200)
+        poll=self.call("/api/messenger/messages?peer=alliance",cookie=a)[1]["messages"][-1]["poll"]
+        self.assertEqual(poll["total_votes"],1)
+        self.assertEqual(poll["options"][1]["votes"],1)
+        self.assertEqual(self.call("/api/messenger/polls/vote","POST",
+            {"peer":"alliance","id":poll_id,"position":0},b,bc)[0],200)
+        self.assertEqual(self.call("/api/messenger/polls/close","POST",
+            {"peer":"alliance","id":poll_id},b,bc)[0],403)
+        self.assertEqual(self.call("/api/messenger/polls/close","POST",
+            {"peer":"alliance","id":poll_id},a,ac)[0],200)
+        self.assertEqual(self.call("/api/messenger/polls/vote","POST",
+            {"peer":"alliance","id":poll_id,"position":0},b,bc)[0],400)
+        self.assertEqual(self.call("/api/messenger/messages","POST",
+            {"peer":"alliance","body":"Hey @Bravo ready?"},a,ac)[0],201)
+        summary=self.call("/api/messenger",cookie=b)[1]
+        alliance=next(x for x in summary["contacts"] if x["id"]=="alliance")
+        self.assertEqual(alliance["mentions"],1)
+        self.assertEqual(self.call("/api/messenger/read","POST",
+            {"peer":"alliance"},b,bc)[0],200)
+        alliance=next(x for x in self.call("/api/messenger",cookie=b)[1]["contacts"]
+                       if x["id"]=="alliance")
+        self.assertEqual(alliance["mentions"],0)
+        self.assertEqual(self.call("/api/messenger/messages","POST",
+            {"peer":"alliance","body":"@everyone must not be allowed"},a,ac)[0],400)
+
     def test_self_notes_are_private_to_owner_and_survive_new_login(self):
         a,ac,aid=self.login("Alpha")
         b,bc,bid=self.login("Bravo")
