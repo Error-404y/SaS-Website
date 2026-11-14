@@ -2,14 +2,13 @@
 
 Uses fake authenticated API responses, never production accounts or networks.
 """
-import io
+import base64
 import json
 import re
 import unittest
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from PIL import Image
 try:
     from playwright.sync_api import sync_playwright
 except ImportError:
@@ -138,12 +137,13 @@ class RichMessengerBrowserTests(unittest.TestCase):
             polls=[x for x in captured if x[0]=="/api/messenger/polls"]
             self.assertTrue(polls)
             self.assertEqual(polls[-1][2]["options"],["Training","Raid"])
-            image=Image.new("RGB",(24,24),(35,75,105))
-            output=io.BytesIO()
-            image.save(output,format="PNG")
+            # Valid 24x24 PNG fixture; browser CI needs no Pillow dependency.
+            png=base64.b64decode(
+                "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqv"
+                "AAAAIklEQVR4nGNU9s5koAZgooopowaNGjRq0KhBowaNGkQRAABo5gEHfNTLSAAAAABJRU5ErkJggg==")
             page.locator("#rich-image-file").set_input_files({
                 "name":"game-screenshot.png","mimeType":"image/png",
-                "buffer":output.getvalue()})
+                "buffer":png})
             page.locator("#rich-photo-preview").wait_for(state="visible",timeout=8000)
             page.locator("#messenger-message").fill("My screenshot")
             page.locator("#messenger-send").click()
