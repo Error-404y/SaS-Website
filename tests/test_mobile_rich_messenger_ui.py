@@ -124,8 +124,27 @@ class RichMessengerBrowserTests(unittest.TestCase):
                 document.querySelector('#messenger-message').value==='' &&
                 document.querySelector('#rich-reply-preview').hidden;
             }""", timeout=8000)
+            page.evaluate("""()=>{
+              window.__actionTrace=[];
+              const dialog=document.querySelector('#rich-actions-dialog');
+              const history=document.querySelector('#messenger-history');
+              const observe=(phase,e)=>window.__actionTrace.push({
+                phase,target:e.target.tagName,
+                attr:e.target.getAttribute('data-rich-menu'),
+                open:dialog.open,dialogConnected:dialog.isConnected,
+                messageCount:history.querySelectorAll('[data-rich-message]').length
+              });
+              history.addEventListener('click',e=>observe('capture',e),true);
+              history.addEventListener('click',e=>observe('bubble',e));
+              document.addEventListener('click',e=>observe('document',e));
+              window.addEventListener('error',e=>window.__actionTrace.push({phase:'error',message:e.message}));
+            }""")
             page.locator('[data-rich-message="2"] [data-rich-menu]').click()
-            self.assertTrue(page.locator("#rich-actions-dialog").evaluate("(d)=>d.open"))
+            state=page.evaluate("""()=>({
+              open:document.querySelector('#rich-actions-dialog').open,
+              trace:window.__actionTrace
+            })""")
+            self.assertTrue(state["open"],state)
             self.assertTrue(page.locator('[data-rich-edit="2"]').is_visible())
             page.locator('[data-rich-edit="2"]').click(timeout=5000)
             page.locator("#rich-edit-body").fill("Updated text")
