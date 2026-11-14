@@ -173,13 +173,14 @@
     catch(_) { /* Typing is best effort and must not block Messenger. */ }
   }
   async function prepareImage(file) {
-    if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Choose PNG, JPEG or WebP.');
+    if (!file || !/^image\/(jpeg|png|webp|heic|heif)$/.test(file.type)) throw new Error('Choose a JPEG, PNG, WebP or supported iPhone HEIC photo.');
     if (file.size>12*1024*1024) throw new Error('Choose an image smaller than 12 MB.');
     const source=URL.createObjectURL(file);
     try {
       const image=new Image();
       image.src=source;
       await image.decode();
+      if (image.width*image.height > 32000000) throw new Error('This photo is too large. Choose a smaller version.');
       const ratio=Math.min(1,1600/Math.max(image.width,image.height));
       const canvas=document.createElement('canvas');
       canvas.width=Math.max(1,Math.round(image.width*ratio));
