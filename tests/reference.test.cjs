@@ -173,3 +173,17 @@ test('Troop Training distinguishes screenshot Origin Time from actual in-game ti
   assert.match(ui,/el\('planner-send-speedups'\)\.disabled = data\.actualSeconds === null/);
   assert.doesNotMatch(ui,/Training time reduction/);
 });
+
+test('Private group invitation displays notification and stays blurred until acceptance',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const ui=fs.readFileSync(path.join(__dirname,'../messenger-ui.js'),'utf8');
+  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+  assert.match(ui,/has invited you to join a Group/);
+  assert.match(ui,/INVITED/);
+  assert.match(ui,/contact\.invitation/);
+  assert.match(ui,/messenger\/groups\/join/);
+  assert.match(ui,/Join Group/);
+  assert.match(ui,/if \(locked\)/);
+  assert.match(html,/id="messenger-join-description"/);
+  assert.match(html,/id="messenger-alliance-lock"/);
+});
