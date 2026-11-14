@@ -49,6 +49,18 @@ def setup(db):
     )""")
     db.execute("""CREATE INDEX IF NOT EXISTS chat_groups_by_member
         ON chat_group_members(member_key,group_id)""")
+    db.execute("""CREATE TABLE IF NOT EXISTS chat_group_invites (
+        group_id INTEGER NOT NULL,
+        member_key TEXT NOT NULL,
+        invited_by TEXT NOT NULL,
+        invited_at TEXT NOT NULL,
+        joined_at TEXT,
+        PRIMARY KEY(group_id,member_key)
+    )""")
+    db.execute("""CREATE INDEX IF NOT EXISTS chat_group_invites_member
+        ON chat_group_invites(member_key,joined_at)""")
+    # Older groups already have accepted memberships in chat_group_members.
+    # Do not turn any of those existing memberships back into invitations.
     # Existing approved accounts retain their previous shared-chat access.
     existing = db.execute("""SELECT 1 FROM sqlite_master WHERE type='table'
         AND name='chat_alliance_members'""").fetchone()
@@ -127,6 +139,57 @@ def group_details(db, actor, target):
     return group
 
 
+def pending_group_invitation(db, actor, target):
+    if not isinstance(target, str) or not target.startswith("group:"):
+        return None
+    suffix=target[6:]
+    if not suffix.isdecimal() or len(suffix)>14:
+        return None
+    return db.execute("""SELECT i.group_id,i.invited_by,g.name
+        FROM chat_group_invites i JOIN chat_groups g ON g.id=i.group_id
+        WHERE i.group_id=? AND i.member_key=? AND i.joined_at IS NULL
+        AND NOT EXISTS (
+            SELECT 1 FROM chat_group_members m
+            WHERE m.group_id=i.group_id AND m.member_key=i.member_key
+        )""",(int(suffix),actor)).fetchone()
+
+
+def actor_name(db, actor):
+    if actor == ADMIN:
+        return "SaS Admin"
+    member = approved_member(db,actor)
+    return str(member["player_name"]) if member else "Former member"
+
+
+def join_group(db, actor, target):
+    if not valid_actor(db,actor):
+        raise PermissionError("Approved account required.")
+    if not isinstance(target,str) or not target.startswith("group:"):
+        raise ValueError("Group not found.")
+    invitation = pending_group_invitation(db,actor,target)
+    if invitation is None:
+        # Repeated presses are idempotent if the account already joined.
+        if group_details(db,actor,target):
+            return False
+        raise ValueError("You have not been invited to this group.")
+    stamp=now_utc()
+    updated=db.execute("""UPDATE chat_group_invites SET joined_at=?
+        WHERE group_id=? AND member_key=? AND joined_at IS NULL""",
+        (stamp,invitation["group_id"],actor))
+    if not updated.rowcount:
+        return False
+    db.execute("""INSERT OR IGNORE INTO chat_group_members(group_id,member_key)
+        VALUES(?,?)""",(invitation["group_id"],actor))
+    body=actor_name(db,actor)+" joined the Group !"
+    cur=db.execute("""INSERT INTO chat_messages(thread_key,sender_key,body,created_at)
+        VALUES(?,?,?,?)""",(target,"system",body,stamp))
+    db.execute("""INSERT INTO chat_reads(member_key,thread_key,last_read_id)
+        VALUES(?,?,?) ON CONFLICT(member_key,thread_key) DO UPDATE SET
+        last_read_id=MAX(chat_reads.last_read_id,excluded.last_read_id)""",
+        (actor,target,cur.lastrowid))
+    return True
+
+
 def create_group(db, actor, name, participants):
     if not valid_actor(db, actor):
         raise PermissionError("Approved account required.")
@@ -145,9 +208,12 @@ def create_group(db, actor, name, participants):
     cur=db.execute("""INSERT INTO chat_groups(name,creator_key,created_at)
         VALUES(?,?,?)""",(name,actor,now_utc()))
     group_id=cur.lastrowid
-    for member in keys|{actor}:
-        db.execute("INSERT INTO chat_group_members(group_id,member_key) VALUES(?,?)",
-                   (group_id,member))
+    db.execute("INSERT INTO chat_group_members(group_id,member_key) VALUES(?,?)",
+               (group_id,actor))
+    for member in keys:
+        db.execute("""INSERT INTO chat_group_invites(
+            group_id,member_key,invited_by,invited_at) VALUES(?,?,?,?)""",
+            (group_id,member,actor,now_utc()))
     return "group:"+str(group_id)
 
 
@@ -188,6 +254,18 @@ def contact_list(db, actor):
         contacts.append({"id": "group:"+str(group["id"]), "username": group["name"],
                          "player_name": str(group["participants"])+" participants",
                          "group": True, "pinned": False})
+    for invitation in db.execute("""SELECT g.id,g.name,i.invited_by
+        FROM chat_group_invites i JOIN chat_groups g ON g.id=i.group_id
+        WHERE i.member_key=? AND i.joined_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM chat_group_members gm
+            WHERE gm.group_id=i.group_id AND gm.member_key=i.member_key)
+        ORDER BY g.id DESC""",(actor,)):
+        sender=actor_name(db,invitation["invited_by"])
+        contacts.append({"id": "group:"+str(invitation["id"]),
+            "username":invitation["name"],
+            "player_name":"Private group invitation",
+            "group":True,"pinned":False,"joined":False,
+            "invited_by":sender,"invitation":True})
     if actor != ADMIN:
         contacts.append({"id": ADMIN, "username": "SaS Admin", "player_name": "Administrator", "group": False})
         own = approved_member(db, actor)
@@ -210,6 +288,12 @@ def summaries(db, actor):
         if target == ALLIANCE and not contact["joined"]:
             summaries_out.append({**contact,"last_message":"","last_at":None,
                 "last_id":0,"last_sender":None,"unread":0})
+            continue
+        if contact.get("invitation"):
+            summaries_out.append({**contact,
+                "last_message":contact["invited_by"]+" has invited you to join a Group",
+                "last_at":None, "last_id":0, "last_sender":None,
+                "unread":1})
             continue
         thread = thread_for(db, actor, target)
         latest = db.execute("""SELECT id,sender_key,body,created_at
@@ -313,6 +397,7 @@ def purge_member(db, member_id):
     # Remove group memberships and delete groups that become empty.
     ids=[row["group_id"] for row in db.execute(
         "SELECT group_id FROM chat_group_members WHERE member_key=?",(key,))]
+    db.execute("DELETE FROM chat_group_invites WHERE member_key=?",(key,))
     db.execute("DELETE FROM chat_group_members WHERE member_key=?",(key,))
     for group_id in ids:
         if db.execute("SELECT 1 FROM chat_group_members WHERE group_id=?",
@@ -320,7 +405,9 @@ def purge_member(db, member_id):
             group_key="group:"+str(group_id)
             db.execute("DELETE FROM chat_messages WHERE thread_key=?",(group_key,))
             db.execute("DELETE FROM chat_reads WHERE thread_key=?",(group_key,))
+            db.execute("DELETE FROM chat_group_invites WHERE group_id=?",(group_id,))
             db.execute("DELETE FROM chat_groups WHERE id=?",(group_id,))
+    db.execute("DELETE FROM chat_group_invites WHERE invited_by=?",(key,))
     db.execute("UPDATE chat_groups SET creator_key='deleted' WHERE creator_key=?",(key,))
     db.execute("UPDATE chat_messages SET sender_key='deleted' WHERE sender_key=? AND thread_key LIKE 'group:%'",(key,))
     db.execute("DELETE FROM chat_messages WHERE thread_key=?", ("notes:"+key,))
