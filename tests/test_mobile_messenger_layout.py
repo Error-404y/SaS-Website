@@ -182,6 +182,54 @@ class MobileMessengerLayoutTests(unittest.TestCase):
         finally:
             page.close()
 
+    def test_ios_keyboard_pan_keeps_composer_above_keyboard(self):
+        # iOS Safari may pan its visual viewport when the keyboard opens.
+        # Regression screenshot: viewport height was applied without pageTop,
+        # which left a huge empty band below the message composer.
+        for page_top,visible_height in ((300,250),(175,330),(0,420)):
+            with self.subTest(page_top=page_top,visible_height=visible_height):
+                page=self.browser.new_page(viewport={"width":390,"height":780},
+                                           is_mobile=True,has_touch=True)
+                try:
+                    page.set_content(self.html,wait_until="load")
+                    page.add_script_tag(content=(ROOT / "messenger-ui.js").read_text(encoding="utf-8"))
+                    page.evaluate("""(geometry)=>{
+                      Object.defineProperty(window,'visualViewport',{
+                        configurable:true,
+                        value:{
+                          pageTop:geometry.pageTop,
+                          offsetTop:geometry.pageTop,
+                          height:geometry.height,
+                          addEventListener:()=>{}
+                        }
+                      });
+                      window.SasMessenger.onPage('messenger');
+                      document.body.classList.add('sas-messenger-keyboard');
+                      window.SasMessenger.onPage('messenger');
+                    }""", {"pageTop":page_top,"height":visible_height})
+                    target_bottom=page_top+visible_height
+                    data=page.evaluate("""()=>{
+                      const composer=document.querySelector('#messenger-compose').getBoundingClientRect();
+                      const send=document.querySelector('#messenger-send').getBoundingClientRect();
+                      return {
+                        composerBottom:composer.bottom,
+                        composerTop:composer.top,
+                        sendRight:send.right,
+                        documentScrollTop:document.scrollingElement.scrollTop,
+                        effectiveHeight:parseFloat(getComputedStyle(document.documentElement)
+                          .getPropertyValue('--sas-messenger-viewport-height')),
+                        visible:!!send.width && !!send.height
+                      };
+                    }""")
+                    self.assertAlmostEqual(data["effectiveHeight"],target_bottom,delta=1,msg=data)
+                    self.assertLessEqual(data["composerBottom"],target_bottom+1,data)
+                    self.assertGreaterEqual(data["composerBottom"],target_bottom-24,data)
+                    self.assertLessEqual(data["sendRight"],390,data)
+                    self.assertTrue(data["visible"],data)
+                    self.assertEqual(data["documentScrollTop"],0,data)
+                finally:
+                    page.close()
+
     def assert_layout(self,page,width,height):
         data=page.evaluate("""()=>{
           const box = selector => {
