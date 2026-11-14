@@ -808,6 +808,27 @@
     <button type="button" id="rich-action-delete" data-rich-delete="0" hidden>Delete message</button>
     <button type="button" data-rich-cancel>Cancel</button>
   </dialog>
+  <dialog id="rich-confirm-dialog" class="dialog rich-dialog rich-confirm-dialog"
+    aria-labelledby="rich-confirm-title" aria-describedby="rich-confirm-message">
+    <form id="rich-confirm-form">
+      <div class="dialog-top">
+        <div>
+          <span class="section-kicker">SAS MESSENGER</span>
+          <h2 id="rich-confirm-title">Please confirm</h2>
+        </div>
+        <button type="button" class="close-button" data-rich-confirm-cancel
+          aria-label="Cancel and close">×</button>
+      </div>
+      <p id="rich-confirm-message" class="rich-confirm-message"></p>
+      <p id="rich-confirm-error" class="form-error" role="alert" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" id="rich-confirm-cancel" class="small-button"
+          data-rich-confirm-cancel>Cancel</button>
+        <button type="submit" id="rich-confirm-submit"
+          class="danger-button rich-confirm-submit">Confirm</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="rich-edit-dialog" class="dialog rich-dialog" aria-labelledby="rich-edit-title">
     <form id="rich-edit-form">
       <div class="dialog-top">

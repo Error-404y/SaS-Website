@@ -72,7 +72,13 @@ class RichMessengerBrowserTests(unittest.TestCase):
                      "poll":{"question":"Raid?", "options":[
                        {"position":0,"label":"Yes","votes":0},
                        {"position":1,"label":"No","votes":0}],
-                       "total_votes":0,"my_vote":None,"closed":False}}]}
+                       "total_votes":0,"my_vote":None,"closed":False}},
+                    {"id":4,"sender_key":"member:1","body":"Which day?",
+                     "kind":"poll","created_at":"2026-11-14 05:04:00",
+                     "poll":{"question":"Which day?", "options":[
+                       {"position":0,"label":"Friday","votes":1},
+                       {"position":1,"label":"Saturday","votes":0}],
+                       "total_votes":1,"my_vote":0,"closed":False}}]}
             else:
                 data={"ok":True,"message":{"id":50},"poll":{"total_votes":1}}
             route.fulfill(status=200,content_type="application/json",body=json.dumps(data))
@@ -156,6 +162,59 @@ class RichMessengerBrowserTests(unittest.TestCase):
             votes=[x for x in captured if x[0]=="/api/messenger/polls/vote"]
             self.assertTrue(votes)
             self.assertEqual(votes[-1][2]["position"],0)
+        finally:
+            page.close()
+
+    def test_close_poll_and_delete_message_use_styled_confirmation(self):
+        page,captured=self.open_chat()
+        try:
+            # Native browser confirm must never be used for these actions.
+            page.evaluate("""()=>{
+              window.confirm=()=>{throw new Error('Native confirmation should not be used');};
+            }""")
+            page.locator('[data-rich-close-poll="4"]').click()
+            dialog=page.locator("#rich-confirm-dialog")
+            self.assertTrue(dialog.evaluate("(d)=>d.open"))
+            self.assertEqual(page.locator("#rich-confirm-title").inner_text(),"Close this poll?")
+            self.assertIn("no longer be able to vote",
+                          page.locator("#rich-confirm-message").inner_text())
+            self.assertEqual(page.locator("#rich-confirm-submit").inner_text(),"Close poll")
+            # On a narrow phone, the entire dialog and both buttons must fit.
+            page.set_viewport_size({"width":320,"height":568})
+            box=dialog.bounding_box()
+            self.assertIsNotNone(box)
+            self.assertGreaterEqual(box["x"],-1,box)
+            self.assertLessEqual(box["x"]+box["width"],321,box)
+            self.assertLessEqual(box["y"]+box["height"],569,box)
+            page.locator("#rich-confirm-cancel").click()
+            self.assertFalse(dialog.evaluate("(d)=>d.open"))
+            self.assertFalse([x for x in captured if x[0]=="/api/messenger/polls/close"])
+            page.locator('[data-rich-close-poll="4"]').click()
+            page.locator("#rich-confirm-submit").click()
+            page.wait_for_function("""()=>!document.querySelector('#rich-confirm-dialog').open""")
+            polls=[x for x in captured if x[0]=="/api/messenger/polls/close"]
+            self.assertEqual(len(polls),1,polls)
+            self.assertEqual(polls[0][2],{"peer":"alliance","id":4})
+
+            # Message deletion uses the exact same popup, not an alert.
+            page.locator('[data-rich-message="2"] [data-rich-menu]').click()
+            page.locator('[data-rich-delete="2"]').click()
+            self.assertTrue(dialog.evaluate("(d)=>d.open"))
+            self.assertEqual(page.locator("#rich-confirm-title").inner_text(),"Delete message?")
+            self.assertIn("Delete this message for everyone?",
+                          page.locator("#rich-confirm-message").inner_text())
+            self.assertEqual(page.locator("#rich-confirm-submit").inner_text(),"Delete for everyone")
+            self.assertFalse([x for x in captured if x[0]=="/api/messenger/messages/delete"])
+            page.keyboard.press("Escape")
+            self.assertFalse(dialog.evaluate("(d)=>d.open"))
+            self.assertFalse([x for x in captured if x[0]=="/api/messenger/messages/delete"])
+            page.locator('[data-rich-message="2"] [data-rich-menu]').click()
+            page.locator('[data-rich-delete="2"]').click()
+            page.locator("#rich-confirm-submit").click()
+            page.wait_for_function("""()=>!document.querySelector('#rich-confirm-dialog').open""")
+            deleted=[x for x in captured if x[0]=="/api/messenger/messages/delete"]
+            self.assertEqual(len(deleted),1,deleted)
+            self.assertEqual(deleted[0][2],{"peer":"alliance","id":2})
         finally:
             page.close()
 

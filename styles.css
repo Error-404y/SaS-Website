@@ -1623,3 +1623,44 @@ html,body{max-width:100%;overflow-x:clip}
    width:min(calc(100vw - 16px),460px);max-width:calc(100vw - 16px);
    border-radius:19px;padding:14px}
 }
+
+
+/* Branded confirmations replace browser-native confirm() for Messenger actions.
+   This dialog lives outside the scroll-clipped mobile chat and remains visible. */
+.rich-confirm-dialog{
+  box-sizing:border-box;
+  width:min(92vw,390px);
+  max-width:92vw;
+  max-height:calc(100dvh - 32px);
+  margin:auto;
+  padding:24px;
+  border:1px solid #e9daef;
+  border-radius:20px;
+  box-shadow:0 24px 75px rgba(34,20,57,.28);
+  background:#fff;
+}
+.rich-confirm-dialog .dialog-top{margin-bottom:15px;padding-bottom:15px}
+.rich-confirm-dialog h2{font-size:21px;line-height:1.2;overflow-wrap:anywhere}
+.rich-confirm-message{color:#6b6376;font-size:14px;line-height:1.6;margin:0;overflow-wrap:anywhere}
+.rich-confirm-dialog .form-error:empty{display:none}
+.rich-confirm-dialog .dialog-actions{gap:10px;margin-top:23px;flex-wrap:nowrap}
+.rich-confirm-dialog .dialog-actions button{
+  min-width:0;
+  flex:1 1 0;
+  min-height:44px;
+  margin:0;
+  padding:11px 12px;
+  font-weight:750;
+  border-radius:10px;
+  text-align:center;
+}
+.rich-confirm-dialog .rich-confirm-submit{background:#6c4594;border-color:#6c4594;color:white}
+.rich-confirm-dialog .rich-confirm-submit.rich-confirm-danger{background:#b33b51;border-color:#b33b51;color:white}
+.rich-confirm-dialog .rich-confirm-submit:hover{filter:brightness(.95)}
+.rich-confirm-dialog button:disabled{opacity:.55;cursor:wait}
+.rich-confirm-dialog::backdrop{background:rgba(20,14,32,.52);backdrop-filter:blur(5px)}
+@media(max-width:620px){
+  .rich-confirm-dialog{width:calc(100vw - 28px);max-width:calc(100vw - 28px);padding:20px}
+  .rich-confirm-dialog h2{font-size:20px}
+  .rich-confirm-dialog .dialog-actions{gap:8px}
+}
