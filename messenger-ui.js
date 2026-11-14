@@ -137,6 +137,7 @@
       (!item.group && !item.self && (item.online || item.last_seen_at) ?
         '<small class="messenger-presence-line'+(item.online?' online':'')+'">'+escape(presenceText(item))+'</small>' : '')+'</span>'+
       '<span class="messenger-contact-meta"><small>'+escape(showTime(item.last_at))+'</small>'+
+      (item.mentions ? '<span class="rich-mention-count" title="You were mentioned">@'+Math.min(item.mentions,99)+'</span>' : '')+
       (item.unread ? '<span class="messenger-contact-badge">'+Math.min(item.unread,99)+(item.unread>99?'+':'')+'</span>':'')+
       '</span></button>';
   }
@@ -208,6 +209,7 @@
     $('messenger-message').disabled=locked;
     $('messenger-send').disabled=locked;
     $('messenger-shell').classList.add('chat-open');
+    window.SasRich.onPeer(peer,contact);
     document.body.classList.add('messenger-mobile-chat-open');
     syncChatViewport();
     renderContacts();
@@ -245,24 +247,9 @@
     finally{loadingOlder=false;}
   }
   function messagesMarkup(messages) {
-    if (!messages.length) return '<div class="messenger-empty">No messages yet. '+(activePeer===identity?'Save a note to yourself!':'Say hello!')+'</div>';
-    return messages.map(msg => {
-      const mine = msg.sender_key===identity;
-      const sender = msg.sender_key==='system' ? 'SaS Group' :
-        (msg.sender_key==='admin' ? 'SaS Admin' :
-        (contacts.find(c=>c.id===msg.sender_key)?.username || (mine ? 'You' : 'Former member')));
-      if (msg.sender_key==='system') return '<div class="messenger-system-message">'+escape(msg.body)+'</div>';
-      return '<div class="messenger-line'+(mine?' mine':'')+'">'+
-        '<div class="messenger-bubble">'+
-        ((activePeer==='alliance'||activePeer.startsWith('group:')) ? '<strong>'+escape(mine?'You':sender)+'</strong>' : '')+
-        '<span class="messenger-bubble-text">'+escape(msg.body)+'</span>'+
-        '<span class="messenger-bubble-footer"><time>'+escape(showTime(msg.created_at))+'</time>'+
-        (mine && typeof msg.read==='boolean' ?
-          '<span class="messenger-read-receipt'+(msg.read?' is-read':'')+'" aria-label="'+(msg.read?'Read':'Sent, not yet read')+'" title="'+(msg.read?'Read':'Sent, not yet read')+'">'+
-          (msg.read ? '<svg viewBox="0 0 26 18" width="13" height="10" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l5 5L17 3"/><path d="M10 9l5 5L25 3"/></svg>' :
-          '<svg viewBox="0 0 18 18" width="12" height="10" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l5 5L16 3"/></svg>')+'</span>' : '')+
-        '</span></div></div>';
-    }).join('');
+    return window.SasRich.messageMarkup(messages, {
+      peer:activePeer, me:identity, contacts
+    });
   }
   async function loadMessages(force=false) {
     // A hidden conversation must not mark newly arrived messages as read.
@@ -279,9 +266,11 @@
           activePeer!==targetPeer || !currentPage ||
           !$('messenger-shell').classList.contains('chat-open')) return;
       const messages=result.messages||[];
+      window.SasRich.onMessageData(result);
       // Include receipt state so a read acknowledgement updates existing bubbles
       // even if no new messages arrived.
-      const key=messages.map(m=>m.id+':'+(m.read===true?'r':m.read===false?'s':'-')).join(',');
+      const key=JSON.stringify(messages.map(m=>[m.id,m.body,m.kind,m.edited_at,m.deleted_at,
+        m.read,m.mentioned_me,m.reply,m.poll]));
       if (force || key!==shownIds) {
         const holder=$('messenger-history');
         const previousScrollTop=holder.scrollTop;
@@ -317,14 +306,19 @@
     event.preventDefault();
     if (!running || !activePeer || busy) return;
     const input=$('messenger-message'), body=input.value.trim();
-    if (!body) return;
+    if (!body && !window.SasRich.hasImage()) return;
     busy=true;
     $('messenger-send').disabled=true;
     error();
     try {
-      await api('/api/messenger/messages',{method:'POST',
-        body:JSON.stringify({peer:activePeer,body})});
+      if(window.SasRich.hasImage()) {
+        await window.SasRich.sendImage(activePeer,body);
+      } else {
+        await api('/api/messenger/messages',{method:'POST',
+          body:JSON.stringify({peer:activePeer,body,reply_to:window.SasRich.replyId()})});
+      }
       input.value='';
+      window.SasRich.afterSend();
       shownIds='';
       await loadMessages(true);
       await loadList();
@@ -406,6 +400,7 @@
     loadList();
   }
   function stop(){
+    window.SasRich.onClose();
     sessionGeneration++;
     running=false;csrf='';identity='';activePeer='';contacts=[];shownIds='';loadingPeer='';
     olderMessages=[];historyHasMore=false;oldestBefore=null;
@@ -430,6 +425,7 @@
     document.body.classList.toggle('sas-messenger-page',currentPage);
     document.documentElement.classList.toggle('sas-messenger-root',currentPage);
     if (!currentPage) {
+      window.SasRich.onClose();
       document.body.classList.remove('sas-messenger-keyboard');
       $('messenger-shell').classList.remove('chat-open');
       document.body.classList.remove('messenger-mobile-chat-open');
@@ -444,6 +440,9 @@
     }
   }
   function init(){
+    window.SasRich.init({api, reload:()=>loadMessages(), refreshContacts:()=>loadList(),
+      error, context:()=>({peer:activePeer,me:identity,contacts,
+        visible:running&&currentPage&&!document.hidden&&$('messenger-shell').classList.contains('chat-open')})});
     $('messenger-history').addEventListener('click',event=>{
       if (event.target.closest('[data-load-older]')) loadOlder();
     });
@@ -479,6 +478,7 @@
       window.visualViewport.addEventListener('scroll',syncChatViewport,{passive:true});
     }
     $('messenger-back').addEventListener('click',()=>{
+      window.SasRich.onClose();
       $('messenger-shell').classList.remove('chat-open');
       document.body.classList.remove('messenger-mobile-chat-open');
       syncChatViewport();
