@@ -116,10 +116,10 @@
     if (!rate) return null;
     const goal = Math.max(0, Math.floor(Number(targetPoints) || 0));
     const needed = Math.ceil(goal / rate);
-    const multiplier = capacityBoost ? 3 : 1;
-    const baseQuantity = Math.ceil(needed / multiplier);
-    // The baseline per-722 screenshot time is already Origin Time. Do not treat
-    // it as the actual sped-up training time or apply a made-up reduction.
+    // The target defines the NORMAL required troop count. A +200% capacity
+    // booster triples that same batch; it must not first divide the batch by 3.
+    // Screenshot example: 722 regular troops -> 2,166 boosted troops.
+    const baseQuantity = needed;
     const result = troops(key, baseQuantity, capacityBoost);
     const validSample = typeof actualSampleSeconds === 'number' &&
       Number.isFinite(actualSampleSeconds) && actualSampleSeconds > 0 &&
