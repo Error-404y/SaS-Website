@@ -1203,3 +1203,11 @@ html,body{max-width:100%;overflow-x:clip}
   .ref-table{min-width:550px}
   .table-container{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 }
+
+/* The page entrance animation uses transform with fill-mode:both.
+   That makes fixed-position chats relative to the page rather than viewport. */
+#page-messenger.page-animate{animation:none!important;transform:none!important}
+@media(max-width:620px){
+  #page-messenger{transform:none!important;filter:none!important;contain:none!important}
+  #page-messenger .messenger-shell.chat-open{position:fixed!important;left:0;right:0;top:var(--sas-visual-top,0px);bottom:auto;z-index:999}
+}
