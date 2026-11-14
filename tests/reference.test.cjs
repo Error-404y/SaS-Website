@@ -148,12 +148,13 @@ test('Messenger self-notes and pinned group opt-in have visible controls',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
   const ui=fs.readFileSync(path.join(__dirname,'../messenger-ui.js'),'utf8');
+  const richUi=fs.readFileSync(path.join(__dirname,'../messenger-rich-ui.js'),'utf8');
   assert.match(html,/id="messenger-join-alliance"/);
   assert.match(html,/id="messenger-alliance-lock"/);
   assert.match(ui,/Your Profile/);
   assert.match(ui,/Join SaS Group/);
   assert.match(ui,/api\/messenger\/alliance\/join/);
-  assert.match(ui,/messenger-system-message/);
+  assert.match(ui+richUi,/messenger-system-message/);
   assert.match(ui,/data-load-older/);
   assert.doesNotMatch(ui,/disabled aria-label="Your profile"/);
 });
