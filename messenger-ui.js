@@ -104,7 +104,9 @@
       '<small>'+escape(item.self ? (item.last_message || (item.username+' · Private notes to yourself')) :
         (item.invitation ? item.invited_by+' has invited you to join a Group' :
         (item.id==='alliance' && !item.joined ? 'Join to see all messages' :
-          (item.last_message || (item.group ? 'Group chat' : (item.player_name||'Say hello'))))))+'</small></span>'+
+          (item.last_message || (item.group ? 'Group chat' : (item.player_name||'Say hello'))))))+'</small>'+
+      (!item.group && !item.self && (item.online || item.last_seen_at) ?
+        '<small class="messenger-presence-line'+(item.online?' online':'')+'">'+escape(presenceText(item))+'</small>' : '')+'</span>'+
       '<span class="messenger-contact-meta"><small>'+escape(showTime(item.last_at))+'</small>'+
       (item.unread ? '<span class="messenger-contact-badge">'+Math.min(item.unread,99)+(item.unread>99?'+':'')+'</span>':'')+
       '</span></button>';
