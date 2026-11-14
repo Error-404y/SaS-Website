@@ -199,6 +199,7 @@ class MobileMessengerLayoutTests(unittest.TestCase):
             bodyOverflow:getComputedStyle(document.body).overflowY,
             listOverflow:getComputedStyle(h).overflowY,
             documentHeight:document.documentElement.scrollHeight,
+            documentWidth:document.documentElement.scrollWidth,
             buttonDisplay:getComputedStyle(b).display,
             buttonVisibility:getComputedStyle(b).visibility,
             disabled:b.disabled,inputDisabled:input.disabled
@@ -207,6 +208,7 @@ class MobileMessengerLayoutTests(unittest.TestCase):
         self.assertLessEqual(data["shell"]["bottom"],height+2,data)
         self.assertLessEqual(data["composer"]["bottom"],height+2,data)
         self.assertLessEqual(data["send"]["right"],width+1,data)
+        self.assertLessEqual(data["documentWidth"],width+1,data)
         self.assertGreater(data["send"]["width"],35,data)
         self.assertGreater(data["input"]["width"],90,data)
         self.assertLessEqual(data["input"]["right"],data["send"]["x"],data)
