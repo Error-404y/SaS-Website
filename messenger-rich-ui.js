@@ -84,13 +84,13 @@
         body='<span class="messenger-bubble-text">'+text+'</span>';
       }
       const actions = !gone ?
-        '<div class="rich-message-actions"><button type="button" class="rich-menu-trigger" data-rich-menu="'+id+
+        '<span class="rich-message-actions"><button type="button" class="rich-menu-trigger" data-rich-menu="'+id+
         '" aria-label="Message options" aria-expanded="false">⋯</button>'+
-        '<div class="rich-message-menu" hidden>'+
+        '<span class="rich-message-menu" hidden>'+
         '<button type="button" data-rich-reply="'+id+'">Reply</button>'+
         (mine && msg.kind==='text'?'<button type="button" data-rich-edit="'+id+'">Edit</button>':'')+
         (mine?'<button type="button" data-rich-delete="'+id+'">Delete</button>':'')+
-        '</div></div>' : '';
+        '</span></span>' : '';
       return '<div class="messenger-line'+(mine?' mine':'')+(msg.mentioned_me?' rich-mentioned':'')+
         '" data-rich-message="'+id+'"><div class="messenger-bubble">'+
         ((state.peer==='alliance'||state.peer.startsWith('group:')) ?
@@ -98,7 +98,7 @@
         replyMarkup+body+
         '<span class="messenger-bubble-footer"><time>'+escape(timeText(msg.created_at))+'</time>'+
         (msg.edited_at && !gone?'<small class="rich-edited">edited</small>':'')+
-        (mine?statusMarkup(msg):'')+'</span>'+actions+'</div></div>';
+        (mine?statusMarkup(msg):'')+actions+'</span></div></div>';
     }).join('');
   }
   const disableMenu = () => {
