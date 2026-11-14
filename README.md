@@ -33,6 +33,15 @@ Const-Web=false
 - When no conversation is open, the placeholder reads **No Conversation has been Made**.
 - Admin account-detail emails are concealed by default and revealed only with an accessible eye toggle; hiding or closing the dialog conceals them again. Account-list rows no longer display unmasked emails. Passwords remain protected and cannot be viewed.
 
+## Mobile layout corrections (phone-first)
+
+- Messenger conversations open in a full-screen phone-sized view with an independently scrollable message history; the message composer stays at the bottom, above the mobile safe area.
+- Removed the unintended visible accessibility label beside the input. It remains accessible to screen readers.
+- Locked group invitation conversations hide the disabled composer and make the join panel scrollable.
+- Horizontal swipe scrolling with a slim visible scrollbar is enabled for Explore and the calculator sub-navigation. Switching sections scrolls the selected tab into view.
+- Short website sections such as HR Announcements no longer inherit the reversed desktop-height arrangement that created large empty bands.
+- Narrow phone headers and content cards handle overflow without pushing the page sideways.
+
 ## SaS Messenger
 
 The approved-member website includes a dedicated **SaS Messenger** page with the same purple glass-style UI used elsewhere:
