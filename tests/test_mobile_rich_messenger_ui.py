@@ -122,6 +122,7 @@ class RichMessengerBrowserTests(unittest.TestCase):
             self.assertTrue(plus.is_visible())
             plus.click()
             dialog=page.locator("#messenger-invite-dialog")
+            dialog.wait_for(state="visible",timeout=8000)
             self.assertTrue(dialog.evaluate("(x)=>x.open"))
             self.assertIn("SvS Team",page.locator("#messenger-invite-title").inner_text())
             # Existing and already-invited members must not be offered.
@@ -137,6 +138,7 @@ class RichMessengerBrowserTests(unittest.TestCase):
             self.assertEqual(sent[0][2],{
                 "peer":"group:12","members":["member:3"],"allow_history":False})
             plus.click()
+            dialog.wait_for(state="visible",timeout=8000)
             page.locator("#messenger-invite-history").check()
             self.assertEqual(page.locator("#messenger-invite-history-state").inner_text(),"Yes")
             page.locator('[data-invite-player="member:3"]').check()
