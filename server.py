@@ -872,6 +872,7 @@ class Handler(BaseHTTPRequestHandler):
                   "/unread.js": ("unread.js", "text/javascript; charset=utf-8"),
                   "/planner.js": ("planner.js", "text/javascript; charset=utf-8"),
                   "/planner-ui.js": ("planner-ui.js", "text/javascript; charset=utf-8"),
+                  "/messenger-rich-ui.js": ("messenger-rich-ui.js", "text/javascript; charset=utf-8"),
                   "/messenger-ui.js": ("messenger-ui.js", "text/javascript; charset=utf-8"),
                   "/reference-data.js": ("reference-data.js", "text/javascript; charset=utf-8"),
                   "/reference-ui.js": ("reference-ui.js", "text/javascript; charset=utf-8"),
