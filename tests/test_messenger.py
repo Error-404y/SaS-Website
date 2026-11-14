@@ -165,6 +165,34 @@ class MessengerTests(unittest.TestCase):
         self.assertEqual(self.call("/api/messenger/read","POST",{"peer":aid},b,bc)[0],200)
         self.assertEqual(self.call("/api/messenger",cookie=b)[1]["unread"],0)
 
+    def test_direct_message_read_ticks_only_after_recipient_marks_read(self):
+        a, ac, aid = self.login("Alpha")
+        b, bc, bid = self.login("Bravo")
+        c, cc, cid = self.login("Charlie")
+        status, data = self.call("/api/messenger/messages", "POST",
+                                 {"peer": bid, "body": "Tick test"}, a, ac)
+        self.assertEqual(status, 201)
+        message_id = data["message"]["id"]
+        sender_history = self.call("/api/messenger/messages?peer="+bid, cookie=a)[1]["messages"]
+        self.assertEqual(sender_history[0]["id"], message_id)
+        self.assertIs(sender_history[0]["read"], False)
+        # Viewing the conversation list or polling messages is not a read receipt.
+        self.call("/api/messenger", cookie=b)
+        self.call("/api/messenger/messages?peer="+aid, cookie=b)
+        self.assertIs(self.call("/api/messenger/messages?peer="+bid, cookie=a)[1]["messages"][0]["read"], False)
+        self.assertEqual(self.call("/api/messenger/read", "POST", {"peer": aid}, b, bc)[0], 200)
+        self.assertIs(self.call("/api/messenger/messages?peer="+bid, cookie=a)[1]["messages"][0]["read"], True)
+        # Others cannot inspect this private conversation or its receipts.
+        self.assertEqual(self.call("/api/messenger/messages?peer="+bid, cookie=c)[1]["messages"], [])
+        # Reader must not be told sender-only receipt state.
+        reader_history = self.call("/api/messenger/messages?peer="+aid, cookie=b)[1]["messages"]
+        self.assertNotIn("read", reader_history[0])
+        # Self notes and alliance messages must not claim to have recipients.
+        self.call("/api/messenger/messages", "POST", {"peer": aid, "body": "Note"}, a, ac)
+        self.assertNotIn("read", self.call("/api/messenger/messages?peer="+aid, cookie=a)[1]["messages"][0])
+        self.call("/api/messenger/messages", "POST", {"peer": "alliance", "body": "Hi"}, a, ac)
+        self.assertNotIn("read", self.call("/api/messenger/messages?peer=alliance", cookie=a)[1]["messages"][-1])
+
     def test_self_notes_are_private_to_owner_and_survive_new_login(self):
         a,ac,aid=self.login("Alpha")
         b,bc,bid=self.login("Bravo")
