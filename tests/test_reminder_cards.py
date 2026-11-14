@@ -122,9 +122,10 @@ class ReminderScheduleTests(unittest.TestCase):
             self.assertTrue(server.reminder_send_once(self.start-3600))
             self.assertEqual(send.call_args_list[1].args[-1],"red")
             self.assertFalse(server.reminder_send_once(self.start-3550))
-            server.reminder_cleanup_once(self.start-3600+86399)
+            end_epoch=self.start+2*3600
+            server.reminder_cleanup_once(end_epoch-1)
             self.assertEqual(delete.call_count,1)
-            server.reminder_cleanup_once(self.start-3600+86400)
+            server.reminder_cleanup_once(end_epoch)
             self.assertEqual(delete.call_count,2)
             with server.connect() as db:
                 records=db.execute("SELECT stage,message_id,deleted_at FROM reminder_messages ORDER BY stage").fetchall()
@@ -206,6 +207,65 @@ class ReminderScheduleTests(unittest.TestCase):
             self.assertEqual(server.reminder_refresh_once(t0+151),1)
             self.assertEqual(edit.call_count,2)
         self.assertEqual(send.call_count,1)
+
+    def test_red_reminders_delete_at_each_events_actual_end(self):
+        # Two different events end at two different times. Their cards must
+        # disappear at their respective end, not 24h after the red warning.
+        with server.connect() as db:
+            db.execute("""INSERT INTO entries(kind,title,category,start_utc,end_utc,created_at)
+                VALUES('alliance','Mafia Attack','Alliance',
+                '2030-01-01 18:00:00','2030-01-01 18:40:00',
+                '2030-01-01T00:00:00+00:00')""")
+        t0=self.start-3600
+        with patch.object(server.reminder_cards,"send_card",side_effect=["111111","222222"]):
+            self.assertTrue(server.reminder_send_once(t0))
+            self.assertTrue(server.reminder_send_once(t0))
+        with patch.object(server.reminder_cards,"delete_card",return_value=True) as delete, \
+             patch.object(server.reminder_cards,"edit_card",return_value=True) as edit:
+            server.reminder_cleanup_once(self.start+2399)
+            delete.assert_not_called()
+            self.assertEqual(server.reminder_refresh_once(self.start+2399),2)
+            # 18:40 UTC: only the short Mafia Attack is removed.
+            server.reminder_cleanup_once(self.start+2400)
+            self.assertEqual(delete.call_count,1)
+            self.assertEqual(delete.call_args.args[-1],"222222")
+            edit.reset_mock()
+            # A completed event must not be refreshed with "Event Started".
+            self.assertEqual(server.reminder_refresh_once(self.start+2401),0)
+            edit.assert_not_called()
+            # Port Inspection remains until 20:00 UTC.
+            server.reminder_cleanup_once(self.start+7199)
+            self.assertEqual(delete.call_count,1)
+            server.reminder_cleanup_once(self.start+7200)
+            self.assertEqual(delete.call_count,2)
+            self.assertEqual(delete.call_args.args[-1],"111111")
+            server.reminder_cleanup_once(self.start+7201)
+            self.assertEqual(delete.call_count,2)
+        with server.connect() as db:
+            red=db.execute("SELECT COUNT(*) FROM reminder_messages WHERE stage='red' AND deleted_at>0").fetchone()[0]
+            self.assertEqual(red,2)
+
+    def test_edited_end_time_uses_latest_schedule_and_retries_failed_removal(self):
+        t0=self.start-3600
+        with patch.object(server.reminder_cards,"send_card",return_value="333333"):
+            self.assertTrue(server.reminder_send_once(t0))
+        # Change only end time, leaving the message and event start unchanged.
+        with server.connect() as db:
+            db.execute("UPDATE entries SET end_utc=? WHERE id=?",
+                       ("2030-01-01 18:25:00",self.event_id))
+        with patch.object(server.reminder_cards,"delete_card",
+             side_effect=[TimeoutError("network"),True]) as delete:
+            server.reminder_cleanup_once(self.start+1500)
+            self.assertEqual(delete.call_count,1)
+            with server.connect() as db:
+                self.assertEqual(db.execute("SELECT deleted_at FROM reminder_messages").fetchone()[0],0)
+            # Retry too soon is rate-limited using the persisted attempt time.
+            server.reminder_cleanup_once(self.start+1530)
+            self.assertEqual(delete.call_count,1)
+            server.reminder_cleanup_once(self.start+1561)
+            self.assertEqual(delete.call_count,2)
+            with server.connect() as db:
+                self.assertGreater(db.execute("SELECT deleted_at FROM reminder_messages").fetchone()[0],0)
 
     def test_editing_event_time_prevents_stale_countdown(self):
         t0=self.start-3600
