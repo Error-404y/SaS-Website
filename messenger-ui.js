@@ -68,7 +68,11 @@
     // focus/blur class toggle could shift every message tap before its click
     // event fired. Keep compact mode until the viewport really expands again.
     keyboardBaseline=Math.max(keyboardBaseline,height);
-    const keyboardOpen=Boolean(viewport && keyboardBaseline-height>125);
+    // Some iOS transitions report a panned visual viewport before any
+    // baseline sample is available (e.g. a restored tab with the keyboard up).
+    // Treat a large visible pageTop pan as keyboard mode as well.
+    const keyboardOpen=Boolean(viewport &&
+      (keyboardBaseline-height>125 || Math.max(0,viewport.pageTop||0)>125));
     document.body.classList.toggle('sas-messenger-keyboard',keyboardOpen);
     // iOS Safari can pan the *visual* viewport down when an input receives
     // focus, even though the document itself remains scroll-locked. Using
