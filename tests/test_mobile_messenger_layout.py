@@ -1,0 +1,193 @@
+"""Browser regression coverage for the real mobile Messenger CSS (no live account needed).
+
+Run: python -m unittest tests.test_mobile_messenger_layout -v
+Requires: pip install playwright && python -m playwright install chromium
+"""
+import unittest
+from pathlib import Path
+
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def fixture():
+    css = (ROOT / "styles.css").read_text(encoding="utf-8")
+    # A representative DOM keeps the exact app class/id hierarchy so CSS cascade,
+    # parent flex sizes and absolute positioning are checked together.
+    return """<!doctype html><html class="sas-messenger-root"><head>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>""" + css + """</style></head>
+      <body class="sas-messenger-page messenger-mobile-chat-open">
+      <div id="website" class="website">
+        <header class="site-header">
+          <div class="header-brand"><strong>SaS</strong><span id="header-section">SaS Messenger</span></div>
+          <div class="header-actions"><button class="small-button">Sign out</button></div>
+        </header>
+        <div id="site-layout" class="layout">
+          <main id="main-content" class="content">
+            <section id="page-messenger" class="page page-animate">
+              <div class="page-title messenger-titlebar"><h1>SaS Messenger</h1></div>
+              <div id="messenger-shell" class="messenger-shell chat-open">
+                <aside class="messenger-list">
+                  <div class="messenger-list-heading"><strong>Messages</strong></div>
+                  <label class="messenger-search-label"><input id="messenger-search" placeholder="Find player"></label>
+                  <div id="messenger-contact-list" class="messenger-contact-list"></div>
+                </aside>
+                <div id="messenger-chat" class="messenger-chat">
+                  <div class="messenger-chat-header">
+                    <button id="messenger-back" class="messenger-back">Back</button>
+                    <div class="messenger-avatar">SaS</div>
+                    <div class="messenger-chat-identity"><strong>SaS Admin</strong><span>Online</span></div>
+                  </div>
+                  <div id="messenger-history" class="messenger-history"></div>
+                  <form class="messenger-compose" id="messenger-compose">
+                    <label class="sr-only" for="messenger-message">Your message</label>
+                    <input id="messenger-message" placeholder="Write a message..." value="Test" />
+                    <button id="messenger-send" aria-label="Send message">➤</button>
+                  </form>
+                </div>
+              </div>
+            </section>
+          </main>
+          <aside class="right-sidebar">
+            <p class="sidebar-heading">EXPLORE <span class="mobile-nav-hint">← Swipe to see more →</span></p>
+            <nav class="sidebar-nav">
+              <button>Events</button><button class="selected">SaS Messenger</button>
+              <button>Alliance Events</button><button>Alliance RSS</button>
+            </nav>
+          </aside>
+        </div>
+      </div>
+      <script>
+      const history = document.querySelector('#messenger-history');
+      for(let i=0;i<70;i++){
+        const row=document.createElement('div');
+        row.className='messenger-line'+(i%2?' mine':'');
+        row.innerHTML='<div class="messenger-bubble"><span class="messenger-bubble-text">Test chat message '+i+'</span><span class="messenger-bubble-footer"><time>02:00 UTC</time></span></div>';
+        history.append(row);
+      }
+      const contacts = document.querySelector('#messenger-contact-list');
+      for(let i=0;i<65;i++){
+        const el=document.createElement('div');
+        el.className='messenger-contact';
+        el.textContent='Player '+i;
+        contacts.append(el);
+      }
+      </script>
+      </body></html>"""
+
+
+@unittest.skipIf(sync_playwright is None, "Playwright not installed")
+class MobileMessengerLayoutTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.playwright = sync_playwright().start()
+        cls.browser = cls.playwright.chromium.launch(headless=True)
+        cls.html = fixture()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.playwright.stop()
+
+    def test_multiple_phone_dimensions(self):
+        for width, height in ((320, 568), (375, 667), (390, 520),
+                              (390, 844), (430, 932), (744, 900)):
+            with self.subTest(width=width, height=height):
+                page = self.browser.new_page(viewport={"width":width,"height":height},
+                                              device_scale_factor=2,is_mobile=True,has_touch=True)
+                try:
+                    page.set_content(self.html, wait_until="load")
+                    page.evaluate("""(height)=>{
+                      document.documentElement.style.setProperty(
+                        '--sas-messenger-viewport-height', height+'px');
+                    }""", height)
+                    self.assert_layout(page, width, height)
+                finally:
+                    page.close()
+
+    def test_chat_history_scrolls_without_page_scrolling(self):
+        page=self.browser.new_page(viewport={"width":390,"height":744},
+                                   is_mobile=True,has_touch=True)
+        try:
+            page.set_content(self.html, wait_until="load")
+            initial=page.evaluate("""()=>{
+              const h=document.querySelector('#messenger-history');
+              return {max:h.scrollHeight-h.clientHeight,body:document.scrollingElement.scrollTop};
+            }""")
+            self.assertGreater(initial["max"], 100)
+            page.locator("#messenger-history").evaluate("(el)=>{el.scrollTop=el.scrollHeight/2;}")
+            after=page.evaluate("""()=>{
+              const h=document.querySelector('#messenger-history');
+              return {history:h.scrollTop,body:document.scrollingElement.scrollTop};
+            }""")
+            self.assertGreater(after["history"],0)
+            self.assertEqual(after["body"],initial["body"])
+            page.locator("#messenger-shell").evaluate("(el)=>el.classList.remove('chat-open')")
+            after_list=page.evaluate("""()=>{
+              const l=document.querySelector('#messenger-contact-list');
+              l.scrollTop=150;
+              return {scroll:l.scrollTop,max:l.scrollHeight-l.clientHeight};
+            }""")
+            self.assertGreater(after_list["max"],100)
+            self.assertGreater(after_list["scroll"],0)
+        finally:
+            page.close()
+
+    def test_short_chat_and_small_keyboard_viewport(self):
+        page=self.browser.new_page(viewport={"width":390,"height":720},
+                                   is_mobile=True,has_touch=True)
+        try:
+            page.set_content(self.html,wait_until="load")
+            page.evaluate("""()=>{
+                document.querySelector('#messenger-history').replaceChildren();
+                document.body.classList.add('sas-messenger-keyboard');
+                document.documentElement.style.setProperty(
+                  '--sas-messenger-viewport-height','380px');
+            }""")
+            self.assert_layout(page,390,380)
+        finally:
+            page.close()
+
+    def assert_layout(self,page,width,height):
+        data=page.evaluate("""()=>{
+          const box = selector => {
+             const r=document.querySelector(selector).getBoundingClientRect();
+             return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};
+          };
+          const h=document.querySelector('#messenger-history');
+          const b=document.querySelector('#messenger-send');
+          const input=document.querySelector('#messenger-message');
+          return {
+            shell:box('#messenger-shell'),chat:box('#messenger-chat'),
+            header:box('.messenger-chat-header'),history:box('#messenger-history'),
+            composer:box('#messenger-compose'),input:box('#messenger-message'),
+            send:box('#messenger-send'),
+            bodyOverflow:getComputedStyle(document.body).overflowY,
+            listOverflow:getComputedStyle(h).overflowY,
+            documentHeight:document.documentElement.scrollHeight,
+            buttonDisplay:getComputedStyle(b).display,
+            buttonVisibility:getComputedStyle(b).visibility,
+            disabled:b.disabled,inputDisabled:input.disabled
+          };
+        }""")
+        self.assertLessEqual(data["shell"]["bottom"],height+2,data)
+        self.assertLessEqual(data["composer"]["bottom"],height+2,data)
+        self.assertLessEqual(data["send"]["right"],width+1,data)
+        self.assertGreater(data["send"]["width"],35,data)
+        self.assertGreater(data["input"]["width"],90,data)
+        self.assertLessEqual(data["input"]["right"],data["send"]["x"],data)
+        self.assertGreaterEqual(data["composer"]["y"],data["history"]["bottom"]-2,data)
+        self.assertGreaterEqual(data["history"]["y"],data["header"]["bottom"]-2,data)
+        self.assertEqual(data["bodyOverflow"],"hidden",data)
+        self.assertEqual(data["listOverflow"],"auto",data)
+        self.assertNotEqual(data["buttonDisplay"],"none",data)
+        self.assertNotEqual(data["buttonVisibility"],"hidden",data)
+
+
+if __name__ == "__main__":
+    unittest.main()
