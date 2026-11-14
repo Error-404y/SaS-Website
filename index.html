@@ -15,6 +15,7 @@
   <script src="/reference-data.js" defer></script>
   <script src="/reference-ui.js" defer></script>
   <script src="/planner-ui.js" defer></script>
+  <script src="/messenger-rich-ui.js" defer></script>
   <script src="/messenger-ui.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
@@ -479,6 +480,7 @@
                 <div class="messenger-chat-identity">
                   <strong id="messenger-active-name">SaS Messenger</strong>
                   <span id="messenger-active-detail">Select a conversation to get started.</span>
+                  <span id="rich-typing" role="status" aria-live="polite"></span>
                 </div>
               </div>
               <div class="messenger-history" id="messenger-history" role="log" aria-live="polite" aria-relevant="additions text">
@@ -497,8 +499,21 @@
                 </div>
               </div>
               <form class="messenger-compose" id="messenger-compose">
+                <div id="rich-reply-preview" class="rich-compose-preview" hidden>
+                  <div><strong id="rich-reply-author">Reply</strong><span id="rich-reply-body"></span></div>
+                  <button type="button" id="rich-reply-cancel" aria-label="Cancel reply">×</button>
+                </div>
+                <div id="rich-photo-preview" class="rich-compose-preview" hidden>
+                  <img id="rich-photo-thumb" alt="Image ready to share">
+                  <span>Photo ready · Add an optional caption</span>
+                  <button type="button" id="rich-photo-cancel" aria-label="Remove photo">×</button>
+                </div>
+                <div id="rich-mention-picker" class="rich-mention-picker" hidden></div>
+                <button type="button" class="rich-tool-button" id="rich-image-trigger" aria-label="Attach photo" title="Share image">📷</button>
+                <input id="rich-image-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                <button type="button" class="rich-tool-button" id="rich-poll-trigger" aria-label="Create group poll" title="Create poll" hidden>☷</button>
                 <label class="sr-only" for="messenger-message">Your message</label>
-                <input id="messenger-message" autocomplete="off" maxlength="2000" placeholder="Write a message..." disabled required>
+                <input id="messenger-message" autocomplete="off" maxlength="2000" placeholder="Write a message..." disabled>
                 <button type="submit" id="messenger-send" disabled aria-label="Send message" title="Send message">
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
                 </button>
@@ -766,6 +781,39 @@
       <label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required>
       <p class="form-error" id="login-error" aria-live="polite"></p>
       <div class="dialog-actions"><button class="primary-button wide-button" type="submit">Sign in</button></div>
+    </form>
+  </dialog>
+  <dialog id="rich-poll-dialog" class="dialog rich-dialog" aria-labelledby="rich-poll-title">
+    <form id="rich-poll-form">
+      <div class="dialog-top">
+        <div><span class="section-kicker">SAINTS AND SINNERS</span><h2 id="rich-poll-title">Create group poll</h2></div>
+        <button type="button" class="close-button" data-rich-close="poll" aria-label="Close poll editor">×</button>
+      </div>
+      <label for="rich-poll-question">Question</label>
+      <input id="rich-poll-question" type="text" maxlength="180" minlength="3" required placeholder="When should we start?">
+      <label>Options</label>
+      <div id="rich-poll-options" class="rich-poll-options"></div>
+      <button type="button" id="rich-poll-add-option" class="small-button">+ Add option (max 6)</button>
+      <p id="rich-poll-error" class="form-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" class="small-button" data-rich-close="poll">Cancel</button>
+        <button type="submit" id="rich-poll-submit" class="primary-button">Create poll</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="rich-edit-dialog" class="dialog rich-dialog" aria-labelledby="rich-edit-title">
+    <form id="rich-edit-form">
+      <div class="dialog-top">
+        <div><span class="section-kicker">SAINTS AND SINNERS</span><h2 id="rich-edit-title">Edit message</h2></div>
+        <button type="button" class="close-button" data-rich-close="edit" aria-label="Close editor">×</button>
+      </div>
+      <label for="rich-edit-body">Your message</label>
+      <textarea id="rich-edit-body" maxlength="2000" rows="5" required></textarea>
+      <p id="rich-edit-error" class="form-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" class="small-button" data-rich-close="edit">Cancel</button>
+        <button type="submit" id="rich-edit-submit" class="primary-button">Save changes</button>
+      </div>
     </form>
   </dialog>
 </body>
