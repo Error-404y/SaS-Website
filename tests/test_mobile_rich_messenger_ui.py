@@ -120,7 +120,21 @@ class RichMessengerBrowserTests(unittest.TestCase):
                 document.querySelector('#rich-reply-preview').hidden;
             }""", timeout=8000)
             page.locator('[data-rich-message="2"] [data-rich-menu]').click()
-            page.locator('[data-rich-edit="2"]').click()
+            menu_state=page.evaluate("""()=>{
+              const box=document.querySelector('[data-rich-message="2"] .rich-message-menu');
+              const trigger=document.querySelector('[data-rich-message="2"] [data-rich-menu]');
+              return {
+                hidden:box.hidden,
+                html:box.outerHTML.slice(0,400),
+                display:getComputedStyle(box).display,
+                visibility:getComputedStyle(box).visibility,
+                expanded:trigger.getAttribute('aria-expanded'),
+                box:box.getBoundingClientRect().toJSON(),
+                history:document.querySelector('#messenger-history').getBoundingClientRect().toJSON()
+              };
+            }""")
+            self.assertFalse(menu_state['hidden'], menu_state)
+            page.locator('[data-rich-edit="2"]').click(timeout=5000)
             page.locator("#rich-edit-body").fill("Updated text")
             page.locator("#rich-edit-submit").click()
             edits=[x for x in captured if x[0]=="/api/messenger/messages/edit"]
