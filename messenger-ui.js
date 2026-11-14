@@ -282,7 +282,10 @@
       // even if no new messages arrived.
       const key=JSON.stringify(messages.map(m=>[m.id,m.body,m.kind,m.edited_at,m.deleted_at,
         m.read,m.mentioned_me,m.reply,m.poll]));
-      if (force || key!==shownIds) {
+      // Do not destroy a message action menu while the user is choosing
+      // Reply/Edit/Delete. The next poll renders updates after it closes.
+      const menuOpen=Boolean(document.querySelector('.rich-message-menu:not([hidden])'));
+      if ((force || key!==shownIds) && (!menuOpen || force)) {
         const holder=$('messenger-history');
         const previousScrollTop=holder.scrollTop;
         const stickToBottom=force || holder.scrollHeight-holder.scrollTop-holder.clientHeight<90;
