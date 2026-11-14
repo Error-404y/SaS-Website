@@ -30,3 +30,21 @@ jobs:
       - run: node --check reference-data.js
       - run: node --check reference-ui.js
       - run: node --test tests/reference.test.cjs
+
+  mobile-ui:
+    # Playwright browsers currently support Ubuntu 24.04, not latest (26.04).
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "playwright>=1.55,<1.59"
+      - run: python -m playwright install --with-deps chromium webkit
+      - run: python -m unittest discover -s tests -p 'test_mobile_messenger_layout.py' -v
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-messenger-browser-previews
+          path: test-results/*.png
+          if-no-files-found: ignore
