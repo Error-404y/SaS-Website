@@ -792,13 +792,6 @@
     return new Date(timestamp * 1000).toISOString().replace('T',' ').slice(0,19) + ' UTC';
   }
 
-  function banRemaining(timestamp) {
-    const seconds = Math.max(0, Math.ceil(timestamp - Date.now() / 1000));
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.ceil((seconds % 3600) / 60);
-    return hours + 'h ' + String(minutes).padStart(2,'0') + 'm remaining';
-  }
-
   function openBanDialog(id) {
     if (!site.admin) return;
     const member = (site.accounts || []).find(item => item.id === id);
@@ -832,7 +825,7 @@
         reason:one('#ban-reason').value
       })});
       one('#ban-dialog').close();
-      notify('Ban scheduled. It will activate after 2 hours unless cancelled.');
+      notify('Ban activated immediately. Use Unban to lift it.');
       await loadBans();
     } catch(error){
       one('#ban-error').textContent = error.message;
@@ -853,48 +846,26 @@
   }
 
   function renderBans() {
-    const active = banRecords.filter(item => item.status === 'pending' || item.status === 'active');
-    const finished = banRecords.filter(item => item.status !== 'pending' && item.status !== 'active');
-    const count = banRecords.filter(item => item.status === 'pending').length;
-    one('#ban-queue-cancel-all').hidden = count === 0;
+    const active = banRecords.filter(item => item.status === 'active');
+    const finished = banRecords.filter(item => item.status !== 'active');
     const accountPending = (site.accounts || []).filter(item => item.status === 'pending').length;
     const resets = (site.passwordRequests || []).filter(item => item.status === 'pending').length;
-    const total = count + accountPending + resets;
+    const total = accountPending + resets;
     one('#accounts-badge').hidden = total === 0;
     one('#accounts-badge').textContent = total > 99 ? '99+' : String(total);
     one('#ban-queue-list').innerHTML = active.map(item =>
-      '<article class="ban-queue-row '+escapeHtml(item.status)+'"><div class="account-row-info">'+
+      '<article class="ban-queue-row active"><div class="account-row-info">'+
       '<strong>@'+escapeHtml(item.username)+' · '+escapeHtml(item.kind.toUpperCase())+' BAN</strong>'+
-      '<span>'+ (item.status === 'pending'
-        ? 'Pending · '+escapeHtml(banRemaining(item.effective_at))+' · Activates '+escapeHtml(banTime(item.effective_at))
-        : 'Active · Since '+escapeHtml(banTime(item.effective_at)))+'</span>'+
+      '<span>Active · Since '+escapeHtml(banTime(item.effective_at))+'</span>'+
       (item.reason ? '<p>'+escapeHtml(item.reason)+'</p>' : '')+'</div>'+
-      '<div class="account-actions"><span class="account-pill '+(item.status==='pending'?'pending':'rejected')+'">'+
-      escapeHtml(item.status)+'</span><button class="small-button" type="button" data-ban-undo="'+item.id+'">'+
-      (item.status === 'pending' ? 'Undo '+escapeHtml(item.kind.toUpperCase())+' Ban' : 'Unban')+
-      '</button></div></article>'
-    ).join('') + (active.length ? '' : '<p class="accounts-muted">No pending or active bans.</p>') +
+      '<div class="account-actions"><span class="account-pill rejected">Active</span>'+
+      '<button class="small-button" type="button" data-ban-undo="'+item.id+'">Unban</button>'+
+      '</div></article>'
+    ).join('') + (active.length ? '' : '<p class="accounts-muted">No active bans.</p>') +
     (finished.length ? '<details class="tool-settings"><summary>Previous bans ('+finished.length+')</summary>'+
       finished.slice(0,30).map(item => '<p class="accounts-muted">'+
         escapeHtml(item.username)+' · '+escapeHtml(item.kind)+' · '+escapeHtml(item.status)+'</p>').join('')+
       '</details>' : '');
-  }
-
-  async function cancelAllPendingBans() {
-    if (!site.admin) return;
-    const pending = banRecords.filter(item => item.status === 'pending').length;
-    if (!pending) return;
-    if (!await confirmAction({
-      title: 'Cancel all pending bans?',
-      message: 'Undo all '+pending+' ban requests that have not yet taken effect? Active bans will not be changed.',
-      buttonLabel: 'Undo All Pending Bans'
-    })) return;
-    try {
-      const result = await request('/api/bans/cancel-pending',
-        {method:'POST', body:'{}'});
-      notify(result.cancelled+' pending ban(s) cancelled.');
-      await loadBans();
-    } catch(error){notify(error.message);}
   }
 
   async function undoBan(id) {
@@ -902,14 +873,14 @@
     const item = banRecords.find(row => row.id === id);
     if (!item) return;
     if (!await confirmAction({
-      title: item.status === 'pending' ? 'Cancel scheduled ban?' : 'Lift active ban?',
+      title: 'Lift active ban?',
       message: 'Remove the '+item.kind.toUpperCase()+' ban for @'+item.username+'?',
-      buttonLabel: item.status === 'pending' ? 'Undo Ban' : 'Unban'
+      buttonLabel: 'Unban'
     })) return;
     try {
       await request('/api/bans/'+id,{method:'DELETE',body:'{}'});
       await loadBans();
-      notify('Ban cancelled or removed.');
+      notify('Ban removed. Access is restored immediately.');
     } catch(error){notify(error.message);}
   }
 
@@ -990,8 +961,7 @@
     const requests = site.passwordRequests || [];
     const pending = requests.filter(item => item.status === 'pending').length;
     const accountPending = (site.accounts || []).filter(item => item.status === 'pending').length;
-    const banPending = banRecords.filter(item => item.status === 'pending').length;
-    const totalPending = pending + accountPending + banPending;
+    const totalPending = pending + accountPending;
     one('#accounts-badge').hidden = totalPending === 0;
     one('#accounts-badge').textContent = totalPending > 99 ? '99+' : String(totalPending);
     one('#password-requests-badge').hidden = pending === 0;
@@ -1280,7 +1250,6 @@
   one('#entry-form').addEventListener('submit', saveEntry);
   one('#ban-form').addEventListener('submit', queueBan);
   one('#ban-queue-refresh').addEventListener('click', loadBans);
-  one('#ban-queue-cancel-all').addEventListener('click', cancelAllPendingBans);
   one('#entry-delete').addEventListener('click', deleteEntry);
   one('#download-calendar').addEventListener('click', downloadCalendar);
   one('#detail-edit').addEventListener('click', () => {
