@@ -260,7 +260,19 @@
     if(menu){
       const panel=menu.nextElementSibling;
       const open=panel.hidden;
-      disableMenu();panel.hidden=!open;menu.setAttribute('aria-expanded',String(open));
+      disableMenu();
+      if(open){
+        panel.hidden=false;
+        const history=$('messenger-history').getBoundingClientRect();
+        const trigger=menu.getBoundingClientRect();
+        // Keep the menu inside the independently scrollable mobile chat:
+        // near the top open down; near the bottom open up.
+        panel.classList.toggle('opens-up',trigger.top-history.top>150 &&
+          (history.bottom-trigger.bottom<165 || trigger.top-history.top>history.bottom-trigger.bottom));
+        // Incoming short bubbles near the left edge need the menu to open right.
+        panel.classList.toggle('opens-right',trigger.right-history.left<155);
+      }
+      menu.setAttribute('aria-expanded',String(open));
       return;
     }
     const mention=target.closest('[data-rich-mention]');
@@ -349,6 +361,9 @@
   function init(config) {
     adapter=config;
     $('messenger-history').addEventListener('click',handleAction);
+    document.addEventListener('click',event=>{
+      if (!event.target.closest('.rich-message-actions')) disableMenu();
+    });
     $('rich-mention-picker').addEventListener('click',handleAction);
     $('messenger-history').addEventListener('touchstart',event=>{
       const line=event.target.closest('[data-rich-message]');
