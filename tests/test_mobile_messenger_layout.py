@@ -107,6 +107,12 @@ class MobileMessengerLayoutTests(unittest.TestCase):
                         '--sas-messenger-viewport-height', height+'px');
                     }""", height)
                     self.assert_layout(page, width, height)
+                    if (width,height) in ((320,568),(390,520),(390,844)):
+                        shots=ROOT / "test-results"
+                        shots.mkdir(exist_ok=True)
+                        page.screenshot(path=str(shots / (
+                            "messenger-"+self.browser.browser_type.name+
+                            "-"+str(width)+"x"+str(height)+".png")))
                 finally:
                     page.close()
 
@@ -137,6 +143,29 @@ class MobileMessengerLayoutTests(unittest.TestCase):
             self.assertGreater(after_list["scroll"],0)
         finally:
             page.close()
+
+    def test_send_button_can_be_tapped(self):
+        # A click on the actual send control must work, not merely be present
+        # in the DOM outside the viewport (the original iPhone regression).
+        for width,height in ((320,568),(390,844),(744,900)):
+            with self.subTest(width=width,height=height):
+                page=self.browser.new_page(viewport={"width":width,"height":height},
+                                           is_mobile=True,has_touch=True)
+                try:
+                    page.set_content(self.html,wait_until="load")
+                    page.evaluate("""()=>{
+                      window.__sent=null;
+                      document.querySelector('#messenger-compose').addEventListener(
+                        'submit',e=>{
+                          e.preventDefault();
+                          window.__sent=document.querySelector('#messenger-message').value;
+                        });
+                    }""")
+                    page.locator("#messenger-message").fill("hello from phone")
+                    page.locator("#messenger-send").click(timeout=2500)
+                    self.assertEqual(page.evaluate("window.__sent"),"hello from phone")
+                finally:
+                    page.close()
 
     def test_short_chat_and_small_keyboard_viewport(self):
         page=self.browser.new_page(viewport={"width":390,"height":720},
