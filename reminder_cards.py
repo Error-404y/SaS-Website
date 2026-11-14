@@ -54,14 +54,16 @@ def make_card(event_title, start_utc, stage, remaining_seconds=None):
         title = title[:-2].rstrip() + "…"
     draw.text((48, 76), title, font=headline, fill=white)
     draw.line((48, 155, 1032, 155), fill=(100, 101, 112), width=2)
-    draw.text((48, 183), "Starts in", font=_font(24), fill=muted)
-    draw.text((548, 183), "Start (UTC)", font=_font(24), fill=muted)
     if remaining_seconds is None:
         remaining_seconds = 7200 if stage == "yellow" else 3600
+    started = remaining_seconds <= 0
+    draw.text((48, 183), "Status" if started else "Starts in",
+              font=_font(24), fill=muted)
+    draw.text((548, 183), "Start (UTC)", font=_font(24), fill=muted)
     total_minutes = max(0, int((remaining_seconds + 59) // 60))
     hours, minutes = divmod(total_minutes, 60)
-    draw.text((48, 232), f"{hours}h {minutes:02d}m",
-              font=_font(49, bold=True), fill=color)
+    countdown = "Event Started" if started else f"{hours}h {minutes:02d}m"
+    draw.text((48, 232), countdown, font=_font(49, bold=True), fill=color)
     draw.text((548, 239), start_utc[:16], font=_font(31, bold=True), fill=white)
     output = io.BytesIO()
     image.save(output, format="PNG", optimize=True)
@@ -105,6 +107,50 @@ def send_card(webhook, title, start_utc, stage):
     if not re.fullmatch(r"\d{1,30}", message_id):
         raise ValueError("Discord did not return a message ID")
     return message_id
+
+def edit_card(webhook, message_id, title, start_utc, stage, now_epoch=None):
+    """Update the ORIGINAL Discord message with a fresh countdown PNG.
+
+    Discord cannot animate an image attachment; re-uploading via PATCH updates
+    the existing message in place. Edits intentionally omit "content" so the
+    initial red @everyone announcement is NEVER sent again. A unique filename
+    also prevents stale Discord image-cache previews.
+    """
+    if stage not in ("yellow", "red"):
+        raise ValueError("Invalid reminder stage")
+    if now_epoch is None:
+        now_epoch = int(datetime.now(timezone.utc).timestamp())
+    start = datetime.strptime(start_utc, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    remaining = max(0, int(start.timestamp()) - int(now_epoch))
+    image = make_card(title, start_utc, stage, remaining_seconds=remaining)
+    filename = "reminder-" + str(int(now_epoch)) + ".png"
+    payload = {
+        "allowed_mentions": {"parse": []},
+        "embeds": [{
+            "color": 0xF5BA2E if stage == "yellow" else 0xF14151,
+            "image": {"url": "attachment://" + filename},
+        }],
+        # On webhook edits this explicitly removes the prior PNG. Keep ONLY the
+        # newly uploaded file or Discord would retain every minute's image.
+        "attachments": [{"id": 0, "filename": filename,
+                         "description": "Updated event countdown and UTC start"}],
+    }
+    boundary = "sas-" + __import__("secrets").token_hex(12)
+    prefix = ("--" + boundary + "\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n"
+              "Content-Type: application/json\r\n\r\n").encode() + json.dumps(payload).encode() + b"\r\n"
+    filehead = ("--" + boundary + "\r\nContent-Disposition: form-data; name=\"files[0]\"; filename=\"" +
+                filename + "\"\r\nContent-Type: image/png\r\n\r\n").encode()
+    body = prefix + filehead + image + b"\r\n--" + boundary.encode() + b"--\r\n"
+    request = urllib.request.Request(
+        message_url(webhook, message_id), data=body, method="PATCH",
+        headers={"Content-Type": "multipart/form-data; boundary=" + boundary,
+                 "User-Agent": "SaS-Website/1.0"})
+    with urllib.request.urlopen(request, timeout=18) as response:
+        result = json.load(response)
+    if str(result.get("id", "")) != str(message_id):
+        raise ValueError("Discord did not confirm the edited reminder ID")
+    return True
+
 
 def delete_card(webhook, message_id):
     """Delete previously sent webhook message. A prior 404 counts as removed."""
