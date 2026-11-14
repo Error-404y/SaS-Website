@@ -96,9 +96,12 @@ test('Phase 3 training calculates required troops from points instead of input t
   assert.equal(x.requiredTroops, 101);
   const boost = p.troopsForTargetPoints('marksman-10', 196001, true);
   assert.equal(boost.requiredTroops, 101);
-  assert.equal(boost.baseQuantity, 34);
-  assert.equal(boost.quantity, 102);
-  assert.equal(boost.actualPoints, 102 * 1960);
+  assert.equal(boost.baseQuantity, 101);
+  assert.equal(boost.quantity, 303);
+  assert.equal(boost.actualPoints, 303 * 1960);
+  assert.equal(boost.capacityMultiplier, 3);
+  assert.equal(boost.originSeconds, p.troopsForTargetPoints('marksman-10',196001).originSeconds * 3);
+  assert.equal(boost.costs.ammo, p.troopsForTargetPoints('marksman-10',196001).costs.ammo * 3);
   assert.equal(p.troopsForTargetPoints('guard-9', 0).quantity, 0);
   assert.equal(p.troopsForTargetPoints('biker-10', 1000), null);
 });
@@ -135,4 +138,19 @@ test('Actual time input accepts the game duration notation and rejects invalid v
   for (const entry of ['', 'not available', '24:00:00', '1d 19:60:00', '2d -1:00:00']) {
     assert.equal(p.parseGameDuration(entry), null, entry);
   }
+});
+
+test('capacity triples the entire goal-based training batch, points, cost, origin and actual time', () => {
+  const target = 722 * 1960;
+  const base = p.troopsForTargetPoints('marksman-10', target, false, 40000);
+  const boosted = p.troopsForTargetPoints('marksman-10', target, true, 40000);
+  assert.equal(base.requiredTroops, 722);
+  assert.equal(base.quantity, 722);
+  assert.equal(boosted.requiredTroops, 722);
+  assert.equal(boosted.baseQuantity, 722);
+  assert.equal(boosted.quantity, 2166);
+  assert.equal(boosted.actualPoints, base.actualPoints * 3);
+  assert.equal(boosted.originSeconds, base.originSeconds * 3);
+  assert.equal(boosted.actualSeconds, base.actualSeconds * 3);
+  for (const key of p.RESOURCES) assert.equal(boosted.costs[key], base.costs[key] * 3);
 });
