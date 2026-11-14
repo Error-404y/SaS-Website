@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 MAX_MESSAGE = 2000
 MAX_HISTORY = 80
 MAX_MESSAGES_PER_MINUTE = 30
+PRESENCE_ONLINE_SECONDS = 75
 ADMIN = "admin"
 ALLIANCE = "alliance"
 
@@ -72,7 +73,23 @@ def setup(db):
         db.execute("""INSERT OR IGNORE INTO chat_alliance_members(member_key, joined_at)
             SELECT 'member:' || id, ? FROM members WHERE status='approved'""",
             (now_utc(),))
+    db.execute("""CREATE TABLE IF NOT EXISTS chat_presence (
+        member_key TEXT PRIMARY KEY,
+        last_seen_at INTEGER NOT NULL
+    )""")
+    # Presence is ephemeral: retain recent last-seen times but prune old records.
+    db.execute("DELETE FROM chat_presence WHERE last_seen_at < CAST(strftime('%s','now') AS INTEGER)-7776000")
     # No email or password data is duplicated in the messenger.
+
+
+def heartbeat(db, actor):
+    """Record activity only for an authenticated, approved player or admin."""
+    if not valid_actor(db, actor):
+        raise PermissionError("Approved account required.")
+    db.execute("""INSERT INTO chat_presence(member_key,last_seen_at)
+        VALUES(?,CAST(strftime('%s','now') AS INTEGER))
+        ON CONFLICT(member_key) DO UPDATE SET last_seen_at=excluded.last_seen_at""",
+        (actor,))
 
 
 def member_key(member_id):
@@ -282,6 +299,14 @@ def summaries(db, actor):
     if not valid_actor(db, actor):
         raise PermissionError("Approved account required.")
     contacts = contact_list(db, actor)
+    now = int(datetime.now(timezone.utc).timestamp())
+    presence = {row["member_key"]: row["last_seen_at"]
+                for row in db.execute("SELECT member_key,last_seen_at FROM chat_presence")}
+    for contact in contacts:
+        if not contact["group"] and not contact.get("self"):
+            seen = presence.get(contact["id"])
+            contact["online"] = bool(seen is not None and 0 <= now-seen <= PRESENCE_ONLINE_SECONDS)
+            contact["last_seen_at"] = seen
     summaries_out = []
     for contact in contacts:
         target = contact["id"]
