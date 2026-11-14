@@ -4,6 +4,7 @@ Only server-derived sender identities are accepted; no client-supplied sender,
 role, recipient display name, or membership information is trusted.
 """
 from datetime import datetime, timedelta, timezone
+import messenger_features as rich
 
 MAX_MESSAGE = 2000
 MAX_HISTORY = 80
@@ -79,6 +80,7 @@ def setup(db):
     )""")
     # Presence is ephemeral: retain recent last-seen times but prune old records.
     db.execute("DELETE FROM chat_presence WHERE last_seen_at < CAST(strftime('%s','now') AS INTEGER)-7776000")
+    rich.setup(db)
     # No email or password data is duplicated in the messenger.
 
 
@@ -261,16 +263,18 @@ def contact_list(db, actor):
     joined = alliance_joined(db, actor)
     contacts = [{"id": ALLIANCE, "username": "SaS - Group Chat",
                  "player_name": "Everyone in the alliance", "group": True,
-                 "pinned": True, "joined": joined}]
-    for group in db.execute("""SELECT g.id,g.name,COUNT(gm.member_key) AS participants
+                 "pinned": True, "joined": joined,
+                 "can_mention_everyone": actor == ADMIN}]
+    for group in db.execute("""SELECT g.id,g.name,g.creator_key,COUNT(gm.member_key) AS participants
         FROM chat_groups g
         JOIN chat_group_members gm ON gm.group_id=g.id
         WHERE EXISTS(SELECT 1 FROM chat_group_members self
                      WHERE self.group_id=g.id AND self.member_key=?)
-        GROUP BY g.id,g.name ORDER BY g.id DESC""",(actor,)):
+        GROUP BY g.id,g.name,g.creator_key ORDER BY g.id DESC""",(actor,)):
         contacts.append({"id": "group:"+str(group["id"]), "username": group["name"],
                          "player_name": str(group["participants"])+" participants",
-                         "group": True, "pinned": False})
+                         "group": True, "pinned": False,
+                         "can_mention_everyone": actor in (ADMIN,group["creator_key"])})
     for invitation in db.execute("""SELECT g.id,g.name,i.invited_by
         FROM chat_group_invites i JOIN chat_groups g ON g.id=i.group_id
         WHERE i.member_key=? AND i.joined_at IS NULL
@@ -321,7 +325,7 @@ def summaries(db, actor):
                 "unread":1})
             continue
         thread = thread_for(db, actor, target)
-        latest = db.execute("""SELECT id,sender_key,body,created_at
+        latest = db.execute("""SELECT id,sender_key,body,created_at,kind,deleted_at
             FROM chat_messages WHERE thread_key=? ORDER BY id DESC LIMIT 1""",
             (thread,)).fetchone()
         seen = db.execute("""SELECT last_read_id FROM chat_reads
@@ -330,12 +334,16 @@ def summaries(db, actor):
         unread = db.execute("""SELECT COUNT(*) AS total FROM chat_messages
             WHERE thread_key=? AND id>? AND sender_key!=?""",
             (thread, last_id, actor)).fetchone()["total"]
+        mentions=rich.mention_unread(db,actor,thread,last_id) if contact["group"] else 0
         summaries_out.append({**contact,
-            "last_message": latest["body"][:100] if latest else "",
+            "last_message": ("Message deleted" if latest and latest["deleted_at"] else
+                "Photo" if latest and latest["kind"]=="image" else
+                "Poll: "+latest["body"][:80] if latest and latest["kind"]=="poll" else
+                latest["body"][:100] if latest else ""),
             "last_at": latest["created_at"] if latest else None,
             "last_id": latest["id"] if latest else 0,
             "last_sender": latest["sender_key"] if latest else None,
-            "unread": unread})
+            "mentions": mentions, "unread": unread})
     # Keep alliance group pinned; custom groups and direct messages follow by activity.
     group = summaries_out[:1]
     rest = sorted(summaries_out[1:], key=lambda r: (-r["last_id"], r["username"].casefold()))
@@ -349,15 +357,16 @@ def history_page(db, actor, target, before=None):
     if before is not None:
         if not isinstance(before,int) or before<=0:
             raise ValueError("Invalid message cursor.")
-        rows = db.execute("""SELECT id,sender_key,body,created_at FROM chat_messages
+        rows = db.execute("""SELECT id,sender_key,body,created_at,reply_to_id,edited_at,deleted_at,kind FROM chat_messages
             WHERE thread_key=? AND id<? ORDER BY id DESC LIMIT ?""",
             (thread, before, MAX_HISTORY+1)).fetchall()
     else:
-        rows = db.execute("""SELECT id,sender_key,body,created_at FROM chat_messages
+        rows = db.execute("""SELECT id,sender_key,body,created_at,reply_to_id,edited_at,deleted_at,kind FROM chat_messages
             WHERE thread_key=? ORDER BY id DESC LIMIT ?""",
             (thread, MAX_HISTORY+1)).fetchall()
     has_more=len(rows)>MAX_HISTORY
     messages=[dict(row) for row in reversed(rows[:MAX_HISTORY])]
+    rich.message_details(db,actor,thread,messages)
     # The existing read cursor belongs to the *recipient*, not to the sender.
     # Reveal it only for the sender's own messages in a private 1:1 chat.
     # Self-notes, alliance chats and custom groups are intentionally excluded.
@@ -375,7 +384,7 @@ def history(db, actor, target):
     return history_page(db,actor,target)[0]
 
 
-def send(db, actor, target, body):
+def send(db, actor, target, body, reply_to=None):
     if not valid_actor(db, actor):
         raise PermissionError("Approved account required.")
     thread = thread_for(db, actor, target)
@@ -388,16 +397,18 @@ def send(db, actor, target, body):
         raise ValueError(f"Messages must be {MAX_MESSAGE} characters or fewer.")
     if any(ord(char) < 32 and char not in "\n\t" for char in message):
         raise ValueError("Invalid message characters.")
+    reply_id=rich.validate_reply(db,thread,reply_to)
     created = now_utc()
     since = (datetime.now(timezone.utc) - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
     recent = db.execute("""SELECT COUNT(*) FROM chat_messages
         WHERE sender_key=? AND created_at>=?""", (actor, since)).fetchone()[0]
     if recent >= MAX_MESSAGES_PER_MINUTE:
         raise ValueError("Too many messages. Try again in a minute.")
-    cur = db.execute("""INSERT INTO chat_messages(thread_key,sender_key,body,created_at)
-        VALUES(?,?,?,?)""", (thread,actor,message,created))
+    cur = db.execute("""INSERT INTO chat_messages(thread_key,sender_key,body,created_at,reply_to_id)
+        VALUES(?,?,?,?,?)""", (thread,actor,message,created,reply_id))
+    rich.sync_mentions(db,thread,actor,cur.lastrowid,message)
     return {"id": cur.lastrowid, "sender_key": actor, "body": message,
-            "created_at": created}
+            "created_at": created, "reply_to_id": reply_id}
 
 
 def mark_read(db, actor, target):
@@ -415,6 +426,11 @@ def mark_read(db, actor, target):
 def purge_member(db, member_id):
     """Destroy private messages when an account is permanently deleted."""
     key = member_key(member_id)
+    # Capture this account's group photos *before* anonymizing sender_key.
+    # Do not erase photos belonging to other previously deleted accounts.
+    photos=[row["id"] for row in db.execute("""SELECT id FROM chat_messages
+        WHERE sender_key=? AND kind='image' AND deleted_at IS NULL
+        AND (thread_key='alliance' OR thread_key LIKE 'group:%')""",(key,))]
     rows = db.execute("""SELECT thread_key FROM chat_messages
         WHERE thread_key LIKE 'dm:%' AND
         (sender_key=? OR thread_key LIKE ? OR thread_key LIKE ?)""",
@@ -424,6 +440,8 @@ def purge_member(db, member_id):
     for thread in threads:
         people = thread[3:].split("|")
         if key in people:
+            rich.purge_messages(db,[row["id"] for row in db.execute(
+                "SELECT id FROM chat_messages WHERE thread_key=?",(thread,))])
             db.execute("DELETE FROM chat_messages WHERE thread_key=?", (thread,))
             db.execute("DELETE FROM chat_reads WHERE thread_key=?", (thread,))
     # Alliance messages no longer belong to the deleted account, but remain as
@@ -438,13 +456,27 @@ def purge_member(db, member_id):
         if db.execute("SELECT 1 FROM chat_group_members WHERE group_id=?",
                       (group_id,)).fetchone() is None:
             group_key="group:"+str(group_id)
+            rich.purge_messages(db,[row["id"] for row in db.execute(
+                "SELECT id FROM chat_messages WHERE thread_key=?",(group_key,))])
             db.execute("DELETE FROM chat_messages WHERE thread_key=?",(group_key,))
             db.execute("DELETE FROM chat_reads WHERE thread_key=?",(group_key,))
             db.execute("DELETE FROM chat_group_invites WHERE group_id=?",(group_id,))
             db.execute("DELETE FROM chat_groups WHERE id=?",(group_id,))
     db.execute("UPDATE chat_groups SET creator_key='deleted' WHERE creator_key=?",(key,))
     db.execute("UPDATE chat_messages SET sender_key='deleted' WHERE sender_key=? AND thread_key LIKE 'group:%'",(key,))
+    rich.purge_messages(db,[row["id"] for row in db.execute(
+        "SELECT id FROM chat_messages WHERE thread_key=?",("notes:"+key,))])
     db.execute("DELETE FROM chat_messages WHERE thread_key=?", ("notes:"+key,))
     db.execute("DELETE FROM chat_reads WHERE thread_key=?", ("notes:"+key,))
     db.execute("DELETE FROM chat_alliance_members WHERE member_key=?", (key,))
     db.execute("DELETE FROM chat_reads WHERE member_key=?", (key,))
+    # The removed account must leave no stored activity or poll-vote identity.
+    db.execute("DELETE FROM chat_presence WHERE member_key=?", (key,))
+    db.execute("DELETE FROM chat_typing WHERE member_key=?", (key,))
+    db.execute("DELETE FROM chat_poll_votes WHERE member_key=?", (key,))
+    db.execute("DELETE FROM chat_mentions WHERE member_key=?", (key,))
+    # Historical group messages stay anonymized; attached images do not.
+    rich.purge_messages(db,photos)
+    for message_id in photos:
+        db.execute("""UPDATE chat_messages SET body='',kind='deleted',deleted_at=?
+            WHERE id=?""",(now_utc(),message_id))

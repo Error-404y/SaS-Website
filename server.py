@@ -2,6 +2,7 @@ import hmac
 import hashlib
 import members
 import messenger
+import messenger_features as rich
 import ban_system
 import reminder_cards
 import json
@@ -755,10 +756,42 @@ class Handler(BaseHTTPRequestHandler):
                 return self.asset("login.html", "text/html; charset=utf-8", private=True)
             if path not in ("/auth.js", "/styles.css", "/assets/logo.webp", "/assets/crest.avif"):
                 return self.respond(403, {"error": "Access restricted."})
-        if path in ("/api/messenger", "/api/messenger/messages"):
+        image_match = re.fullmatch(r"/api/messenger/images/(\d+)", path)
+        if image_match:
             actor, csrf = self.messenger_actor()
             if actor is None:
                 return self.respond(401, {"error": "An approved account is required."})
+            from urllib.parse import parse_qs
+            peer = parse_qs(urlsplit(self.path).query).get("peer", [""])[0]
+            try:
+                with LOCK, connect() as db:
+                    data, content_type = rich.read_image(db,actor,peer,int(image_match.group(1)))
+            except (ValueError,PermissionError):
+                return self.respond(404, {"error": "Image unavailable."})
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "private, no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+            self.send_header("X-Frame-Options", "DENY")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        if path in ("/api/messenger", "/api/messenger/messages",
+                    "/api/messenger/mentionables"):
+            actor, csrf = self.messenger_actor()
+            if actor is None:
+                return self.respond(401, {"error": "An approved account is required."})
+            if path == "/api/messenger/mentionables":
+                from urllib.parse import parse_qs
+                peer = parse_qs(urlsplit(self.path).query).get("peer", [""])[0]
+                with LOCK, connect() as db:
+                    try:
+                        choices = rich.mentionable(db, actor, peer)
+                    except (ValueError,PermissionError):
+                        return self.respond(404, {"error": "Conversation unavailable."})
+                return self.respond(200, {"members": choices})
             if path == "/api/messenger":
                 with LOCK, connect() as db:
                     contacts = messenger.summaries(db, actor)
@@ -774,10 +807,11 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     messages, has_more = messenger.history_page(
                         db, actor, peer, int(cursor) if cursor else None)
-                except ValueError as exc:
+                    typing_names = rich.typing_names(db, actor, peer)
+                except (ValueError,PermissionError) as exc:
                     return self.respond(404, {"error": str(exc)})
             return self.respond(200, {"me": actor, "peer": peer, "messages": messages,
-                                      "has_more": has_more})
+                                      "has_more": has_more, "typing": typing_names})
         if path == "/api/reads":
             player = members.member_session(self, connect, LOCK)
             if not player or player["status"] != "approved":
@@ -838,6 +872,7 @@ class Handler(BaseHTTPRequestHandler):
                   "/unread.js": ("unread.js", "text/javascript; charset=utf-8"),
                   "/planner.js": ("planner.js", "text/javascript; charset=utf-8"),
                   "/planner-ui.js": ("planner-ui.js", "text/javascript; charset=utf-8"),
+                  "/messenger-rich-ui.js": ("messenger-rich-ui.js", "text/javascript; charset=utf-8"),
                   "/messenger-ui.js": ("messenger-ui.js", "text/javascript; charset=utf-8"),
                   "/reference-data.js": ("reference-data.js", "text/javascript; charset=utf-8"),
                   "/reference-ui.js": ("reference-ui.js", "text/javascript; charset=utf-8"),
@@ -848,12 +883,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.asset(*assets[path])
         return self.respond(404, {"error": "Not found."})
 
-    def read_json(self):
+    def read_json(self, max_bytes=16000):
         try:
             size = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             raise ValueError("Invalid content length.")
-        if size < 1 or size > 16000:
+        if size < 1 or size > max_bytes:
             raise ValueError("Invalid request size.")
         try:
             value = json.loads(self.rfile.read(size))
@@ -963,6 +998,37 @@ class Handler(BaseHTTPRequestHandler):
                     group_id = messenger.create_group(db, actor, data.get("name"),
                         data.get("members"))
                 return self.respond(201, {"id": group_id})
+            if path in ("/api/messenger/typing", "/api/messenger/messages/edit",
+                        "/api/messenger/messages/delete", "/api/messenger/polls",
+                        "/api/messenger/polls/vote", "/api/messenger/polls/close",
+                        "/api/messenger/images") and method == "POST":
+                actor, csrf = self.messenger_actor()
+                if actor is None:
+                    return self.respond(401, {"error": "An approved account is required."})
+                if not hmac.compare_digest(self.headers.get("X-CSRF-Token", ""), csrf):
+                    return self.respond(403, {"error": "Invalid CSRF token."})
+                data = self.read_json(max_bytes=6000000 if path == "/api/messenger/images" else 16000)
+                peer = data.get("peer", "")
+                with LOCK, connect() as db:
+                    if path == "/api/messenger/typing":
+                        rich.set_typing(db,actor,peer,data.get("active") is True)
+                        return self.respond(200, {"ok": True})
+                    if path == "/api/messenger/messages/edit":
+                        return self.respond(200, rich.edit_message(db,actor,peer,
+                            data.get("id"),data.get("body")))
+                    if path == "/api/messenger/messages/delete":
+                        return self.respond(200, rich.delete_message(db,actor,peer,data.get("id")))
+                    if path == "/api/messenger/polls":
+                        return self.respond(201, {"message":rich.create_poll(db,actor,peer,
+                            data.get("question"),data.get("options"),data.get("reply_to"))})
+                    if path == "/api/messenger/polls/vote":
+                        return self.respond(200, {"poll":rich.vote_poll(db,actor,peer,
+                            data.get("id"),data.get("position"))})
+                    if path == "/api/messenger/polls/close":
+                        return self.respond(200, rich.close_poll(db,actor,peer,data.get("id")))
+                    if path == "/api/messenger/images":
+                        return self.respond(201, {"message":rich.send_image(db,actor,peer,
+                            data.get("image"),data.get("caption",""),data.get("reply_to"))})
             if path in ("/api/messenger/messages", "/api/messenger/read") and method == "POST":
                 actor, csrf = self.messenger_actor()
                 if actor is None:
@@ -973,7 +1039,8 @@ class Handler(BaseHTTPRequestHandler):
                 peer = values.get("peer", "")
                 with LOCK, connect() as db:
                     if path == "/api/messenger/messages":
-                        message = messenger.send(db, actor, peer, values.get("body"))
+                        message = messenger.send(db, actor, peer, values.get("body"),
+                            values.get("reply_to"))
                         return self.respond(201, {"message": message})
                     last_read_id = messenger.mark_read(db, actor, peer)
                 return self.respond(200, {"ok": True, "last_read_id": last_read_id})
@@ -1314,6 +1381,8 @@ class Handler(BaseHTTPRequestHandler):
                                    (key, value))
                 return self.respond(200, {"ok": True})
             return self.respond(404, {"error": "Not found."})
+        except PermissionError as exc:
+            return self.respond(403, {"error": str(exc)})
         except ValueError as exc:
             return self.respond(400, {"error": str(exc)})
         except Exception:
