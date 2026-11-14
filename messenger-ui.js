@@ -45,20 +45,24 @@
     catch (e) { /* Presence is optional; Messenger must remain usable. */ }
     finally { presenceFlight=false; }
   }
-  // Keep a mobile chat within the *visible* viewport when Chrome's URL bar or
-  // the on-screen keyboard changes size. CSS uses dvh as a safe fallback.
+  // The entire Messenger page (not just an open conversation) fits the
+  // visible phone viewport. The Players list and chat history scroll inside it.
+  // VisualViewport tracks iOS Safari / Android keyboard and browser bar changes.
   function syncChatViewport(){
+    const root=document.documentElement;
     const shell=$('messenger-shell');
-    if (!shell) return;
-    if (window.innerWidth>620 || !shell.classList.contains('chat-open')) {
+    if (shell) {
       shell.style.removeProperty('--sas-visual-height');
       shell.style.removeProperty('--sas-visual-top');
+    }
+    if (!currentPage || window.innerWidth>750) {
+      root.style.removeProperty('--sas-messenger-viewport-height');
       return;
     }
     const viewport=window.visualViewport;
     const height=viewport ? viewport.height : window.innerHeight;
-    shell.style.setProperty('--sas-visual-height',Math.max(240,Math.round(height))+'px');
-    shell.style.setProperty('--sas-visual-top',Math.round(viewport?.offsetTop||0)+'px');
+    root.style.setProperty('--sas-messenger-viewport-height',
+      Math.max(280,Math.round(height))+'px');
   }
   const totalUnread = () => contacts.reduce((sum, c) => sum + (Number(c.unread)||0),0);
   async function api(path, options={}) {
@@ -151,7 +155,8 @@
       contacts = Array.isArray(data.contacts) ? data.contacts : [];
       if (activePeer && !contacts.some(c=>c.id===activePeer)) {
         activePeer = '';
-        $('messenger-shell').classList.remove('chat-open');
+        $('messenger-shell').classList.remove('chat-open','is-locked');
+        document.body.classList.remove('messenger-mobile-chat-open');
       }
       renderContacts();
       updateActivePresence();
@@ -394,7 +399,7 @@
     lastPresencePing=0;
     $('messenger-active-avatar').classList.remove('is-online');
     $('messenger-shell').classList.remove('chat-open','is-locked');
-    document.body.classList.remove('messenger-mobile-chat-open');
+    document.body.classList.remove('messenger-mobile-chat-open','sas-messenger-page');
     syncChatViewport();
     $('messenger-message').disabled=true;
     $('messenger-send').disabled=true;
@@ -403,12 +408,17 @@
     renderContacts();
   }
   function onPage(name){
-    currentPage=name==='messenger';
+    const entering=name==='messenger';
+    // Reset scroll BEFORE locking the page; otherwise changing from a long
+    // calculator page can leave the fixed-size Messenger above the screen.
+    if (entering && !currentPage && window.innerWidth<=750) window.scrollTo(0,0);
+    currentPage=entering;
+    document.body.classList.toggle('sas-messenger-page',currentPage);
     if (!currentPage) {
       $('messenger-shell').classList.remove('chat-open');
       document.body.classList.remove('messenger-mobile-chat-open');
-      syncChatViewport();
     }
+    syncChatViewport();
     if (currentPage && running) {
       loadList();
       if (activePeer) {
@@ -438,6 +448,9 @@
     });
     $('messenger-group-form').addEventListener('submit',createGroup);
     $('messenger-compose').addEventListener('submit',send);
+    $('messenger-message').addEventListener('focus',()=>{
+      requestAnimationFrame(syncChatViewport);
+    });
     window.addEventListener('resize',syncChatViewport,{passive:true});
     if (window.visualViewport){
       window.visualViewport.addEventListener('resize',syncChatViewport,{passive:true});
