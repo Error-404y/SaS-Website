@@ -263,16 +263,18 @@ def contact_list(db, actor):
     joined = alliance_joined(db, actor)
     contacts = [{"id": ALLIANCE, "username": "SaS - Group Chat",
                  "player_name": "Everyone in the alliance", "group": True,
-                 "pinned": True, "joined": joined}]
-    for group in db.execute("""SELECT g.id,g.name,COUNT(gm.member_key) AS participants
+                 "pinned": True, "joined": joined,
+                 "can_mention_everyone": actor == ADMIN}]
+    for group in db.execute("""SELECT g.id,g.name,g.creator_key,COUNT(gm.member_key) AS participants
         FROM chat_groups g
         JOIN chat_group_members gm ON gm.group_id=g.id
         WHERE EXISTS(SELECT 1 FROM chat_group_members self
                      WHERE self.group_id=g.id AND self.member_key=?)
-        GROUP BY g.id,g.name ORDER BY g.id DESC""",(actor,)):
+        GROUP BY g.id,g.name,g.creator_key ORDER BY g.id DESC""",(actor,)):
         contacts.append({"id": "group:"+str(group["id"]), "username": group["name"],
                          "player_name": str(group["participants"])+" participants",
-                         "group": True, "pinned": False})
+                         "group": True, "pinned": False,
+                         "can_mention_everyone": actor in (ADMIN,group["creator_key"])})
     for invitation in db.execute("""SELECT g.id,g.name,i.invited_by
         FROM chat_group_invites i JOIN chat_groups g ON g.id=i.group_id
         WHERE i.member_key=? AND i.joined_at IS NULL
