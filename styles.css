@@ -1102,3 +1102,23 @@ html,body{max-width:100%;overflow-x:clip}
 @supports not (height:100dvh){
   @media(max-width:620px){.messenger-shell.chat-open{height:100vh}}
 }
+
+@media(max-width:620px){
+  body.messenger-mobile-chat-open{overflow:hidden;overscroll-behavior:none}
+  body.messenger-mobile-chat-open .messenger-shell.chat-open{overscroll-behavior:contain}
+  body.messenger-mobile-chat-open .messenger-history{scrollbar-width:thin}
+  .messenger-compose .sr-only{pointer-events:none}
+  .messenger-shell.chat-open .messenger-join-content{max-height:calc(100dvh - 105px);overflow-y:auto}
+}
+@media(max-width:750px){
+  .right-sidebar,.tools-sidebar,.sidebar-nav,.tools-nav{max-width:100%;min-width:0}
+  .sidebar-heading{display:flex;align-items:center;justify-content:space-between}
+  .mobile-nav-hint{display:inline;font-size:10px;white-space:nowrap}
+  .site-header{min-width:0}
+  .header-brand{min-width:0;flex:1}
+  #header-section{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .header-actions{flex:none}
+  .post-card{padding:19px 16px}
+  .page-title{min-width:0}
+  .page-title h1{overflow-wrap:anywhere}
+}
