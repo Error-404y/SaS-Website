@@ -1,5 +1,6 @@
-"""Delayed moderation ban behavior: 2h queue, cancel, active restrictions, shared IP."""
+"""Immediate moderation bans, unbans, existing pending migrations and shared IP."""
 import tempfile
+import time
 import unittest
 from pathlib import Path
 import sqlite3
@@ -25,33 +26,36 @@ class BanStoreTests(unittest.TestCase):
         ban_system.record_ip(self.db,self.alpha,"198.51.100.10")
         ban_system.record_ip(self.db,self.bravo,"198.51.100.11")
 
-    def test_queue_waits_two_hours_before_enforcement_and_can_be_cancelled(self):
+    def test_ban_takes_effect_immediately_and_unban_restores_access(self):
         now=100000
         bid=ban_system.queue(self.db,self.alpha,"everything","Test reason",now=now)
-        self.assertFalse(ban_system.is_banned(self.db,email="alpha@test.example",now=now+7199))
-        self.assertFalse(ban_system.is_banned(self.db,ip="198.51.100.10",now=now+7199))
-        self.assertEqual(ban_system.list_bans(self.db,now)[0]["status"],"pending")
-        self.assertTrue(ban_system.stop(self.db,bid,now=now+7199))
-        self.assertFalse(ban_system.is_banned(self.db,email="alpha@test.example",now=now+7201))
-        self.assertEqual(ban_system.list_bans(self.db,now+7201)[0]["status"],"cancelled")
+        self.assertTrue(ban_system.is_banned(self.db,email="alpha@test.example",now=now))
+        self.assertTrue(ban_system.is_banned(self.db,ip="198.51.100.10",now=now))
+        self.assertTrue(ban_system.is_banned(self.db,username="Alpha",now=now))
+        self.assertEqual(ban_system.list_bans(self.db,now)[0]["status"],"active")
+        self.assertEqual(self.db.execute(
+            "SELECT effective_at FROM moderation_bans WHERE id=?",(bid,)).fetchone()[0],now)
+        self.assertFalse(ban_system.stop(self.db,bid,now=now))
+        self.assertFalse(ban_system.is_banned(self.db,email="alpha@test.example",now=now))
+        self.assertFalse(ban_system.is_banned(self.db,ip="198.51.100.10",now=now))
+        self.assertEqual(ban_system.list_bans(self.db,now)[0]["status"],"revoked")
 
     def test_each_type_only_enforces_matching_selector(self):
         now=200000
         bid=ban_system.queue(self.db,self.alpha,"email",now=now)
-        self.assertFalse(ban_system.is_banned(self.db,email="alpha@test.example",now=now+7199))
-        self.assertTrue(ban_system.is_banned(self.db,email="ALPHA@Test.Example",now=now+7200))
-        self.assertFalse(ban_system.is_banned(self.db,ip="198.51.100.10",now=now+7200))
-        self.assertTrue(ban_system.stop(self.db,bid,now=now+7201) is False)
-        self.assertFalse(ban_system.is_banned(self.db,email="alpha@test.example",now=now+7202))
+        self.assertTrue(ban_system.is_banned(self.db,email="ALPHA@Test.Example",now=now))
+        self.assertFalse(ban_system.is_banned(self.db,ip="198.51.100.10",now=now))
+        self.assertFalse(ban_system.stop(self.db,bid,now=now))
+        self.assertFalse(ban_system.is_banned(self.db,email="alpha@test.example",now=now))
         ban_system.queue(self.db,self.alpha,"name",now=now)
-        self.assertTrue(ban_system.is_banned(self.db,username="ALPHA",now=now+7200))
-        self.assertTrue(ban_system.is_banned(self.db,player_name="AlphaChief",now=now+7200))
-        self.assertFalse(ban_system.is_banned(self.db,username="Bravo",now=now+7200))
+        self.assertTrue(ban_system.is_banned(self.db,username="ALPHA",now=now))
+        self.assertTrue(ban_system.is_banned(self.db,player_name="AlphaChief",now=now))
+        self.assertFalse(ban_system.is_banned(self.db,username="Bravo",now=now))
 
     def test_ip_bans_can_affect_multiple_members_on_shared_address(self):
         now=300000
         ban_system.queue(self.db,self.alpha,"ip",now=now)
-        self.assertTrue(ban_system.is_banned(self.db,ip="198.51.100.10",now=now+7200))
+        self.assertTrue(ban_system.is_banned(self.db,ip="198.51.100.10",now=now))
         self.assertFalse(ban_system.is_banned(self.db,ip="198.51.100.11",now=now+7200))
         self.assertFalse(ban_system.is_banned(self.db,email="alpha@test.example",now=now+7200))
 
@@ -66,10 +70,28 @@ class BanStoreTests(unittest.TestCase):
         bid=ban_system.queue(self.db,self.alpha,"name",now=200)
         with self.assertRaisesRegex(ValueError,"already exists"):
             ban_system.queue(self.db,self.alpha,"name",now=201)
-        self.assertTrue(ban_system.stop(self.db,bid,now=202))
+        self.assertFalse(ban_system.stop(self.db,bid,now=202))
         with self.assertRaisesRegex(ValueError,"already been"):
             ban_system.stop(self.db,bid,now=204)
         self.assertIsInstance(ban_system.queue(self.db,self.alpha,"name",now=205),int)
+
+    def test_old_queued_bans_become_active_on_restart_without_reviving_revoked(self):
+        now=int(time.time())
+        old=ban_system.queue(self.db,self.alpha,"email",now=now)
+        cancelled=ban_system.queue(self.db,self.bravo,"name",now=now)
+        self.db.execute("UPDATE moderation_bans SET effective_at=? WHERE id IN (?,?)",
+                        (now+7200,old,cancelled))
+        self.db.execute("UPDATE moderation_bans SET cancelled_at=? WHERE id=?",
+                        (now,cancelled))
+        self.assertFalse(ban_system.is_banned(self.db,email="alpha@test.example",now=now))
+        ban_system.setup(self.db)
+        self.assertTrue(ban_system.is_banned(self.db,email="alpha@test.example",now=now))
+        self.assertFalse(ban_system.is_banned(self.db,username="Bravo",now=now))
+        row=self.db.execute("SELECT * FROM moderation_bans WHERE id=?",(old,)).fetchone()
+        self.assertLessEqual(row["effective_at"],int(time.time()))
+        unchanged=self.db.execute("SELECT * FROM moderation_bans WHERE id=?",(cancelled,)).fetchone()
+        self.assertEqual(unchanged["effective_at"],now+7200)
+        self.assertEqual(ban_system.list_bans(self.db,now)[0]["status"],"active")
 
     def test_reject_invalid_ip_address_data(self):
         ban_system.record_ip(self.db,self.alpha,"forged")

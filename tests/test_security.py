@@ -441,7 +441,7 @@ class SecurityBoundaryTests(unittest.TestCase):
         self.assertIn("channels", json.loads(raw))
         self.assertNotIn("api/webhooks", raw.decode())
 
-    def test_delayed_bans_are_admin_only_and_enforced_after_activation(self):
+    def test_instant_bans_are_admin_only_and_enforced_on_next_request(self):
         self.register("BanTarget", "approved")
         player_cookie, player_csrf = self.login_member("BanTarget")
         admin_cookie, admin_csrf = self.login_admin()
@@ -454,17 +454,15 @@ class SecurityBoundaryTests(unittest.TestCase):
         status, raw, _ = self.call("/api/bans", "POST", body, admin_cookie, admin_csrf)
         self.assertEqual(status, 201, raw)
         ban_id = json.loads(raw)["id"]
-        self.assertEqual(json.loads(raw)["delay_seconds"], 7200)
-        self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 200)
+        self.assertEqual(json.loads(raw)["delay_seconds"], 0)
+        # The member's existing cookie no longer grants access immediately.
+        self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 403)
         self.assertEqual(self.call("/api/bans", cookie=player_cookie)[0], 403)
         status, raw, _ = self.call("/api/bans", cookie=admin_cookie)
         self.assertEqual(status, 200, raw)
-        self.assertEqual(json.loads(raw)["bans"][0]["status"], "pending")
+        self.assertEqual(json.loads(raw)["bans"][0]["status"], "active")
         self.assertNotIn("selectors_json", raw.decode())
 
-        with server.connect() as db:
-            db.execute("UPDATE moderation_bans SET effective_at=? WHERE id=?",
-                       (int(time.time()) - 1, ban_id))
         self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 403)
         self.assertEqual(self.call("/api/messenger", cookie=player_cookie)[0], 403)
         self.assertEqual(self.call("/index.html", cookie=player_cookie)[0], 403)
@@ -479,34 +477,33 @@ class SecurityBoundaryTests(unittest.TestCase):
         self.assertFalse(json.loads(raw)["undone"])
         self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 200)
 
-    def test_admin_can_cancel_all_pending_bans_without_touching_active(self):
+    def test_all_new_bans_are_active_and_can_be_unbanned_individually(self):
         self.register("FirstBan", "approved")
         self.register("SecondBan", "approved")
         admin_cookie, csrf = self.login_admin()
         with server.connect() as db:
             one = db.execute("SELECT id FROM members WHERE username='FirstBan'").fetchone()[0]
             two = db.execute("SELECT id FROM members WHERE username='SecondBan'").fetchone()[0]
+        ban_ids=[]
         for member_id in (one, two):
             status, raw, _ = self.call("/api/bans", "POST",
                 {"member_id": member_id, "kind": "email"}, admin_cookie, csrf)
             self.assertEqual(status, 201, raw)
-        with server.connect() as db:
-            db.execute("UPDATE moderation_bans SET effective_at=? WHERE member_id=?",
-                       (int(time.time())-5, one))
-        self.assertEqual(self.call("/api/bans/cancel-pending", "POST", {})[0], 403)
+            self.assertEqual(json.loads(raw)["delay_seconds"],0)
+            ban_ids.append(json.loads(raw)["id"])
+        # The old queue-cancellation action no longer exists.
         self.assertEqual(self.call("/api/bans/cancel-pending", "POST",
-                                   {}, admin_cookie)[0], 403)
-        status, raw, _ = self.call("/api/bans/cancel-pending", "POST",
-                                   {}, admin_cookie, csrf)
+                                   {}, admin_cookie, csrf)[0], 404)
+        status, raw, _ = self.call("/api/bans", cookie=admin_cookie)
         self.assertEqual(status, 200, raw)
-        self.assertEqual(json.loads(raw)["cancelled"], 1)
-        with server.connect() as db:
-            active = db.execute("SELECT cancelled_at FROM moderation_bans WHERE member_id=?",
-                                (one,)).fetchone()
-            pending = db.execute("SELECT cancelled_at FROM moderation_bans WHERE member_id=?",
-                                 (two,)).fetchone()
-        self.assertIsNone(active["cancelled_at"])
-        self.assertIsNotNone(pending["cancelled_at"])
+        self.assertEqual([b["status"] for b in json.loads(raw)["bans"][:2]],
+                         ["active","active"])
+        self.assertEqual(self.call("/api/bans/"+str(ban_ids[0]), "DELETE",
+                                   {}, admin_cookie, csrf)[0],200)
+        status, raw, _ = self.call("/api/bans", cookie=admin_cookie)
+        records={item["id"]:item for item in json.loads(raw)["bans"]}
+        self.assertEqual(records[ban_ids[0]]["status"],"revoked")
+        self.assertEqual(records[ban_ids[1]]["status"],"active")
 
     def test_banned_ip_blocks_member_but_does_not_lock_out_admin(self):
         self.register("NetworkBan", "approved")
@@ -518,9 +515,6 @@ class SecurityBoundaryTests(unittest.TestCase):
             {"member_id": member_id, "kind": "ip"}, admin_cookie, admin_csrf)
         self.assertEqual(status, 201, raw)
         ban_id = json.loads(raw)["id"]
-        with server.connect() as db:
-            db.execute("UPDATE moderation_bans SET effective_at=? WHERE id=?",
-                       (int(time.time()) - 1, ban_id))
         self.assertEqual(self.call("/api/state", cookie=player_cookie)[0], 403)
         self.assertEqual(self.call("/api/member/login", "POST",
             {"username": "NetworkBan", "password": "member-password-long"})[0], 403)

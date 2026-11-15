@@ -89,8 +89,12 @@ test('Event UI shows Reset Values, click hints, detailed scoring and ban modal',
   assert.match(html,/id="entry-scoring"/);
   assert.match(app,/How to Earn Points/);
   assert.match(html,/id="ban-dialog"/);
-  assert.match(html,/id="ban-queue-cancel-all"/);
-  assert.match(app,/Cancel scheduled ban/);
+  assert.match(html,/Ban account immediately/);
+  assert.match(html,/Ban Now/);
+  assert.doesNotMatch(html,/id="ban-queue-cancel-all"/);
+  assert.doesNotMatch(html,/2-hour waiting period/);
+  assert.match(app,/Ban activated immediately/);
+  assert.match(app,/Lift active ban/);
 });
 
 test('Messenger exposes player list, pinned alliance and private group creation',()=>{
