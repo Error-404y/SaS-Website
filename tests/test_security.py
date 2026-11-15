@@ -116,6 +116,30 @@ class SecurityBoundaryTests(unittest.TestCase):
         self.assertEqual(self.call("/api/accounts/1", "PATCH", {"status":"approved"}, cookie, csrf)[0], 403)
         self.assertEqual(self.call("/api/password/requests/1", "PATCH", {"decision":"approved"}, cookie, csrf)[0], 403)
 
+    def test_last_connection_ip_and_timestamp_are_admin_only(self):
+        self.register("IPViewer", "approved")
+        self.register("NoRecordedIP", "pending")
+        member_cookie, member_csrf = self.login_member("IPViewer")
+        admin_cookie, _ = self.login_admin()
+        self.assertEqual(self.call("/api/accounts")[0],403)
+        self.assertEqual(self.call("/api/accounts",cookie=member_cookie)[0],403)
+        status, raw, _ = self.call("/api/accounts",cookie=admin_cookie)
+        self.assertEqual(status,200)
+        accounts={item["username"]:item for item in json.loads(raw)["accounts"]}
+        self.assertEqual(accounts["IPViewer"]["last_ip"],"127.0.0.1")
+        self.assertIsInstance(accounts["IPViewer"]["last_ip_seen_at"],int)
+        self.assertGreater(accounts["IPViewer"]["last_ip_seen_at"],0)
+        self.assertEqual(accounts["NoRecordedIP"]["last_ip"],"")
+        self.assertIsNone(accounts["NoRecordedIP"]["last_ip_seen_at"])
+        # A spoofed proxy header must not overwrite the server-observed address.
+        self.assertEqual(self.call("/api/state",cookie=member_cookie,
+                        headers={"X-Forwarded-For":"203.0.113.250"})[0],200)
+        status, raw, _ = self.call("/api/accounts",cookie=admin_cookie)
+        accounts={item["username"]:item for item in json.loads(raw)["accounts"]}
+        self.assertEqual(accounts["IPViewer"]["last_ip"],"127.0.0.1")
+        self.assertNotIn("last_ip",json.loads(self.call("/api/session",
+                         cookie=member_cookie)[1]))
+
     def test_admin_csrf_and_origin_boundaries(self):
         cookie, csrf = self.login_admin()
         self.assertEqual(self.call("/api/accounts", cookie=cookie)[0], 200)

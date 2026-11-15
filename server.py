@@ -968,7 +968,12 @@ class Handler(BaseHTTPRequestHandler):
                 resets = members.list_password_requests(db)
             with LOCK, connect() as db:
                 for account in accounts:
-                    account["last_ip"] = ban_system.member_ip(db, account["id"])
+                    # Admin-only, server-observed network address. The value may
+                    # be a reverse proxy or shared network, not a unique person.
+                    observed=db.execute("""SELECT last_ip,seen_at FROM member_ips
+                        WHERE member_id=?""",(account["id"],)).fetchone()
+                    account["last_ip"]=observed["last_ip"] if observed else ""
+                    account["last_ip_seen_at"]=observed["seen_at"] if observed else None
             return self.respond(200, {"accounts": accounts, "password_requests": resets})
         if path == "/api/session":
             session = current_session(self)
