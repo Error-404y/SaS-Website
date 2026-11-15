@@ -88,7 +88,9 @@ def resolve(socket_peer, headers, config=None):
         return Identity("", "unverified")
     if config.header != "x-forwarded-for":
         value = normalize_ip(values[0])
-        return Identity(value, "trusted_proxy") if value else Identity("", "unverified")
+        if not value or not ipaddress.ip_address(value).is_global:
+            return Identity("", "unverified")
+        return Identity(value, "trusted_proxy")
 
     # Read X-Forwarded-For from the trusted-proxy end, not from the
     # client-controlled leftmost element. This selects the first upstream
@@ -102,5 +104,6 @@ def resolve(socket_peer, headers, config=None):
     for addr in reversed(addresses):
         hop = ipaddress.ip_address(addr)
         if not any(hop in net for net in config.trusted_proxies):
-            return Identity(addr, "trusted_proxy")
+            return (Identity(addr, "trusted_proxy") if hop.is_global
+                    else Identity("", "unverified"))
     return Identity("", "unverified")
