@@ -64,8 +64,10 @@ class ClientIPTests(unittest.TestCase):
                          ("X-Forwarded-For","1.1.1.1")),
             self.headers(("X-Forwarded-For","8.8.8.8\nanother")),
         ]
-        for headers in bad:
-            with self.subTest(headers=str(headers)):
+        for index,headers in enumerate(bad):
+            # One deliberately malformed header contains a newline, which
+            # HTTPMessage cannot stringify; the resolver must still reject it.
+            with self.subTest(case=index):
                 self.assertEqual(client_ips.resolve("10.33.0.10",headers,config).ip,"")
 
     def test_single_value_header_and_v6(self):
