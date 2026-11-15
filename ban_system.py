@@ -90,7 +90,7 @@ def member_selectors(db, member_id, kind):
     selectors = {}
     if kind in ("ip","everything"):
         if not ip:
-            raise ValueError("No verified visitor IP available. Configure a trusted proxy, then ask the player to reconnect; IP/Everything bans are currently unavailable.")
+            raise ValueError("No verified IP recorded for this account. Configure a trusted proxy, then ask the player to reconnect; IP/Everything bans are currently unavailable.")
         selectors["ip"] = ip
     if kind in ("email","everything"):
         selectors["email"] = member["email"].strip().casefold()
