@@ -97,6 +97,21 @@ test('Event UI shows Reset Values, click hints, detailed scoring and ban modal',
   assert.match(app,/Lift active ban/);
 });
 
+test('admin account details expose recorded IP with copy and warning in native SaS popup',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+  const ui=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
+  assert.match(html,/id="account-detail-dialog"/);
+  assert.match(html,/id="account-detail-ip"/);
+  assert.match(html,/id="account-detail-ip-copy"/);
+  assert.match(html,/id="account-detail-ip-seen"/);
+  assert.match(html,/hosting proxies can affect IP bans/);
+  assert.match(ui,/member\.last_ip_seen_at/);
+  assert.match(ui,/member\.last_ip/);
+  assert.match(ui,/navigator\.clipboard\.writeText\(ip\)/);
+  assert.match(ui,/Last recorded connection IP/);
+});
+
 test('Messenger exposes player list, pinned alliance and private group creation',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
