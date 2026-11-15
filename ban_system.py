@@ -30,8 +30,14 @@ def setup(db):
     db.execute("""CREATE TABLE IF NOT EXISTS member_ips (
         member_id INTEGER PRIMARY KEY,
         last_ip TEXT NOT NULL,
-        seen_at INTEGER NOT NULL
+        seen_at INTEGER NOT NULL,
+        source TEXT NOT NULL DEFAULT 'legacy'
     )""")
+    # Existing records may contain the hosting reverse proxy's shared IP.
+    # Keep timestamps for audit, but NEVER reuse old records for new IP bans.
+    fields={row["name"] for row in db.execute("PRAGMA table_info(member_ips)")}
+    if "source" not in fields:
+        db.execute("ALTER TABLE member_ips ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy'")
     # Migrate previously queued two-hour bans to the new immediate policy.
     # Do not reactivate bans which have been cancelled or revoked.
     db.execute("""UPDATE moderation_bans SET effective_at=?
@@ -46,18 +52,31 @@ def normalize_ip(raw):
         return ""
 
 
-def record_ip(db, member_id, remote_ip):
+def record_ip(db, member_id, remote_ip, source="direct"):
+    """Persist only a verified direct or trusted-proxy connection.
+
+    The default 'direct' is for explicitly direct callers (e.g. unit tests);
+    the website always passes the resolved connection's source explicitly.
+    """
     address = normalize_ip(remote_ip)
-    if address:
-        db.execute("""INSERT INTO member_ips(member_id,last_ip,seen_at)
-            VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET
-            last_ip=excluded.last_ip,seen_at=excluded.seen_at""",
-            (int(member_id), address, int(time.time())))
+    if address and source in ("direct","trusted_proxy"):
+        db.execute("""INSERT INTO member_ips(member_id,last_ip,seen_at,source)
+            VALUES(?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET
+            last_ip=excluded.last_ip,seen_at=excluded.seen_at,
+            source=excluded.source""",
+            (int(member_id), address, int(time.time()), source))
 
 
 def member_ip(db, member_id):
-    row = db.execute("SELECT last_ip FROM member_ips WHERE member_id=?", (member_id,)).fetchone()
-    return row["last_ip"] if row else ""
+    row = db.execute("SELECT last_ip,source FROM member_ips WHERE member_id=?",
+                     (member_id,)).fetchone()
+    return row["last_ip"] if row and row["source"] in ("direct","trusted_proxy") else ""
+
+
+def member_ip_source(db, member_id):
+    row = db.execute("SELECT source FROM member_ips WHERE member_id=?",
+                     (member_id,)).fetchone()
+    return row["source"] if row else "not_recorded"
 
 
 def member_selectors(db, member_id, kind):
@@ -71,7 +90,7 @@ def member_selectors(db, member_id, kind):
     selectors = {}
     if kind in ("ip","everything"):
         if not ip:
-            raise ValueError("No verified IP recorded for this account. They must sign in first.")
+            raise ValueError("No verified visitor IP available. Configure a trusted proxy, then ask the player to reconnect; IP/Everything bans are currently unavailable.")
         selectors["ip"] = ip
     if kind in ("email","everything"):
         selectors["email"] = member["email"].strip().casefold()
