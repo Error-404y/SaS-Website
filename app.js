@@ -808,8 +808,8 @@
     }
     one('#ban-kind').value = hasIP ? 'ip' : 'email';
     one('#ban-ip-warning').textContent = hasIP
-      ? 'Last verified connection IP: ' + member.last_ip + '. Shared networks may affect multiple players.'
-      : 'No verified IP is available yet. IP and Everything bans require this account to register or sign in again after the update.';
+      ? 'Last recorded connection IP: ' + member.last_ip + '. This address may belong to a shared network or reverse proxy.'
+      : 'No connection IP recorded for this account. IP and Everything bans require an observed registration or sign-in address.';
     openDialog('ban-dialog');
   }
 
@@ -940,9 +940,31 @@
     eye.setAttribute('aria-label', 'Show email');
     eye.title = 'Show email';
     one('#account-detail-status').textContent = member.status;
+    const ip=member.last_ip || '';
+    one('#account-detail-ip').textContent=ip || 'Not recorded';
+    const seen=Number(member.last_ip_seen_at);
+    one('#account-detail-ip-seen').textContent=
+      ip && Number.isFinite(seen) && seen>0
+        ? 'Last observed: '+new Date(seen*1000).toISOString().slice(0,19).replace('T',' ')+' UTC'
+        : 'No connection time is available for this account.';
+    const copy=one('#account-detail-ip-copy');
+    copy.hidden=!ip;
+    copy.dataset.ip=ip;
     one('#account-detail-created').textContent = member.created_at;
     one('#account-detail-review').textContent = member.review_message || '—';
     openDialog('account-detail-dialog');
+  }
+
+  async function copyAccountIP(){
+    if(!site.admin)return;
+    const ip=one('#account-detail-ip-copy').dataset.ip;
+    if(!ip)return;
+    try {
+      await navigator.clipboard.writeText(ip);
+      notify('Recorded IP copied.');
+    } catch (_) {
+      notify('Could not copy IP automatically. Select and copy the value shown in the account details.');
+    }
   }
 
   function toggleAccountEmail() {
@@ -1238,7 +1260,11 @@
     }, reducedMotion ? 0 : 540);
   });
   one('#account-detail-email-toggle').addEventListener('click', toggleAccountEmail);
+  one('#account-detail-ip-copy').addEventListener('click',copyAccountIP);
   one('#account-detail-dialog').addEventListener('close', () => {
+    one('#account-detail-ip').textContent='Not recorded';
+    one('#account-detail-ip-copy').dataset.ip='';
+    one('#account-detail-ip-copy').hidden=true;
     const email = one('#account-detail-email');
     email.textContent = '••••••••••••';
     email.dataset.value = '';
