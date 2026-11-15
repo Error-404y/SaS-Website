@@ -135,7 +135,7 @@ class SecurityBoundaryTests(unittest.TestCase):
         status, raw, _ = self.call("/api/bans","POST",
             {"member_id":banned_id,"kind":"everything"},admin_cookie,csrf)
         self.assertEqual(status,400)
-        self.assertIn(b"No verified visitor IP",raw)
+        self.assertIn(b"No verified IP",raw)
         # Email + Name ban still works. Other users on the same proxy IP
         # are not accidentally blocked in fail-closed proxy mode.
         self.assertEqual(self.call("/api/bans","POST",
