@@ -187,11 +187,34 @@ All destructive administrator actions—permanent account deletion, deleting an 
 
 **SaS – Accounts** includes a **Ban** action next to each player plus Moderation & Active Bans. Admins can select **IP**, **Email**, **Name** (both account username and in-game name), or **Everything** (all of these) from an in-site popup, optionally add a reason, and click **Ban Now**. **The ban takes effect immediately**, including for existing logged-in sessions on their next request; there is no two-hour waiting period. An admin can select **Unban** at any time to restore access. The restriction is checked server-side on every relevant request, so no background scheduler is needed. On the first restart after deploying this change, previously queued but uncancelled bans are **activated immediately**; already revoked or cancelled bans remain inactive. The old **Cancel All Pending Bans** control and API are removed.
 
-This protection is **not a device ban**: the site cannot reliably identify a particular phone. It tracks the last actual HTTP peer IP for a registered member and checks that source on future requests. It intentionally **does not trust client-supplied X-Forwarded-For** values. Behind a reverse proxy, the peer address can represent the proxy instead of the visitor; IP bans can also affect unrelated people sharing the same network. Only use IP/Everything when the administrator sees a verified last IP, and verify hosting proxy configuration before relying on it. An approved admin session is exempt from moderation bans so admins can lift a bad ban even from a shared network. Bans on names/emails apply to those values; someone who changes both their details and their IP may evade them.
+This protection is **not a device ban**: the site cannot uniquely identify a phone. To prevent the hosting proxy from being treated as a player, client-IP resolution now **fails closed by default** (see *Trusted reverse proxy IP setup* below). IP/Everything bans are unavailable until a genuine visitor address is verified. Email/Name bans and existing admin emergency-unban access are unaffected. A successfully verified IP may still be shared by people on the same public network or mobile carrier, so verify before banning.
 
 Ban queue and removal endpoints require authenticated admin sessions **and CSRF tokens**. Members, guests, pending and rejected accounts cannot view the queue or schedule/cancel bans. Existing account deletion is separate and remains immediate.
 
 **Events and Alliance Events** show a clear *Click me · View details* hint on every row. Their detail popups include event title, UTC start/end, category/status, rewards, **Points / Milestones**, **How to Earn Points**, and optional notes. Admins can edit the two new event fields. Older events show *Not specified* until an admin fills them in; no event-point rules are invented. The **Reset Values** button in Event Points replaces the older screenshot-specific label.
+
+### Trusted reverse proxy IP setup (Bot-Hosting / Cloudflare)
+
+Bot-Hosting's custom-domain documentation confirms that applications may run behind **Bot-Hosting's reverse proxy**, and its guide optionally places **Cloudflare** in front. The app's raw `self.client_address[0]` is therefore often the hosting proxy, **not the player**. The public Bot-Hosting docs do **not** currently specify which client-IP header is delivered to this particular Python service or the source IP/CIDRs of the reverse proxy. **Do not guess either value.**
+
+SaSWeb now selects an address through `client_ips.py` and uses the same verified identity for account IP storage, registration, login and IP-ban checks. Configure through your **Bot-Hosting Python application's private environment** after Bot-Hosting support has confirmed the chain:
+
+```ini
+# Default is proxy, so unverified addresses are not banned or recorded.
+SAS_CLIENT_IP_MODE=proxy
+# One of: x-forwarded-for, x-real-ip, cf-connecting-ip.
+# Use ONLY the header Bot-Hosting confirms it overwrites/appends safely:
+SAS_CLIENT_IP_HEADER=x-forwarded-for
+# REPLACE with the actual source IP range of the reverse proxy that
+# CONNECTS DIRECTLY to the Python application; a single /32 is ideal.
+SAS_TRUSTED_PROXY_CIDRS=192.0.2.10/32
+```
+
+**Example values are placeholders only.** `192.0.2.10/32` is a reserved documentation IP; it is **not** a Bot-Hosting proxy address. Ask hosting support which **socket peer addresses** are legitimate and whether inbound client-supplied forwarding headers are removed or rewritten. If there are multiple proxies (e.g. Cloudflare → Bot-Hosting → Python), confirm the rightmost trusted `X-Forwarded-For` chain and what Bot-Hosting forwards. For a single-value header, confirm it is overwritten by the trusted proxy and cannot be set by an external client. Never blindly trust all IPs, or set `SAS_CLIENT_IP_MODE=direct` behind a proxy. `direct` is only for installations where the client connects straight to the Python server (no reverse proxy), and **all** forwarding headers are ignored.
+
+**Safety behavior:** If the server is in proxy mode without a trusted header and source range, or the request doesn't actually come from a configured proxy, its player IP is **unverified**: new address records are not written, IP/Everything bans cannot be created from that unknown address, and any existing IP selector is ignored. Email and name restrictions continue to work. Old saved `member_ips` rows are migrated to provenance `legacy`, kept for audit, but **not reusable** for future IP bans. Fresh successful registrations/logins will record a verified address once the proxy setup is correct. Existing Everything bans need to be explicitly **Unbanned** in the admin panel if you intend to remove their email/name restrictions too.
+
+**Verify before enabling bans:** Log in with two approved test accounts from different networks, confirm two distinct addresses in **SaS – Accounts**, and compare each with the visitor's own public IP. Check that spoofed `X-Forwarded-For`/other forwarding headers do not change the selected client IP. If both still display the same IP, stop and ask Bot-Hosting support; your deployment may not expose the real visitor IP at all. No code can reconstruct a missing upstream IP after a proxy has hidden it.
 
 ### Account moderation and password recovery
 
