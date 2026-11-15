@@ -4,6 +4,7 @@ import members
 import messenger
 import messenger_features as rich
 import ban_system
+import client_ips
 import reminder_cards
 import json
 import logging
@@ -39,6 +40,7 @@ def load_local_env():
         os.environ.setdefault(key, setting.strip().strip('"').strip("'"))
 
 load_local_env()
+CLIENT_IP_CONFIG = client_ips.configuration()
 DB = Path(os.environ.get("SAS_DB_PATH", str(ROOT / "data" / "website.sqlite3")))
 HOST = os.environ.get("SAS_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SERVER_PORT") or os.environ.get("PORT") or "8080")
@@ -752,6 +754,13 @@ def reminder_loop():
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     init()
+    logging.info("Visitor IP mode: %s; %s trusted proxy network(s); header: %s",
+                 CLIENT_IP_CONFIG.mode, len(CLIENT_IP_CONFIG.trusted_proxies),
+                 CLIENT_IP_CONFIG.header or "NOT CONFIGURED")
+    if CLIENT_IP_CONFIG.mode == "proxy" and (not CLIENT_IP_CONFIG.trusted_proxies or
+                                              not CLIENT_IP_CONFIG.header):
+        logging.warning("Visitor IP verification unavailable: IP bans disabled; "
+                        "configure SAS_TRUSTED_PROXY_CIDRS and SAS_CLIENT_IP_HEADER.")
     for kind, url in (("reminder", WEBHOOK), ("registration", REGISTRATION_WEBHOOK), ("login", LOGIN_WEBHOOK)):
         logging.info("Discord %s webhook: %s", kind,
             "ready" if url and webhook_valid(url) else "invalid URL" if url else "NOT CONFIGURED")
@@ -840,13 +849,17 @@ class Handler(BaseHTTPRequestHandler):
             return messenger.member_key(player["id"]), player["csrf"]
         return None, None
 
+    def client_identity(self):
+        # This stays unverified until the hosting proxy's actual source IP
+        # ranges and overwritten header are known and configured.
+        return client_ips.resolve(self.client_address[0], self.headers, CLIENT_IP_CONFIG)
+
     def banned_client(self):
-        # The HTTP peer address is used, never an untrusted X-Forwarded-For.
         if current_session(self):
             return False  # Admins must retain an emergency unban path.
         player = members.member_session(self, connect, LOCK)
         with LOCK, connect() as db:
-            kwargs = {"ip": self.client_address[0]}
+            kwargs = {"ip": self.client_identity().ip}
             if player:
                 row = db.execute("SELECT username,player_name,email FROM members WHERE id=?",
                                  (player["id"],)).fetchone()
@@ -969,6 +982,7 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK, connect() as db:
                 for account in accounts:
                     account["last_ip"] = ban_system.member_ip(db, account["id"])
+                    account["last_ip_source"] = ban_system.member_ip_source(db, account["id"])
             return self.respond(200, {"accounts": accounts, "password_requests": resets})
         if path == "/api/session":
             session = current_session(self)
@@ -1220,7 +1234,7 @@ class Handler(BaseHTTPRequestHandler):
                          datetime.now(timezone.utc).isoformat()))
                 return self.respond(200, {"seen": seen})
             if path == "/api/password/request" and method == "POST":
-                source = self.client_address[0]
+                source = self.client_identity().ip or self.client_address[0]
                 if login_throttled("password-request", source, limit=25):
                     return self.respond(429, {"error": "Too many password requests. Try later."})
                 data = self.read_json()
@@ -1248,17 +1262,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, {"ok": True, "reset_code": code,
                     "message": "Share the reset code privately with the player. It expires in one hour and is shown only once." if code else "Request rejected."})
             if path == "/api/register" and method == "POST":
-                source = self.client_address[0]
+                identity=self.client_identity()
+                source = identity.ip or self.client_address[0]
                 if login_throttled("registration", source, limit=25):
                     return self.respond(429, {"error": "Too many registrations. Try later."})
                 values = self.read_json()
                 with LOCK, connect() as db:
-                    if ban_system.is_banned(db, ip=source, email=values.get("email", ""),
+                    if ban_system.is_banned(db, ip=identity.ip, email=values.get("email", ""),
                             username=values.get("username", ""), player_name=values.get("player_name", "")):
                         return self.respond(403, {"error": "Registration restricted."})
                     members.register(db, values)
                     row = db.execute("SELECT id FROM members WHERE username=?", (values["username"],)).fetchone()
-                    if row: ban_system.record_ip(db, row["id"], self.client_address[0])
+                    if row: ban_system.record_ip(db, row["id"], identity.ip, source=identity.source)
                 note_login_failure("registration", source)
                 discord_account_notice("registration", "MEMBER", values.get("username", ""),
                     values.get("email", ""), values.get("player_name", ""))
@@ -1268,7 +1283,8 @@ class Handler(BaseHTTPRequestHandler):
                 username = str(data.get("username", "")).strip()
                 # Include the login identifier to avoid locking out unrelated players
                 # when they share a reverse proxy IP.
-                source = self.client_address[0] + ":" + hashlib.sha256(username.casefold().encode()).hexdigest()[:20]
+                identity=self.client_identity()
+                source = (identity.ip or self.client_address[0]) + ":" + hashlib.sha256(username.casefold().encode()).hexdigest()[:20]
                 if login_throttled("member", source):
                     return self.respond(429, {"error": "Too many login attempts. Try again later."})
                 password = data.get("password", "")
@@ -1278,14 +1294,14 @@ class Handler(BaseHTTPRequestHandler):
                         note_login_failure("member", source)
                         time.sleep(0.5)
                         return self.respond(401, {"error": "Invalid username or password."})
-                    if ban_system.is_banned(db, ip=self.client_address[0], email=row["email"],
+                    if ban_system.is_banned(db, ip=identity.ip, email=row["email"],
                             username=row["username"], player_name=row["player_name"]):
                         return self.respond(403, {"error": "Access restricted."})
                     if row["status"] != "approved":
                         return self.respond(403, {"error": "Your account is awaiting approval." if row["status"] == "pending" else
                             "Your application was declined: " + (row["review_message"] or "Contact an administrator.")})
                     token, csrf = members.new_session(db, row["id"])
-                    ban_system.record_ip(db, row["id"], self.client_address[0])
+                    ban_system.record_ip(db, row["id"], identity.ip, source=identity.source)
                 clear_login_failures("member", source)
                 self.session_cookie("sas_member", token, {"approved": True, "admin": False, "csrf": csrf, "username": row["username"]})
                 discord_account_notice("login", "MEMBER", row["username"], row["email"])
@@ -1368,7 +1384,7 @@ class Handler(BaseHTTPRequestHandler):
                         db.execute("DELETE FROM member_sessions WHERE member_id=?", (int(account_match.group(1)),))
                 return self.respond(200, {"ok": True})
             if path == "/api/login" and method == "POST":
-                source = self.client_address[0]
+                source = self.client_identity().ip or self.client_address[0]
                 if login_throttled("admin", source):
                     return self.respond(429, {"error": "Too many login attempts. Try again later."})
                 data = self.read_json()
