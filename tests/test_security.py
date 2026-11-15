@@ -19,6 +19,10 @@ class SecurityBoundaryTests(unittest.TestCase):
         self.original_db = server.DB
         self.original_password = server.ADMIN_PASSWORD
         self.original_cookie = server.COOKIE_SECURE
+        self.original_ip_config = server.CLIENT_IP_CONFIG
+        # Local HTTP integration tests use a direct TCP connection, unlike
+        # the Bot-Hosting deployment (proxy mode is the production default).
+        server.CLIENT_IP_CONFIG = server.client_ips.Config("direct", (), "")
         server.DB = Path(self.folder.name) / "security.sqlite3"
         server.ADMIN_PASSWORD = "admin-test-secret-long"
         server.COOKIE_SECURE = False
@@ -35,6 +39,7 @@ class SecurityBoundaryTests(unittest.TestCase):
         server.DB = self.original_db
         server.ADMIN_PASSWORD = self.original_password
         server.COOKIE_SECURE = self.original_cookie
+        server.CLIENT_IP_CONFIG = self.original_ip_config
         self.folder.cleanup()
 
     def call(self, path, method="GET", body=None, cookie=None, csrf=None, headers=None):
@@ -115,6 +120,65 @@ class SecurityBoundaryTests(unittest.TestCase):
         self.assertEqual(self.call("/api/rss", "PUT", {}, cookie, csrf)[0], 403)
         self.assertEqual(self.call("/api/accounts/1", "PATCH", {"status":"approved"}, cookie, csrf)[0], 403)
         self.assertEqual(self.call("/api/password/requests/1", "PATCH", {"decision":"approved"}, cookie, csrf)[0], 403)
+
+    def test_unverified_proxy_ip_does_not_ban_unrelated_users(self):
+        self.register("Blocked", "approved")
+        self.register("Normal", "approved")
+        admin_cookie, csrf = self.login_admin()
+        banned_id = next(x["id"] for x in json.loads(
+            self.call("/api/accounts",cookie=admin_cookie)[1])["accounts"]
+            if x["username"]=="Blocked")
+        # Simulate migration of a legacy shared proxy recording.
+        with server.connect() as db:
+            db.execute("""INSERT INTO member_ips(member_id,last_ip,seen_at,source)
+                 VALUES(?, '127.0.0.1', 1000, 'legacy')""",(banned_id,))
+        status, raw, _ = self.call("/api/bans","POST",
+            {"member_id":banned_id,"kind":"everything"},admin_cookie,csrf)
+        self.assertEqual(status,400)
+        self.assertIn(b"No verified visitor IP",raw)
+        # Email + Name ban still works. Other users on the same proxy IP
+        # are not accidentally blocked in fail-closed proxy mode.
+        self.assertEqual(self.call("/api/bans","POST",
+            {"member_id":banned_id,"kind":"email"},admin_cookie,csrf)[0],201)
+        try:
+            server.CLIENT_IP_CONFIG = server.client_ips.Config("proxy", (), "")
+            self.assertEqual(self.call("/api/member/login","POST",{
+                "username":"Normal","password":"member-password-long"})[0],200)
+            self.assertEqual(self.call("/api/member/login","POST",{
+                "username":"Blocked","password":"member-password-long"})[0],403)
+            status, raw, _ = self.call("/api/accounts",cookie=admin_cookie)
+            self.assertEqual(status,200)
+            banned=next(x for x in json.loads(raw)["accounts"]
+                if x["username"]=="Blocked")
+            self.assertEqual(banned["last_ip"],"")
+            self.assertEqual(banned["last_ip_source"],"legacy")
+        finally:
+            server.CLIENT_IP_CONFIG = server.client_ips.Config("direct", (), "")
+
+    def test_new_proxy_verification_writes_distinct_member_ips(self):
+        self.register("FirstIP", "approved")
+        self.register("SecondIP", "approved")
+        config=server.client_ips.Config("proxy",
+            (server.client_ips.ipaddress.ip_network("127.0.0.1/32"),),
+            "x-forwarded-for")
+        server.CLIENT_IP_CONFIG=config
+        try:
+            self.assertEqual(self.call("/api/member/login","POST",{
+                "username":"FirstIP","password":"member-password-long"},
+                headers={"X-Forwarded-For":"8.8.8.8"})[0],200)
+            self.assertEqual(self.call("/api/member/login","POST",{
+                "username":"SecondIP","password":"member-password-long"},
+                headers={"X-Forwarded-For":"1.1.1.1"})[0],200)
+            admin_cookie,_=self.login_admin()
+            status,raw,_=self.call("/api/accounts",cookie=admin_cookie)
+            self.assertEqual(status,200)
+            accounts={item["username"]:item for item in json.loads(raw)["accounts"]}
+            self.assertEqual(accounts["FirstIP"]["last_ip"],"8.8.8.8")
+            self.assertEqual(accounts["SecondIP"]["last_ip"],"1.1.1.1")
+            self.assertEqual(accounts["FirstIP"]["last_ip_source"],"trusted_proxy")
+            self.assertEqual(accounts["SecondIP"]["last_ip_source"],"trusted_proxy")
+        finally:
+            server.CLIENT_IP_CONFIG = server.client_ips.Config("direct", (), "")
 
     def test_admin_csrf_and_origin_boundaries(self):
         cookie, csrf = self.login_admin()
