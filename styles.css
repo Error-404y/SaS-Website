@@ -654,6 +654,13 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .account-detail-grid>div{display:grid;gap:6px;padding:12px 14px;background:#f7f8fb;border:1px solid #e8ebf1;border-radius:10px;overflow-wrap:anywhere}
 .account-detail-grid span{color:#738096;font-size:11px;font-weight:650;letter-spacing:.03em}
 .account-detail-grid strong{font-size:13px;font-weight:650}
+.account-detail-grid .account-ip-detail{background:#f8f6fb;border-color:#e7dff0}
+.account-ip-value{display:flex;align-items:center;gap:12px;justify-content:space-between;min-width:0;flex-wrap:wrap}
+.account-ip-value strong{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.account-ip-value button{padding:7px 11px;font-size:11px;white-space:nowrap;flex:none}
+.account-ip-detail small{font-size:11px;color:#748094;line-height:1.5}
+.account-ip-detail .account-ip-notice{color:#8b7283}
+
 .accounts-muted{color:#728096;font-size:13px;margin-bottom:15px}
 #reset-code-dialog textarea{width:100%;font:600 13px ui-monospace,monospace;overflow-wrap:anywhere;background:#f6f7fa;border:1px solid #d8e0eb;border-radius:9px;padding:14px;resize:none}
 #reset-code-dialog p{line-height:1.6;color:#69788a}
